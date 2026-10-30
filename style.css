@@ -1,0 +1,114 @@
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #101830; color: #fff;
+  font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.panel {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  background: rgba(16, 24, 48, 0.94); border: 3px solid #ffd23f; border-radius: 24px;
+  padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.hidden { display: none !important; }
+h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text-align: center; }
+.tag { margin: 0 0 16px; text-align: center; opacity: .85; }
+.row { display: flex; align-items: center; gap: 12px; margin: 10px 0; flex-wrap: wrap; }
+.label { width: 76px; font-weight: bold; opacity: .8; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button, .small, #hudButtons button {
+  font: inherit; font-weight: bold; color: #fff; background: #26335c;
+  border: 2px solid #3d4f86; border-radius: 12px; padding: 8px 14px; cursor: pointer;
+}
+.seg button.on { background: #ffd23f; color: #101830; border-color: #ffd23f; }
+.big {
+  display: block; width: 100%; margin-top: 16px; padding: 14px; font: inherit; font-size: 26px; font-weight: bold;
+  background: #3ddc84; color: #0b2a17; border: none; border-radius: 16px; cursor: pointer;
+}
+.big:disabled { opacity: .5; }
+.small { display: block; margin: 10px auto 0; }
+.status { min-height: 1.2em; text-align: center; color: #ffb3b3; margin: 10px 0 0; }
+
+.player { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.player .dot { width: 26px; height: 26px; border-radius: 50%; flex: none; border: 3px solid #fff; }
+.player input {
+  flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 10px;
+  border: 2px solid #3d4f86; background: #0d1430; color: #fff;
+}
+.player select {
+  font: inherit; padding: 8px; border-radius: 10px; border: 2px solid #3d4f86; background: #0d1430; color: #fff;
+}
+.help { margin-top: 14px; opacity: .9; font-size: 15px; }
+.help summary { cursor: pointer; font-weight: bold; }
+.help li { margin: 4px 0; }
+
+#results { display: grid; gap: 10px; margin: 14px 0; }
+.result { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px; background: #1c2647; }
+.result .dot { width: 34px; height: 34px; border-radius: 50%; flex: none; border: 3px solid #fff; }
+.result .who { flex: 1; }
+.result .name { font-size: 22px; font-weight: bold; }
+.result .award { color: #ffd23f; }
+.result .score { font-size: 26px; font-weight: bold; }
+
+#hudButtons { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; opacity: .55; }
+#hudButtons:hover { opacity: 1; }
+#hudButtons button { padding: 6px 12px; font-size: 18px; }
+
+/* Face bubbles */
+.bubble { position: relative; flex: none; width: 64px; height: 64px; border-radius: 50%; border: 4px solid #fff; }
+.bubble.lg { width: 92px; height: 92px; }
+.face { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.noface { display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; color: #fff; }
+.badge {
+  position: absolute; top: -8px; right: -14px; min-width: 30px; padding: 2px 7px; border-radius: 14px;
+  background: #ff3b30; color: #fff; font-weight: bold; font-size: 15px; text-align: center; border: 2px solid #fff;
+}
+.result .sub { font-size: 14px; opacity: .8; }
+.result .nums { text-align: right; }
+.result .hr { color: #ff6b81; font-weight: bold; font-size: 18px; }
+
+/* Champions splash */
+#splash { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+.champ { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 16px; background: linear-gradient(135deg, #3a2a6e, #1c2647); border: 2px solid #ffd23f; }
+.champ .label { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #ffd23f; }
+.champ .champName { font-size: 24px; font-weight: bold; }
+.champ .champVal { font-size: 20px; }
+.heartBtn { background: #ff5d73; color: #fff; }
+
+/* Heart check */
+.heart { text-align: center; width: min(720px, calc(100vw - 32px)); }
+.hc-who { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.face.xl { width: 110px; height: 110px; border: 4px solid #fff; }
+.hc-name { font-size: 34px; font-weight: bold; }
+.hc-sub { opacity: .7; }
+.hc-steps { text-align: left; font-size: 22px; line-height: 1.5; }
+.hc-phase { font-size: 26px; margin: 14px 0 0; }
+.hc-heart { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 10px 0; }
+.heartIcon { font-size: 120px; color: #ff3b5c; line-height: 1; animation: beat .8s ease-in-out infinite; display: inline-block; }
+.hc-count { font-size: 120px; font-weight: bold; line-height: 1; }
+.hc-live { font-size: 26px; min-height: 1.3em; margin: 4px 0 12px; }
+.hc-bar { height: 14px; border-radius: 7px; background: #26335c; overflow: hidden; }
+.hc-bar div { height: 100%; width: 0; background: #ff5d73; }
+.hc-big { font-size: 30px; font-weight: bold; color: #ff6b81; }
+.hc-note { font-size: 13px; opacity: .65; margin-top: 14px; }
+@keyframes beat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.18); } 30% { transform: scale(1); } }
+
+/* Portrait phones: ask for landscape (the heart check works either way). */
+#rotate { display: none; }
+@media (orientation: portrait) and (max-width: 600px) {
+  body:not(.heart-mode) #rotate {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    position: fixed; inset: 0; z-index: 10; background: #101830; text-align: center; padding: 24px;
+  }
+  #rotate img { width: 120px; height: 120px; border-radius: 26px; image-rendering: pixelated; }
+  #rotate p { margin: 0; font-size: 26px; font-weight: bold; color: #ffd23f; }
+  #rotate .small-note { font-size: 16px; color: #fff; font-weight: normal; opacity: .8; }
+}
+@media (max-height: 500px) {
+  #hudButtons button { padding: 3px 8px; font-size: 12px; border-radius: 8px; }
+  h1 { font-size: 30px; }
+}

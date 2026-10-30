@@ -1,0 +1,26 @@
+<!doctype html><canvas id="c"></canvas>
+<script type="module">
+import { CHARACTERS, drawCharacter, cartoonPose } from '../js/render.js';
+window.make = size => {
+  const low = document.createElement('canvas'); low.width = low.height = 64;
+  const g = low.getContext('2d');
+  // Sky, grass, road.
+  g.fillStyle = '#5ec8f2'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#c8f0ff'; g.fillRect(0, 16, 64, 6);
+  g.fillStyle = '#6cc644'; g.fillRect(0, 22, 64, 42);
+  g.fillStyle = '#5fb83b'; for (let y = 25; y < 64; y += 7) g.fillRect(0, y, 64, 3);
+  g.fillStyle = '#ffffff'; g.fillRect(24, 6, 12, 3); g.fillRect(27, 3, 6, 3);
+  const pick = ['fox', 'frog', 'bunny', 'robot'].map(id => CHARACTERS.find(c => c.id === id));
+  const poses = [{ reach: true }, { jump: true }, {}, { left: true }];
+  pick.forEach((ch, i) => {
+    const S = 7.4, x = 8 + i * 16;
+    const lift = poses[i].jump ? 5 : 0;
+    drawCharacter(g, x, 63 - 1.65 * S - lift, S, cartoonPose(poses[i]), ch);
+  });
+  const c = document.getElementById('c'); c.width = c.height = size;
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.drawImage(low, 0, 0, size, size);
+  return c.toDataURL('image/png');
+};
+window.ready = true;
+</script>

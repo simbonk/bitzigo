@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Quad Squad">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#101830">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<title>Quad Squad</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="stage"></canvas>
+<video id="cam" playsinline muted></video>
+
+<section id="setup" class="panel">
+  <h1>Quad Squad</h1>
+  <p class="tag">Jump, duck, punch and reach. Up to 4 players, standing in place.</p>
+
+  <div class="row">
+    <span class="label">Players</span>
+    <div class="seg" id="count">
+      <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button><button data-n="4" class="on">4</button>
+    </div>
+  </div>
+
+  <div id="players"></div>
+
+  <div class="row">
+    <span class="label">Controls</span>
+    <div class="seg" id="mode">
+      <button data-mode="camera" class="on">Camera</button><button data-mode="keys">Keyboard test</button>
+    </div>
+  </div>
+  <div class="row" id="camRow">
+    <span class="label">Camera</span>
+    <div class="seg" id="facing">
+      <button data-facing="user" class="on">Front</button><button data-facing="environment">Back</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="label">Workout</span>
+    <div class="seg" id="length">
+      <button data-sec="60">1 min</button><button data-sec="120" class="on">2 min</button><button data-sec="180">3 min</button><button data-sec="300">5 min</button><button data-sec="0">Endless</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="label">World</span>
+    <div class="seg" id="theme">
+      <button data-theme="forest" class="on">Forest</button><button data-theme="snow">Snow</button><button data-theme="desert">Desert</button><button data-theme="space">Space</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="label">Intro</span>
+    <div class="seg" id="intro">
+      <button data-intro="1" class="on">Show how to play</button><button data-intro="0">Skip</button>
+    </div>
+  </div>
+
+  <button id="go" class="big">Let's go!</button>
+  <p id="status" class="status"></p>
+  <details class="help">
+    <summary>How to set up</summary>
+    <ul>
+      <li>Prop the phone or laptop up at waist height, 3 to 4 metres back, so all kids fit in the picture from head to knees.</li>
+      <li>Kids stand wherever they like, spread out. Player 1 is whoever is furthest left on the TV. Each kid points an arm sideways to change character, then puts both hands up when ready.</li>
+      <li>On iPhone, use Screen Mirroring to show it on the TV.</li>
+      <li>Moves: <b>jump</b> over logs, <b>duck</b> under bars, <b>punch</b> (raise an arm) to smash crates on that side, <b>both hands up</b> to grab stars.</li>
+      <li>Keyboard test: P1 W/A/S/D, P2 T/F/G/H, P3 I/J/K/L, P4 arrow keys. Up = jump, down = duck, left/right = punch, left+right = reach.</li>
+      <li>Difficulty is per kid: it starts gentle for their age, speeds up when they're nailing it and backs off after misses. It also ramps up a little as the workout timer runs down, and the last 15 seconds are double points.</li>
+      <li>Keyboard shortcuts: <b>V</b> camera view, <b>`</b> debug info, <b>C</b> recalibrate, <b>M</b> mute, <b>Enter</b> start from the lobby, <b>Esc</b> end the workout.</li>
+    </ul>
+  </details>
+</section>
+
+<section id="end" class="panel hidden">
+  <h1>Great moving, squad!</h1>
+  <div id="splash"></div>
+  <div id="results"></div>
+  <button id="heart" class="big heartBtn">♥ Heart check</button>
+  <button id="again" class="big">Play again</button>
+  <button id="menu" class="small">Change players</button>
+</section>
+
+<div id="hudButtons" class="hidden">
+  <button id="btnStart" title="Start with who is here (Enter)">Start now</button>
+  <button id="btnCam" title="Camera view (V)">Camera</button>
+  <button id="btnMute" title="Sound (M)">Sound</button>
+  <button id="btnStop" title="End workout (Esc)">End</button>
+</div>
+
+<div id="rotate">
+  <img src="icons/icon-180.png" alt="">
+  <p>Turn your phone sideways</p>
+  <p class="small-note">Landscape fits all four players on the TV</p>
+</div>
+
+<script src="vendor/sternum/analysis.js"></script>
+<script src="vendor/sternum/nosleep-media.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
