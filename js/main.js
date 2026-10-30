@@ -6,6 +6,7 @@ import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 import { saveGame, addHeartRates, clearStats, showStats } from './stats.js';
+import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere } from './net.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#stage');
@@ -176,6 +177,68 @@ seg('#length', 'sec', 'seconds', Number);
 seg('#intro', 'intro', 'intro', v => v === '1');
 seg('#course', 'course', 'course');
 renderPlayerRows();
+
+// ---------------- Play with a friend ----------------
+// One household makes a code and texts it; the other types it in (or opens
+// the shared link). See net.js.
+
+let lastFriend = null;  // the friends' latest update, kept for the results after they leave
+let ownSettings = null; // the guest's own length and tutorial, while the code maker's are in use
+function renderRoom() {
+  const s = room.status;
+  const on = s !== 'off' && s !== 'error';
+  $('#roomIdle').classList.toggle('hidden', on);
+  $('#roomOn').classList.toggle('hidden', !on);
+  $('#roomBadge').textContent = on ? room.code || '' : '';
+  const msg = {
+    starting: 'Making a code…',
+    joining: `Joining ${room.code}…`,
+    waiting: 'Text this code to your friend, then press Let\'s go.',
+    connected: room.role === 'host' ? 'Friend joined! Press Let\'s go and you\'ll start together.'
+      : 'Joined! Press Let\'s go. The code maker picks the world and workout length.',
+    lost: 'Lost the connection to your friend.',
+  }[s] || '';
+  const el = $('#roomText');
+  el.textContent = msg;
+  el.className = `roomText ${s === 'connected' ? 'good' : s === 'lost' ? 'bad' : ''}`;
+  $('#roomShare').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  if (s === 'error') $('#status').textContent = room.error;
+  if (s === 'off') {
+    lastFriend = null;
+    if (ownSettings) {
+      Object.assign(settings, ownSettings);
+      ownSettings = null;
+      save();
+      seg('#length', 'sec', 'seconds', Number);
+      seg('#intro', 'intro', 'intro', v => v === '1');
+    }
+  }
+}
+onRoom(msg => {
+  if (msg.type === 'status') renderRoom();
+  if (msg.type === 'tick') { lastFriend = msg; if (state === 'end') renderFriendResults(); }
+  if (msg.type === 'go') friendSaysGo(msg);
+});
+$('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch(e => console.error(e)); };
+$('#roomJoin').onclick = () => { $('#status').textContent = ''; joinRoom($('#roomCode').value).catch(e => console.error(e)); };
+$('#roomCode').onkeydown = e => { if (e.key === 'Enter') $('#roomJoin').click(); };
+$('#roomLeave').onclick = () => leaveRoom();
+$('#roomShare').onclick = async () => {
+  const url = `${location.origin}${location.pathname}?room=${room.code}`;
+  const words = `Race us in Bitzigo! Open ${url} or type the code ${room.code}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Bitzigo', text: words }); return; }
+    await navigator.clipboard.writeText(words);
+    $('#roomShare').textContent = 'Copied!';
+    setTimeout(() => { $('#roomShare').textContent = 'Text it'; }, 2000);
+  } catch { }
+};
+// A shared link (…?room=FROG-42) joins straight away.
+{
+  const code = new URLSearchParams(location.search).get('room');
+  if (code) { $('#roomCode').value = code; joinRoom(code).catch(e => console.error(e)); }
+}
+renderRoom();
 
 // Full screen: real fullscreen where the browser allows it (Chrome, iPad
 // Safari, desktop). iPhone Safari doesn't, so it points to Add to Home Screen,
@@ -446,10 +509,11 @@ let wyr = null;         // the shared Would You Rather round, during that break
 // Breaks come out of a shuffled bag, so every game is different and nothing
 // repeats until they've all had a turn.
 let breakBag = [];
+function fillBreakBag() {
+  breakBag = BREAKS.filter(b => b !== (roundTheme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
+}
 function nextBreak() {
-  if (!breakBag.length) {
-    breakBag = BREAKS.filter(b => b !== (roundTheme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
-  }
+  if (!breakBag.length) fillBreakBag();
   return breakBag.shift();
 }
 let slotGear = [];      // hats each player slot has collected
@@ -544,7 +608,26 @@ function showResults() {
   const hasHR = players.some(p => p.heartRate);
   $('#heart').textContent = hasHR ? '♥ Redo heart check' : '♥ Heart check';
   $('#splash').innerHTML = splashHtml();
+  renderFriendResults();
   $('#end').classList.remove('hidden');
+}
+
+// The friends' scores under ours, and which squad is ahead.
+function renderFriendResults() {
+  const box = $('#friendResults');
+  const f = lastFriend;
+  let html = '';
+  if (f?.kids?.length && players.length) {
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const ours = players.reduce((a, p) => a + total(p), 0);
+    const theirs = f.kids.reduce((a, k) => a + (k.total || 0), 0);
+    const done = f.state === 'end';
+    const verdict = !done ? 'They are still playing…' : ours > theirs ? 'Your squad wins this one!' : ours < theirs ? 'Your friends win this one!' : 'It\'s a tie!';
+    html = `<h3>🤝 Friends${room.code ? ` (${esc(room.code)})` : ''}</h3>
+      <div class="vs">Your squad ${ours.toLocaleString()} · Friends ${theirs.toLocaleString()}. ${verdict}</div>` +
+      [...f.kids].sort((a, b) => b.total - a.total).map(k => `<div class="fk"><span class="sw" style="background:${esc(k.color)}"></span><span class="n">${esc(k.name)}</span><span class="s">${(k.total || 0).toLocaleString()}</span></div>`).join('');
+  }
+  if (box.dataset.html !== html) { box.dataset.html = html; box.innerHTML = html; }
 }
 
 function shortScore(n) {
@@ -634,11 +717,12 @@ addEventListener('keydown', e => {
   if (e.code === 'Backquote') debug = !debug;
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyC' && (state === 'play' || state === 'tutorial')) recalibrate();
-  if (e.code === 'Enter' && state === 'lobby') startReady();
+  if (e.code === 'Enter' && state === 'lobby') lobby.waiting ? startReady() : lobbyDone();
   if (e.code === 'Escape' && ['lobby', 'ready', 'tutorial', 'play'].includes(state)) endRound(true);
 });
 addEventListener('keyup', e => keys.delete(e.code));
-$('#btnStart').onclick = () => state === 'lobby' && startReady();
+// Start now: start with whoever is here. Pressed while waiting for a friend, it starts without them.
+$('#btnStart').onclick = () => state === 'lobby' && (lobby.waiting ? startReady() : lobbyDone());
 $('#btnCam').onclick = () => { showCam = !showCam; };
 $('#btnMute').onclick = toggleMute;
 $('#btnStop').onclick = () => endRound(true);
@@ -857,6 +941,7 @@ function loop() {
     watchCamera(t);
   }
 
+  shareTick(t);
   if (state === 'lobby') updateLobby(t);
   else if (['ready', 'tutorial', 'play'].includes(state)) updateGame(t, dt);
 
@@ -890,6 +975,7 @@ function watchCamera(t) {
 }
 
 function updateLobby(t) {
+  if (lobby.waiting) lobbyDone(); // the friends may be ready now, or gone
   if (settings.mode === 'camera') {
     lobby.found = assignLobby(t);
   } else {
@@ -933,10 +1019,56 @@ function updateLobby(t) {
     // Next round of a set: no hands-up needed, just everyone back in view
     // (or whoever is there after a while).
     const all = lobby.every(L => L.found);
-    if ((all && t - stateT > 1.2) || (t - stateT > 6 && lobby.some(L => L.found))) startReady();
+    if ((all && t - stateT > 1.2) || (t - stateT > 6 && lobby.some(L => L.found))) lobbyDone();
     return;
   }
-  if (allReady && t - stateT > 1) startReady();
+  if (allReady && t - stateT > 1) lobbyDone();
+}
+
+// Our squad is ready. With a friend, both households start together: each
+// says when it is ready, and the code maker starts the race for both. If the
+// friend goes away, we just play.
+function lobbyDone() {
+  if (!friendHere() && room.status !== 'waiting') return startReady();
+  if (!lobby.waiting) lobby.waiting = now();
+  const f = room.friend;
+  if (room.role === 'host' && friendHere() && f?.state === 'lobby' && f.waiting) {
+    if (!breakBag.length) fillBreakBag();
+    sendRoom({ type: 'go', theme: roundTheme, seconds: settings.seconds, intro: settings.intro, round: setRound, breaks: breakBag });
+    startReady();
+  }
+}
+
+// The code maker started the race: use their world, length and break games.
+function friendSaysGo(msg) {
+  if (state !== 'lobby' || room.role !== 'guest') return;
+  ownSettings ||= { seconds: settings.seconds, intro: settings.intro };
+  if (THEMES[msg.theme]) roundTheme = msg.theme;
+  if (typeof msg.seconds === 'number') settings.seconds = msg.seconds;
+  settings.intro = !!msg.intro;
+  if (msg.round) setRound = msg.round;
+  if (Array.isArray(msg.breaks)) breakBag = msg.breaks.filter(b => BREAKS.includes(b));
+  startReady();
+}
+
+// A small update to the friend: a few times a second while playing, once a
+// second otherwise.
+let lastShare = 0;
+function shareTick(t) {
+  if (room.status !== 'connected') return;
+  const busy = ['ready', 'tutorial', 'play'].includes(state);
+  if (t - lastShare < (busy ? 0.12 : 1)) return;
+  lastShare = t;
+  sendRoom({
+    type: 'tick', state, round: setRound,
+    waiting: state === 'lobby' && !!lobby.waiting,
+    found: state === 'lobby' ? lobby.filter(L => L.found).length : 0,
+    kids: players.map(p => ({
+      name: p.name, color: p.color, char: (p.character || CHARACTERS[slotChar[p.index]]).id,
+      score: p.score, total: total(p), streak: p.streak, lift: Math.round(p.lift * 100) / 100,
+      act: Object.fromEntries(Object.entries(p.act).filter(([, v]) => v === true)), gear: p.gear,
+    })),
+  });
 }
 
 function updateGame(t, dt) {
@@ -1101,17 +1233,47 @@ function draw(t) {
     text(ctx, `${m}:${String(s).padStart(2, '0')}`, W / 2, hudBottom(n) + size * 0.7, size, left <= 15 ? '#ff5d73' : '#ffffff');
   }
 
+  const friendsH = drawFriends(t, hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01));
   if (showCam && frame && tracker) {
     const cw = W * 0.18, ch = cw * 0.6;
     const L0 = laneBox(0, n, W, H);
     const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12;
-    const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01);
+    const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01) + friendsH;
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: String(p.index + 1) }));
     drawCamera(ctx, video, frame.aspect, x, y, cw, ch, people);
   }
   if (wyr && state === 'play') drawWyrQuestion(ctx, wyr, W, hudBottom(n) + (settings.seconds ? H * 0.075 : H * 0.01), H);
 
   drawBanner(t);
+}
+
+// The friends' characters, doing the moves their kids are doing right now,
+// in a small window under the timer. Returns the height it took.
+function drawFriends(t, y) {
+  const f = room.friend;
+  if (!friendHere() || !f?.kids?.length) return 0;
+  const k = f.kids.length;
+  const h = H * 0.19, S = H * 0.024, cell = Math.max(H * 0.13, S * 6), pad = H * 0.012;
+  const w = Math.max(cell * k, H * 0.42) + pad * 2;
+  // On the line between two lanes, so it hides as little of each as it can.
+  const n = players.length, mid = n === 1 ? W - w / 2 - H * 0.02 : W * Math.floor(n / 2) / n, x = mid - w / 2;
+  ctx.fillStyle = 'rgba(10,14,30,0.6)';
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(x, y, w, h, H * 0.015) : ctx.rect(x, y, w, h);
+  ctx.fill();
+  const ours = players.reduce((a, p) => a + total(p), 0);
+  const theirs = f.kids.reduce((a, q) => a + (q.total || 0), 0);
+  text(ctx, `Us ${ours.toLocaleString()}  ·  Friends ${theirs.toLocaleString()}`, mid, y + h * 0.11, H * 0.026, ours >= theirs ? '#3ddc84' : '#ffe14d');
+  const x0 = mid - (cell * k) / 2;
+  f.kids.forEach((q, i) => {
+    const cx = x0 + cell * (i + 0.5);
+    const feet = y + h * 0.7;
+    const P = cartoonPose(q.act || {}, Math.sin(t * 8 + i) * 0.04);
+    drawCharacter(ctx, cx, feet - 1.65 * S - (q.lift || 0) * S * 0.9, S, P, CHARACTERS[charIndex(q.char)], false, q.gear || {});
+    text(ctx, `${q.streak >= 8 ? '⚡' : ''}${q.name}`, cx, y + h * 0.79, H * 0.021, q.color || '#ffffff');
+    text(ctx, (q.score || 0).toLocaleString(), cx, y + h * 0.91, H * 0.024, '#ffffff');
+  });
+  return h + H * 0.01;
 }
 
 // Bottom edge of the name plates at the top of each lane.
@@ -1201,7 +1363,13 @@ function drawLobby(t) {
     sub = cam ? 'Point an arm to the side to change character. Both hands up when ready!'
       : 'Left/right to change character. Up when ready!';
   }
+  if (lobby.waiting) {
+    headline = 'Waiting for your friends…';
+    sub = 'We\'ll start together when they\'re ready. Start now plays without them.';
+  }
   text(ctx, headline, W / 2, H * 0.06, H * 0.065, '#ffe14d');
+  const fl = friendLine();
+  if (fl) text(ctx, fl, W / 2, H * 0.935, H * 0.032, '#8fd3ff');
   text(ctx, sub, W / 2, H * 0.125, H * 0.032, '#ffffff');
 
   // Name cards under each character.
@@ -1226,6 +1394,19 @@ function drawLobby(t) {
       }
     }
   });
+}
+
+// What the friends are up to, for the bottom of the lobby.
+function friendLine() {
+  if (room.status === 'waiting') return `🤝 Code ${room.code}: waiting for your friend to join`;
+  if (room.status === 'lost') return '🤝 Lost the connection to your friends';
+  const f = room.friend;
+  if (!friendHere() || !f) return '';
+  const n = f.kids?.length || 0;
+  if (f.state === 'lobby') return f.waiting ? '🤝 Your friends are ready!' : `🤝 Friends: found ${f.found} of ${n}`;
+  if (f.state === 'setup') return '🤝 Your friends are on the home screen';
+  if (f.state === 'end' || f.state === 'heart') return '🤝 Your friends are looking at their scores';
+  return '🤝 Your friends are playing';
 }
 
 requestAnimationFrame(loop);

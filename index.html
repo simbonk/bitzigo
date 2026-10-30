@@ -67,6 +67,22 @@
     </div>
   </div>
 
+  <div class="row friendRow">
+    <span class="label">Friend</span>
+    <div id="roomIdle" class="roomBox">
+      <button id="roomMake" class="setupBtn">🤝 Make a code</button>
+      <span class="or">or</span>
+      <input id="roomCode" placeholder="FROG-42" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Friend's code">
+      <button id="roomJoin" class="setupBtn">Join</button>
+    </div>
+    <div id="roomOn" class="roomBox hidden">
+      <span id="roomBadge" class="roomBadge"></span>
+      <span id="roomText" class="roomText"></span>
+      <button id="roomShare" class="setupBtn hidden">Text it</button>
+      <button id="roomLeave" class="setupBtn">Leave</button>
+    </div>
+  </div>
+
   <div class="actions">
     <button id="go" class="big">Let's go!</button>
     <button id="fs" class="small">⛶ Full screen</button>
@@ -98,6 +114,7 @@
   <h1>Great moving, squad!</h1>
   <div id="splash"></div>
   <div id="results"></div>
+  <div id="friendResults"></div>
   <div id="nextRound" class="hidden"><span></span> <button id="nextGo" class="small">Go now</button> <button id="nextStop" class="small">Stop</button></div>
   <button id="heart" class="big heartBtn">♥ Heart check</button>
   <button id="again" class="big">Play again</button>
