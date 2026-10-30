@@ -105,6 +105,7 @@ export class Player {
     this.score = 0;
     this.streak = 0;
     this.tiers = [0, 0, 0]; // perfect, great, good
+    this.recent = [];
     this.bestStreak = 0;
     this.hits = 0;
     this.misses = 0;
@@ -592,6 +593,13 @@ export class Player {
     const s = (this.typeStats[o.kind] ||= { hit: 0, miss: 0 });
     ok ? s.hit++ : s.miss++;
     if (!o.tutorial) this.judged++;
+    if (!o.tutorial) (this.recent ||= []).push(ok ? 1 : 0), this.recent.length > 8 && this.recent.shift();
+  }
+
+  // How the last few moves went (1 = all hit), for easing off the speed.
+  get recentAcc() {
+    const r = this.recent || [];
+    return r.length < 4 ? 1 : r.reduce((a, b) => a + b, 0) / r.length;
   }
 
   addPoints(pts, word) {

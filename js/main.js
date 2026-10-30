@@ -1047,7 +1047,10 @@ function updateGame(t, dt) {
     setIntensity(dur ? roundT / dur : Math.min(1, roundT / 180));
     if (dur) {
       const left = dur - roundT;
-      ramp = 1.5 * Math.min(1, roundT / dur);
+      // The course speeds up a little as the timer runs down, but only while
+      // everyone is keeping up: it eases off as soon as moves start getting missed.
+      const acc = Math.min(...players.map(p => p.recentAcc));
+      ramp = 1.0 * Math.min(1, roundT / dur) * Math.max(0, Math.min(1, (acc - 0.6) / 0.3));
       const rush = left <= 15;
       if (rush && !players[0].rush) {
         setIntensity(1);
