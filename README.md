@@ -1,4 +1,4 @@
-# Quad Squad
+# Bitzigo
 
 A living-room motion game for up to four kids at once. A phone or laptop camera watches the kids standing in place; each one becomes a blocky character running down their own lane, and they **jump** over brick walls, **punch** crates, **lean their head** away from crazy birds and put **both hands up** to grab a rope and swing over puddles. A few times per workout everyone stops for a break game: **throw time** (knock down cans), **snowball time** (knock down a snowman), **karate time** (chop down to break boards), **fire time** (point an arm to aim a hose and put out the fires) and **bubble time** (flap, flap, flap up to a bubble, pop it with your head and drop back down). Hats and accessories float down the road as free prizes, and 8 in a row makes a kid **super charged**: electric sparks and 1.5× points until they miss, or spin all the way round to cash it in for a mega bonus. Everyone runs the same course at the same time (or their own course, from setup). Eleven characters to pick from, including a ninja, a blue hedgehog, a pink axolotl, a firefighter and a cow. Built as a proof of concept to see how the mechanics feel.
 

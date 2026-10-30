@@ -10,8 +10,8 @@ window.make = size => {
   g.fillStyle = '#6cc644'; g.fillRect(0, 22, 64, 42);
   g.fillStyle = '#5fb83b'; for (let y = 25; y < 64; y += 7) g.fillRect(0, y, 64, 3);
   g.fillStyle = '#ffffff'; g.fillRect(24, 6, 12, 3); g.fillRect(27, 3, 6, 3);
-  const pick = ['fox', 'frog', 'bunny', 'robot'].map(id => CHARACTERS.find(c => c.id === id));
-  const poses = [{ reach: true }, { jump: true }, {}, { left: true }];
+  const pick = ['firefighter', 'axolotl', 'cow', 'hedgehog'].map(id => CHARACTERS.find(c => c.id === id));
+  const poses = [{ reach: true }, { jump: true }, {}, { reach: true }];
   pick.forEach((ch, i) => {
     const S = 7.4, x = 8 + i * 16;
     const lift = poses[i].jump ? 5 : 0;

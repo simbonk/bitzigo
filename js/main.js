@@ -18,8 +18,8 @@ const settings = {
     { name: 'Player 3', age: 6 }, { name: 'Player 4', age: 4 },
   ],
 };
-try { Object.assign(settings, JSON.parse(localStorage.getItem('quadsquad') || '{}')); } catch { }
-const save = () => { try { localStorage.setItem('quadsquad', JSON.stringify(settings)); } catch { } };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('bitzigo') || '{}')); } catch { }
+const save = () => { try { localStorage.setItem('bitzigo', JSON.stringify(settings)); } catch { } };
 
 let state = 'setup';   // setup | loading | lobby | ready | tutorial | play | end | heart
 let players = [];
