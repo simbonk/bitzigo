@@ -26,6 +26,7 @@ const save = () => { try { localStorage.setItem('bitzigo', JSON.stringify(settin
 const testing = /[?&](debug|keys)\b/.test(location.search);
 document.body.classList.toggle('testing', testing);
 if (!testing && settings.mode === 'keys') settings.mode = 'camera';
+settings.theme = 'random'; // every visit starts on Surprise me
 
 let state = 'setup';   // setup | loading | lobby | ready | tutorial | play | end | heart
 let players = [];
