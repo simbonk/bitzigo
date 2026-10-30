@@ -16,7 +16,7 @@ const lctx = low.getContext('2d');
 const video = $('#cam');
 
 const settings = {
-  count: 4, mode: 'camera', facing: 'user', seconds: 120, theme: 'random', intro: true, course: 'together',
+  count: 2, mode: 'camera', facing: 'user', seconds: 120, theme: 'random', intro: true, course: 'together',
   players: [
     { name: 'Player 1', age: 10 }, { name: 'Player 2', age: 8 },
     { name: 'Player 3', age: 6 }, { name: 'Player 4', age: 4 },
@@ -28,6 +28,10 @@ const save = () => { try { localStorage.setItem('bitzigo', JSON.stringify(settin
 const testing = /[?&](debug|keys)\b/.test(location.search);
 document.body.classList.toggle('testing', testing);
 if (!testing && settings.mode === 'keys') settings.mode = 'camera';
+// Two kids per camera: tracking more than that was too much for a tablet.
+// With a friend's house joined, their two kids make four lanes.
+const MAX_KIDS = 2;
+settings.count = Math.min(MAX_KIDS, settings.count);
 settings.theme = 'random'; // every visit starts on Surprise me
 
 let state = 'setup';   // setup | loading | lobby | ready | tutorial | play | end | heart
@@ -1065,7 +1069,7 @@ function shareTick(t) {
     found: state === 'lobby' ? lobby.filter(L => L.found).length : 0,
     kids: players.map(p => ({
       name: p.name, color: p.color, char: (p.character || CHARACTERS[slotChar[p.index]]).id,
-      score: p.score, total: total(p), streak: p.streak, lift: Math.round(p.lift * 100) / 100,
+      score: p.score, total: total(p), streak: p.streak, skill: Math.round(p.skill * 100) / 100, lift: Math.round(p.lift * 100) / 100,
       act: Object.fromEntries(Object.entries(p.act).filter(([, v]) => v === true)), gear: p.gear,
     })),
   });
@@ -1219,11 +1223,14 @@ function draw(t) {
     return;
   }
   const theme = themeNow();
-  const n = players.length;
+  const fl = friendLanes(t);
+  const n = players.length + fl.length;
   lctx.clearRect(0, 0, low.width, low.height);
   for (const p of players) drawLaneWorld(lctx, laneBox(p.index, n, low.width, low.height), p, t, p.character || CHARACTERS[0], theme);
+  for (const q of fl) drawLaneWorld(lctx, laneBox(q.index, n, low.width, low.height), q, t, q.character, theme);
   ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
   for (const p of players) drawLaneHud(ctx, laneBox(p.index, n, W, H), p, p.character, { debug });
+  for (const q of fl) drawLaneHud(ctx, laneBox(q.index, n, W, H), q, q.character, {});
 
   // Timer.
   if (state === 'play' && settings.seconds) {
@@ -1233,7 +1240,7 @@ function draw(t) {
     text(ctx, `${m}:${String(s).padStart(2, '0')}`, W / 2, hudBottom(n) + size * 0.7, size, left <= 15 ? '#ff5d73' : '#ffffff');
   }
 
-  const friendsH = drawFriends(t, hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01));
+  const friendsH = drawSquadScores(hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01));
   if (showCam && frame && tracker) {
     const cw = W * 0.18, ch = cw * 0.6;
     const L0 = laneBox(0, n, W, H);
@@ -1247,33 +1254,36 @@ function draw(t) {
   drawBanner(t);
 }
 
-// The friends' characters, doing the moves their kids are doing right now,
-// in a small window under the timer. Returns the height it took.
-function drawFriends(t, y) {
+// The friends' kids get their own lanes after ours: the road scrolls and
+// their character does whatever move their kid is doing right now. Their
+// obstacles aren't sent, so the lane has none.
+let friendKids = [];
+function friendLanes(t) {
+  const f = room.friend;
+  if (!friendHere() || !f?.kids?.length) { friendKids = []; return friendKids; }
+  const kids = f.kids.slice(0, MAX_KIDS);
+  friendKids = kids.map((k, i) => {
+    const q = friendKids[i] || { obstacles: [], fx: [], bonk: 0, bump: 0, throwing: null, misses: 0, hits: 0 };
+    if (q.score != null && k.score > q.score) q.bump = 0.5; // the score bubble jiggles, as for our kids
+    q.bump = Math.max(0, (q.bump || 0) - 1 / 60);
+    return Object.assign(q, {
+      index: players.length + i, name: `🤝 ${k.name}`, color: k.color || '#8fd3ff', character: CHARACTERS[charIndex(k.char)],
+      score: k.score || 0, streak: k.streak || 0, skill: k.skill ?? 2, act: k.act || {}, lift: k.lift || 0,
+      gear: k.gear || {}, clock: t, level: Math.floor(k.skill ?? 2) + 1,
+    });
+  });
+  return friendKids;
+}
+
+// Both squads' totals under the timer. Returns the height it took.
+function drawSquadScores(y) {
   const f = room.friend;
   if (!friendHere() || !f?.kids?.length) return 0;
-  const k = f.kids.length;
-  const h = H * 0.19, S = H * 0.024, cell = Math.max(H * 0.13, S * 6), pad = H * 0.012;
-  const w = Math.max(cell * k, H * 0.42) + pad * 2;
-  // On the line between two lanes, so it hides as little of each as it can.
-  const n = players.length, mid = n === 1 ? W - w / 2 - H * 0.02 : W * Math.floor(n / 2) / n, x = mid - w / 2;
-  ctx.fillStyle = 'rgba(10,14,30,0.6)';
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(x, y, w, h, H * 0.015) : ctx.rect(x, y, w, h);
-  ctx.fill();
   const ours = players.reduce((a, p) => a + total(p), 0);
   const theirs = f.kids.reduce((a, q) => a + (q.total || 0), 0);
-  text(ctx, `Us ${ours.toLocaleString()}  ·  Friends ${theirs.toLocaleString()}`, mid, y + h * 0.11, H * 0.026, ours >= theirs ? '#3ddc84' : '#ffe14d');
-  const x0 = mid - (cell * k) / 2;
-  f.kids.forEach((q, i) => {
-    const cx = x0 + cell * (i + 0.5);
-    const feet = y + h * 0.7;
-    const P = cartoonPose(q.act || {}, Math.sin(t * 8 + i) * 0.04);
-    drawCharacter(ctx, cx, feet - 1.65 * S - (q.lift || 0) * S * 0.9, S, P, CHARACTERS[charIndex(q.char)], false, q.gear || {});
-    text(ctx, `${q.streak >= 8 ? '⚡' : ''}${q.name}`, cx, y + h * 0.79, H * 0.021, q.color || '#ffffff');
-    text(ctx, (q.score || 0).toLocaleString(), cx, y + h * 0.91, H * 0.024, '#ffffff');
-  });
-  return h + H * 0.01;
+  const size = H * 0.032;
+  text(ctx, `Us ${ours.toLocaleString()}  ·  Friends ${theirs.toLocaleString()}`, W / 2, y + size * 0.6, size, ours >= theirs ? '#3ddc84' : '#ffe14d');
+  return size * 1.4;
 }
 
 // Bottom edge of the name plates at the top of each lane.
@@ -1319,7 +1329,8 @@ const attractPlayers = [0, 1, 2, 3].map(i => ({
 
 function drawLobby(t) {
   const theme = themeNow();
-  const n = players.length;
+  const fl = friendLanes(t);
+  const n = players.length + fl.length;
   const cam = settings.mode === 'camera';
 
   // Backdrop + big characters in their lanes (pixel layer).
@@ -1338,6 +1349,15 @@ function drawLobby(t) {
     drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
     lctx.globalAlpha = 1;
   });
+  const fr = room.friend;
+  fl.forEach((q, i) => {
+    const L = laneBox(q.index, n, low.width, low.height);
+    const S = Math.min(low.height * 0.05, L.w * 0.12);
+    const P = cartoonPose(q.act, Math.sin(t * 6 + q.index) * 0.05);
+    lctx.globalAlpha = fr.state === 'lobby' ? 1 : 0.5;
+    drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, q.character, false, q.gear);
+    lctx.globalAlpha = 1;
+  });
   ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
 
   // Camera view on top.
@@ -1350,14 +1370,14 @@ function drawLobby(t) {
   }
 
   // Headline.
-  const found = lobby.found ?? 0;
+  const found = lobby.found ?? 0, here = players.length;
   let headline, sub;
-  if (cam && found < n) {
-    headline = found === 0 ? 'Step into the picture!' : `Found ${found} of ${n}`;
+  if (cam && found < here) {
+    headline = found === 0 ? 'Step into the picture!' : `Found ${found} of ${here}`;
     sub = 'Spread out so the camera can see everyone, head to knees';
-  } else if (cam && found > n) {
+  } else if (cam && found > here) {
     headline = `I see ${found} people`;
-    sub = `Only ${n} can play. Extra people, step out of the picture please`;
+    sub = `Only ${here} can play. Extra people, step out of the picture please`;
   } else {
     headline = 'Everyone is here!';
     sub = cam ? 'Point an arm to the side to change character. Both hands up when ready!'
@@ -1368,8 +1388,8 @@ function drawLobby(t) {
     sub = 'We\'ll start together when they\'re ready. Start now plays without them.';
   }
   text(ctx, headline, W / 2, H * 0.06, H * 0.065, '#ffe14d');
-  const fl = friendLine();
-  if (fl) text(ctx, fl, W / 2, H * 0.935, H * 0.032, '#8fd3ff');
+  const line = friendLine();
+  if (line) text(ctx, line, W / 2, H * 0.935, H * 0.032, '#8fd3ff');
   text(ctx, sub, W / 2, H * 0.125, H * 0.032, '#ffffff');
 
   // Name cards under each character.
@@ -1393,6 +1413,15 @@ function drawLobby(t) {
         ctx.fillRect(L.x + L.w * 0.1, H * 0.79, L.w * 0.8 * k, H * 0.01);
       }
     }
+  });
+  fl.forEach(q => {
+    const L = laneBox(q.index, n, W, H);
+    const fs = Math.min(H * 0.04, L.w * 0.085);
+    ctx.fillStyle = q.color;
+    ctx.fillRect(L.x + L.w * 0.1, H * 0.80, L.w * 0.8, H * 0.08);
+    text(ctx, `${q.name} · ${q.character.name}`, L.cx, H * 0.825, fs, '#ffffff');
+    const status = fr.state !== 'lobby' ? 'Not here yet' : fr.waiting ? 'READY!' : 'Getting ready…';
+    text(ctx, status, L.cx, H * 0.86, fs * 0.8, fr.waiting ? '#3ddc84' : '#ffffff');
   });
 }
 
