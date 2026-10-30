@@ -1,6 +1,6 @@
-import { Player, COLORS, features, keyActions } from './game.js';
+import { Player, COLORS, BREAKS, features, keyActions } from './game.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
-import { unlockAudio, sfx, hitSound, missSound, say, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, voice, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 
@@ -25,6 +25,8 @@ let state = 'setup';   // setup | loading | lobby | ready | tutorial | play | en
 let players = [];
 let slotChar = [0, 1, 2, 3];
 let tracker = null;
+let camFacing = null;   // which camera the running stream uses
+const watch = { time: -1, since: 0, busy: false }; // camera freeze watchdog
 let frame = null;       // latest pose result
 let keys = new Set();
 let showCam = true, debug = false, muted = false;
@@ -103,39 +105,81 @@ $('#helpClose').onclick = () => { $('#help').classList.add('hidden'); $('#setup'
 $('#btnFs').onclick = toggleFullscreen;
 if (standalone || !canFs) $('#btnFs').classList.add('hidden');
 
+const exitFullscreen = () => (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+document.addEventListener('fullscreenchange', updateFsNudge);
+document.addEventListener('webkitfullscreenchange', updateFsNudge);
+$('#fsNudge').onclick = () => { enterFullscreen(); setTimeout(updateFsNudge, 500); };
+function updateFsNudge() {
+  $('#fsNudge').classList.toggle('hidden', state !== 'lobby' || !canFs || standalone || !!fsEl());
+}
+
+// Starts (or restarts) the camera stream and builds the body tracker once.
+// The tracker is reused between rounds: building a new one each time used up
+// the phone's graphics memory, which froze the camera on the second game.
+async function ensureCamera() {
+  watch.busy = true;
+  try { await openCamera(); } finally { watch.busy = false; watch.since = now(); }
+}
+async function openCamera() {
+  const live = video.srcObject?.getVideoTracks().some(t => t.readyState === 'live');
+  if (!live || camFacing !== settings.facing) {
+    stopCamera(video);
+    await startCamera(video, settings.facing);
+    camFacing = settings.facing;
+  } else if (video.paused) {
+    await video.play();
+  }
+  if (!tracker || tracker.players !== settings.count) {
+    tracker?.close();
+    tracker = null;
+    tracker = await createTracker(video, settings.count);
+  }
+}
+
 $('#go').onclick = async () => {
   unlockAudio();
-  if (canFs) enterFullscreen();
   $('#status').textContent = '';
   awake.start();
   players = settings.players.slice(0, settings.count).map((cfg, i) => new Player(i, cfg));
-  players.forEach(p => {
-    p.keyboard = settings.mode === 'keys';
-    p.onEvent = (type, o) => {
-      if (type === 'hit') hitSound(o.kind);
-      else if (type === 'miss') missSound(o.kind);
-      else if (sfx[type]) sfx[type]();
-    };
-  });
-  if (settings.mode === 'camera' && !tracker) {
+  players.forEach(p => { p.gear = { ...(slotGear[p.index] || {}) }; });
+  if (settings.mode === 'camera') {
+    // Ask for the camera before going full screen: on iPad the permission
+    // prompt gets lost behind a full screen page.
+    if (!video.srcObject && fsEl()) { try { await exitFullscreen(); } catch { } }
     $('#go').disabled = true;
     $('#status').textContent = 'Starting camera and loading the body tracker…';
     try {
-      await startCamera(video, settings.facing);
-      tracker = await createTracker(video, settings.count);
+      await ensureCamera();
     } catch (e) {
       console.error(e);
       $('#status').textContent = `Couldn't start the camera: ${e.message || e}. You can try Keyboard test instead.`;
       $('#go').disabled = false;
       stopCamera(video);
-      tracker = null;
       return;
     }
     $('#go').disabled = false;
+  } else {
+    stopCamera(video);
   }
+  // After a camera prompt some browsers refuse full screen; the lobby then
+  // shows a big button for it.
+  if (canFs) enterFullscreen();
   $('#setup').classList.add('hidden');
   enterLobby();
 };
+
+function playerEvent(type, o) {
+  if (type === 'hit') hitSound(o.kind);
+  else if (type === 'miss') missSound(o.kind);
+  else if (sfx[type]) sfx[type]();
+  if (type === 'super') voice('electric');
+  else if (type === 'gear') voice('new_hat', { soft: true });
+  else if (type === 'level') voice('level_up', { soft: true });
+  else if (type === 'pop') voice('pop', { soft: true });
+  else if (type === 'strike') voice(players[0]?.throwing?.type === 'karate' ? 'hiyah' : 'strike', { soft: true });
+  else if (type === 'chop' && Math.random() < 0.3) voice('chop', { soft: true });
+  else if (type === 'streak') voice(['wow', 'awesome', 'nice'][Math.floor(Math.random() * 3)], { soft: true });
+}
 
 // ---------------- States ----------------
 
@@ -144,24 +188,26 @@ function setState(s) {
   stateT = now();
   $('#hudButtons').classList.toggle('hidden', !['lobby', 'ready', 'tutorial', 'play'].includes(s));
   $('#btnStart').classList.toggle('hidden', s !== 'lobby');
+  updateFsNudge();
 }
 
 function enterLobby() {
   lobby = players.map(() => ({ found: false, ready: false, upSince: 0, armLatch: false }));
-  players.forEach(p => { p.reset(); p.clearCalibration(); p.trackX = null; p.heartRate = null; });
-  if (settings.mode === 'camera' && !tracker) { restartCamera(); }
+  players.forEach(p => { p.reset(); p.clearCalibration(); p.trackX = null; p.homeX = null; p.heartRate = null; p.onEvent = playerEvent; });
+  tracks = [];
+  if (settings.mode === 'camera') ensureCamera().catch(e => console.error(e));
   setState('lobby');
-  say(settings.mode === 'camera'
-    ? 'Stand where you like and spread out. Point an arm to the side to pick your character. Put both hands up when you are ready!'
-    : 'Press left or right to pick your character. Press up when you are ready!');
+  updateFsNudge();
+  if (settings.mode === 'camera') voice('lobby');
 }
 
 function startReady() {
   // Everyone found (or the parent pressed Start): calibrate and count down.
   players.forEach(p => { p.clearCalibration(); p.character = CHARACTERS[slotChar[p.index]]; });
+  setHomes();
   setState('ready');
   showBanner('Arms down, stand tall!', 'Get ready…', 2.4);
-  say('Arms down and stand tall!');
+  voice('ready');
 }
 
 function startTutorial() {
@@ -172,18 +218,18 @@ function startTutorial() {
 }
 
 const LESSONS = [
-  { kind: 'log', title: 'Brick wall? JUMP!', speak: 'Here comes a brick wall. Jump over it!' },
-  { kind: 'crate', side: 'mid', title: 'Crate? PUNCH it!', speak: 'Here comes a crate. Punch it to smash it!' },
-  { kind: 'bird', side: 'left', title: 'Crazy bird? LEAN away!', speak: 'Uh oh, a crazy bird! Lean your head the other way!' },
-  { kind: 'rope', title: 'Puddle? GRAB the rope!', speak: 'A muddy puddle! Put both hands up to grab the rope and swing!' },
+  { kind: 'log', title: 'Brick wall? JUMP!' },
+  { kind: 'crate', side: 'mid', title: 'Crate? PUNCH it!' },
+  { kind: 'bird', side: 'left', title: 'Crazy bird? LEAN away!' },
+  { kind: 'rope', title: 'Puddle? GRAB the rope!' },
 ];
 
-// Short calls in a squeaky cartoon voice as each obstacle gets close.
+// Short calls from the cartoon announcer as each obstacle gets close.
 function callFor(o) {
-  if (o.kind === 'log') return 'Jump!';
-  if (o.kind === 'rope') return 'Grab the rope!';
-  if (o.kind === 'bird') return o.side === 'left' ? 'Lean right!' : 'Lean left!';
-  return o.side === 'mid' ? 'Punch!' : `Punch ${o.side}!`;
+  if (o.kind === 'log') return 'jump';
+  if (o.kind === 'rope') return 'rope';
+  if (o.kind === 'bird') return o.side === 'left' ? 'lean_right' : 'lean_left';
+  return o.side === 'mid' ? 'punch' : `punch_${o.side}`;
 }
 let lastCall = 0;
 function callMoves(t) {
@@ -199,18 +245,27 @@ function callMoves(t) {
   // Mark everything due now as called, so the voice doesn't fall behind.
   for (const p of players) for (const o of p.obstacles) if (!o.called && (o.arrive - p.clock) / o.travel < 0.5) o.called = true;
   lastCall = t;
-  say(callFor(best.o), { cartoon: true });
+  voice(callFor(best.o));
 }
 
-// Throw-time breaks: once in a short workout, a couple of times in longer ones.
+// Stop-and-do breaks: once in a 1 minute workout, more in longer ones.
 function planThrows(dur) {
-  if (!dur) return [40, 90, 140, 190, 240, 290].concat([...Array(40)].map((_, i) => 340 + i * 50));
+  if (!dur) return [...Array(60)].map((_, i) => 35 + i * 45);
   if (dur < 60) return [];
-  const n = dur >= 180 ? 2 : 1;
+  const n = dur >= 240 ? 3 : dur >= 120 ? 2 : 1;
   return [...Array(n)].map((_, i) => Math.round((dur * (i + 1)) / (n + 1)));
 }
-const THROW_SECS = 12;
+const THROW_SECS = 14;
+const BREAK_INFO = {
+  cans: { title: 'THROW TIME!', sub: 'Throw the ball to knock down the cans!', clip: 'throw_time' },
+  karate: { title: 'KARATE TIME!', sub: 'Chop down hard to break the boards!', clip: 'karate_time' },
+  bubbles: { title: 'BUBBLE TIME!', sub: 'Flap your arms to fly up and pop the bubbles!', clip: 'bubble_time' },
+  snowman: { title: 'SNOWBALL TIME!', sub: 'Throw snowballs to knock down the snowman!', clip: 'snowball_time' },
+};
 let throwPlan = [], throwEnd = 0;
+// Carries on between rounds, so the next game starts with a different break.
+let breakTurn = Math.floor(Math.random() * BREAKS.length);
+let slotGear = [];      // hats each player slot has collected
 
 function startPlay() {
   setState('play');
@@ -220,7 +275,7 @@ function startPlay() {
   throwEnd = 0;
   players.forEach(p => p.startRound());
   showBanner('GO!', settings.seconds ? `${Math.round(settings.seconds / 60)} minute workout` : 'Endless mode', 1.4);
-  say('Go!');
+  voice('go');
   sfx.beep(true);
 }
 
@@ -229,7 +284,8 @@ function endRound() {
   stopMusic();
   players.forEach(p => p.throwing && p.stopThrowing());
   sfx.finish();
-  say('Great moving, squad!');
+  voice('great');
+  players.forEach(p => { slotGear[p.index] = { ...p.gear }; });
   showResults();
 }
 
@@ -237,15 +293,6 @@ function showBanner(textStr, sub = '', secs = 2) {
   banner = { text: textStr, sub, until: now() + secs, from: now() };
 }
 
-// The heart check turns the camera off; bring it back for another round.
-async function restartCamera() {
-  try {
-    await startCamera(video, settings.facing);
-    tracker = await createTracker(video, settings.count);
-  } catch (e) {
-    console.error(e);
-  }
-}
 
 // ---------------- End screen ----------------
 
@@ -302,7 +349,10 @@ function pickAwards(ps) {
     ['Super Jumper', p => p.counts.jump],
     ['Bird Dodger', p => p.counts.dodge],
     ['Jungle Swinger', p => p.counts.swing],
-    ['Can Crusher', p => p.counts.knock],
+    ['Sharp Shooter', p => p.counts.knock],
+    ['Karate Master', p => p.counts.chop],
+    ['Bubble Popper', p => p.counts.pop],
+    ['Hat Collector', p => p.counts.gear],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
   const out = new Map();
@@ -321,14 +371,16 @@ $('#again').onclick = () => { $('#end').classList.add('hidden'); unlockAudio(); 
 $('#menu').onclick = () => { $('#end').classList.add('hidden'); setState('setup'); $('#setup').classList.remove('hidden'); };
 $('#heart').onclick = async () => {
   $('#end').classList.add('hidden');
-  if (tracker) { stopCamera(video); tracker = null; frame = null; }
+  // The camera rests during the heart check; the tracker is kept for later.
+  stopCamera(video);
+  frame = null;
   setState('heart');
   document.body.classList.add('heart-mode');
-  await runHeartCheck(players, { say, sfx });
+  await runHeartCheck(players, { voice, sfx });
   document.body.classList.remove('heart-mode');
   setState('end');
   showResults();
-  if (players.some(p => p.heartRate)) say('Here are your champions!');
+  if (players.some(p => p.heartRate)) voice('champions');
 };
 
 // ---------------- Input ----------------
@@ -389,6 +441,12 @@ function updateTracks(t) {
 // Lobby: whoever is in view, left to right, becomes players 1..n.
 function assignLobby(t) {
   updateTracks(t);
+  // Once everyone has been seen together, each kid keeps their own spot, so a
+  // brief miss doesn't shuffle characters between kids.
+  if (players.every(p => p.homeX != null)) {
+    assignHomes(t, 0.1);
+    return tracks.length;
+  }
   const chosen = [...tracks].sort((a, b) => b.f.torso - a.f.torso).slice(0, players.length).sort((a, b) => a.x - b.x);
   players.forEach((p, i) => {
     const o = chosen[i];
@@ -396,39 +454,70 @@ function assignLobby(t) {
     p.trackX = o ? o.x : null;
     if (o) p.lastSeen = t;
   });
+  if (chosen.length === players.length) setHomes();
   return tracks.length;
 }
 
-// In play: follow each kid by staying with the closest person to where they were.
+// In play: every kid has a home spot, set when the lobby ends. Kids stand in
+// place and never pass each other, so people in view are matched to homes
+// keeping their left-to-right order, each person to the nearest free home.
+// That way two kids can't swap characters, a kid who drops out of view is
+// picked up again at their own spot, and a double detection of one kid can't
+// steal a neighbour's character. Homes slowly follow the kids, which keeps
+// the spots fresh if someone shuffles over a little.
+let homeReach = 0.2;   // how far (fraction of the picture) from home still counts
+function setHomes() {
+  const n = players.length;
+  players.forEach(p => { p.homeX = p.trackX ?? (p.index + 0.5) / n; });
+  // Keep homes in player order (player 1 is furthest left).
+  const xs = players.map(p => p.homeX).sort((a, b) => a - b);
+  players.forEach((p, i) => { p.homeX = xs[i]; });
+  // Never reach past halfway to a neighbour's spot.
+  let gap = 1;
+  for (let i = 1; i < n; i++) gap = Math.min(gap, xs[i] - xs[i - 1]);
+  homeReach = Math.max(0.06, Math.min(0.2, gap * 0.55));
+}
+
 function assignPlay(t) {
   updateTracks(t);
-  const pairs = [];
-  players.forEach(p => tracks.forEach((o, j) => {
-    if (p.trackX != null) pairs.push({ p, j, d: Math.abs(p.trackX - o.x) });
-  }));
-  pairs.sort((a, b) => a.d - b.d);
-  const usedP = new Set(), usedO = new Set();
-  const feed = (p, o) => {
-    p.trackX = o.x;
-    if (o.stamp === t) p.trackPose(o.pts, t);
-  };
-  for (const { p, j, d } of pairs) {
-    if (usedP.has(p) || usedO.has(j) || d > 0.22) continue;
-    usedP.add(p); usedO.add(j);
-    feed(p, tracks[j]);
-  }
-  // A kid that dropped out of view can be picked up again by anyone unclaimed.
-  for (const p of players) {
-    if (usedP.has(p)) continue;
-    const free = tracks.map((o, j) => ({ o, j })).filter(e => !usedO.has(e.j));
-    if (free.length && (p.trackX == null || t - (p.lastSeen ?? 0) > 1.5)) {
-      const slotX = (p.index + 0.5) / players.length;
-      free.sort((a, b) => Math.abs(a.o.x - slotX) - Math.abs(b.o.x - slotX));
-      usedO.add(free[0].j);
-      feed(p, free[0].o);
-    } else {
-      p.trackPose(null, t);
+  assignHomes(t, 0.02);
+}
+
+// follow: how quickly homes move to where the kids are now standing.
+function assignHomes(t, follow) {
+  const HOME_REACH = homeReach;
+  const ps = [...players].sort((a, b) => a.homeX - b.homeX);
+  const os = [...tracks].sort((a, b) => a.x - b.x);
+  const n = ps.length, m = os.length;
+  // best[i][j]: lowest cost placing the first i kids using the first j people.
+  // Leaving a kid without anyone costs a fixed amount, as does ignoring a person.
+  const MISS = HOME_REACH, EXTRA = 0.02;
+  const best = [...Array(n + 1)].map(() => Array(m + 1).fill(Infinity));
+  const how = [...Array(n + 1)].map(() => Array(m + 1).fill(0));
+  best[0][0] = 0;
+  for (let i = 0; i <= n; i++) for (let j = 0; j <= m; j++) {
+    const c = best[i][j];
+    if (c === Infinity) continue;
+    if (i < n && c + MISS < best[i + 1][j]) { best[i + 1][j] = c + MISS; how[i + 1][j] = 1; }
+    if (j < m && c + EXTRA < best[i][j + 1]) { best[i][j + 1] = c + EXTRA; how[i][j + 1] = 2; }
+    if (i < n && j < m) {
+      const d = Math.abs(os[j].x - ps[i].homeX);
+      if (d < HOME_REACH && c + d < best[i + 1][j + 1]) { best[i + 1][j + 1] = c + d; how[i + 1][j + 1] = 3; }
     }
+  }
+  const match = new Map();
+  for (let i = n, j = m; i > 0 || j > 0;) {
+    const h = how[i][j];
+    if (h === 3) { match.set(ps[i - 1], os[j - 1]); i--; j--; }
+    else if (h === 1) i--;
+    else j--;
+  }
+  for (const p of players) {
+    const o = match.get(p);
+    if (!o) { p.trackPose(null, t); continue; }
+    p.trackX = o.x;
+    p.homeX += (o.x - p.homeX) * follow;
+    if (o.stamp === t) p.trackPose(o.pts, t);
   }
 }
 
@@ -491,12 +580,26 @@ function loop() {
 
   if (tracker && state !== 'setup' && state !== 'end') {
     try { frame = tracker.detect(t * 1000) || frame; } catch (e) { console.warn(e); }
+    watchCamera(t);
   }
 
   if (state === 'lobby') updateLobby(t);
   else if (['ready', 'tutorial', 'play'].includes(state)) updateGame(t, dt);
 
   draw(t);
+}
+
+// If the picture stops moving, nudge the video; if that doesn't help,
+// restart the camera stream (the tracker stays).
+function watchCamera(t) {
+  if (settings.mode !== 'camera' || watch.busy) return;
+  if (video.currentTime !== watch.time) { watch.time = video.currentTime; watch.since = t; return; }
+  const stuck = t - watch.since;
+  if (stuck > 1.5 && stuck < 1.6) video.play().catch(() => { });
+  if (stuck > 4) {
+    stopCamera(video);
+    ensureCamera().catch(e => console.error(e));
+  }
 }
 
 function updateLobby(t) {
@@ -552,24 +655,25 @@ function updateGame(t, dt) {
       p.setActions(a);
       if (!p.base) p.base = { hipX: 0, hipY: 0, noseX: 0, noseY: 0, torso: 1 };
     }
-    const seen = !cam || (p.lastSeen != null && t - p.lastSeen < 0.7);
+    const seen = !cam || (p.lastSeen != null && t - p.lastSeen < 1.2);
     p.paused = !seen ? 'Come back to your spot!' : !p.base ? 'Stand still…' : null;
   }
 
   if (state === 'ready') {
     const el = t - stateT;
-    const allSet = players.every(p => p.base || !(t - (p.lastSeen ?? -9) < 0.7));
+    const allSet = players.every(p => p.base || !(t - (p.lastSeen ?? -9) < 1.2));
     if (el > 2.4 && !banner?.count) {
       if (allSet || el > 7) {
         banner = { count: 3, at: t };
         sfx.beep(false);
+        voice('three');
       }
     }
     if (banner?.count) {
       const n = 3 - Math.floor(t - banner.at);
       if (n !== banner.count) {
         banner.count = n;
-        if (n > 0) sfx.beep(false);
+        if (n > 0) { sfx.beep(false); voice(['one', 'two', 'three'][n - 1]); }
       }
       if (n <= 0) {
         banner = null;
@@ -584,13 +688,13 @@ function updateGame(t, dt) {
       tut.step++;
       if (tut.step >= LESSONS.length) {
         showBanner("You've got it!", 'Now the real thing…', 2);
-        say("You've got it! Let's go!");
+        voice('got_it');
         tut.next = Infinity;
         setTimeout(() => state === 'tutorial' && startPlay(), 2200);
       } else {
         const L = LESSONS[tut.step];
         showBanner(L.title, '', 4.2);
-        say(L.speak);
+        voice(`lesson_${L.kind}`);
         players.forEach(p => p.teach(L.kind, L.side || null, 4));
         tut.next = tn + 5.6;
       }
@@ -604,9 +708,13 @@ function updateGame(t, dt) {
     if (throwPlan.length && roundT >= throwPlan[0] && !throwEnd && (!dur || dur - roundT > THROW_SECS + 15)) {
       throwPlan.shift();
       throwEnd = roundT + THROW_SECS;
-      players.forEach(p => p.startThrowing());
-      showBanner('THROW TIME!', 'Throw the ball to knock down the cans!', 2.6);
-      say('Throw time! Throw the ball and knock down the cans!');
+      let type = BREAKS[breakTurn++ % BREAKS.length];
+      if (settings.theme === 'snow' && type === 'cans') type = 'snowman';
+      else if (settings.theme !== 'snow' && type === 'snowman' && Math.random() < 0.5) type = 'cans';
+      players.forEach(p => p.startBreak(type));
+      const info = BREAK_INFO[type];
+      showBanner(info.title, info.sub, 2.8);
+      voice(info.clip);
     } else if (throwPlan.length && dur && roundT >= throwPlan[0] && !throwEnd) {
       throwPlan.shift();
     }
@@ -614,7 +722,7 @@ function updateGame(t, dt) {
       throwEnd = 0;
       players.forEach(p => p.stopThrowing());
       showBanner('Back to running!', '', 1.6);
-      say('Back to running!');
+      voice('back');
     }
     if (!throwEnd) callMoves(t);
     setIntensity(dur ? roundT / dur : Math.min(1, roundT / 180));
@@ -625,7 +733,7 @@ function updateGame(t, dt) {
       if (rush && !players[0].rush) {
         setIntensity(1);
         showBanner('FINAL RUSH!', 'Double points!', 2);
-        say('Final rush! Double points!');
+        voice('final_rush');
       }
       players.forEach(p => { p.rush = rush; });
       if (left <= 3 && Math.ceil(left) !== Math.ceil(left + dt)) sfx.beep(false);
@@ -734,7 +842,7 @@ function drawLobby(t) {
     const act = st.ready ? { reach: Math.floor(t * 3) % 2 === 0 } : {};
     const P = cartoonPose(act, Math.sin(t * 6 + i) * 0.05);
     lctx.globalAlpha = st.found ? 1 : 0.35;
-    drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]]);
+    drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
     lctx.globalAlpha = 1;
   });
   ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
@@ -793,5 +901,9 @@ requestAnimationFrame(loop);
 
 // Test hook: open with ?debug to inspect tracking from the console.
 if (new URLSearchParams(location.search).has('debug')) {
-  window.qs = { get frame() { return frame; }, get players() { return players; }, get state() { return state; }, advance(sec) { roundT += sec; } };
+  window.qs = {
+    get frame() { return frame; }, get players() { return players; }, get state() { return state; },
+    get tracker() { return tracker; }, advance(sec) { roundT += sec; },
+    startBreak(type) { throwEnd = roundT + THROW_SECS; players.forEach(p => p.startBreak(type)); },
+  };
 }

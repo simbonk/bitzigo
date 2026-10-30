@@ -1,4 +1,5 @@
-// Little synthesised sound effects (no audio files) plus a spoken voice for cues.
+// Little synthesised sound effects and music, plus short recorded voice clips
+// (voice/*.mp3) for the cartoon announcer.
 let ac = null;
 let master = null;
 let muted = false;
@@ -11,6 +12,9 @@ export function unlockAudio() {
     master = ac.createGain();
     master.gain.value = 0.5;
     master.connect(ac.destination);
+    // iPhone/iPad: play even with the ring switch on silent.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
+    loadVoices();
   }
   if (ac.state === 'suspended') ac.resume();
 }
@@ -76,6 +80,11 @@ export const sfx = {
   beep(high) { tone(high ? 880 : 440, 0.15, { vol: 0.2 }); },
   select() { tone(700, 0.06, { vol: 0.15 }); tone(1000, 0.06, { vol: 0.15, delay: 0.05 }); },
   ready() { tone(523, 0.1, { vol: 0.18 }); tone(784, 0.16, { vol: 0.18, delay: 0.08 }); },
+  pop() { tone(500, 0.08, { type: 'sine', vol: 0.35, slide: 3 }); noise(0.08, { vol: 0.3, from: 5000, to: 2000, q: 2, delay: 0.03 }); },
+  chop() { noise(0.12, { vol: 0.7, from: 3000, to: 600, q: 1.5 }); tone(180, 0.1, { vol: 0.25, slide: 0.5 }); },
+  flap() { noise(0.14, { vol: 0.25, from: 400, to: 1400, q: 2 }); },
+  super() { [0, 0.07, 0.14, 0.21].forEach((d, i) => tone(1200 + i * 300, 0.06, { type: 'sawtooth', vol: 0.1, slide: 0.5, delay: d })); noise(0.4, { vol: 0.25, from: 6000, to: 1500, q: 4 }); },
+  gear() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.18, delay: i * 0.05 })); },
   finish() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.18, { vol: 0.18, delay: i * 0.12 })); },
 };
 
@@ -175,15 +184,43 @@ export function stopMusic() {
 // 0..1: speeds the music up and fills it out as the timer runs down.
 export function setIntensity(v) { music.intense = Math.max(0, Math.min(1, v)); }
 
-// Spoken cue using the device's built-in voice, if it has one.
-// cartoon: a squeaky, fast voice for the in-game move calls.
-export function say(text, { cartoon = false } = {}) {
-  if (muted || !window.speechSynthesis) return;
-  try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = cartoon ? 1.25 : 1.0;
-    u.pitch = cartoon ? 2 : 1.25;
-    speechSynthesis.speak(u);
-  } catch { /* speech is optional */ }
+// ---------- Voice: pre-recorded clips, decoded once and played on the audio clock ----------
+
+export const VOICE_LINES = [
+  'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
+  'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time',
+  'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
+  'got_it', 'lobby', 'heart', 'heart_done', 'champions', 'super', 'level_up', 'strike', 'hiyah',
+  'wow', 'awesome', 'nice', 'oops', 'pop', 'electric', 'chop', 'fly', 'new_hat',
+];
+const clips = {};
+let current = null;
+
+function loadVoices() {
+  for (const name of VOICE_LINES) {
+    fetch(`voice/${name}.mp3`)
+      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+      // Older Safari only has the callback form of decodeAudioData.
+      .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
+      .then(b => { clips[name] = b; })
+      .catch(() => { /* a missing clip just stays silent */ });
+  }
+}
+
+// Plays a clip, cutting off the one before so calls never pile up.
+// soft: a quick reaction that never interrupts an instruction.
+export function voice(name, { soft = false } = {}) {
+  if (!ac || muted || !clips[name]) return;
+  const t = ac.currentTime;
+  if (current && current.end > t) {
+    if (soft) return;
+    try { current.src.stop(); } catch { }
+  }
+  const src = ac.createBufferSource();
+  src.buffer = clips[name];
+  const g = ac.createGain();
+  g.gain.value = 1.6;
+  src.connect(g).connect(master);
+  src.start(t);
+  current = { src, end: t + clips[name].duration, soft };
 }

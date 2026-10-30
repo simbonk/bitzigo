@@ -3,6 +3,9 @@
 // drawn on top at full resolution so they stay crisp and readable.
 import { LM, tuning } from './game.js';
 
+// How high (in lane heights) the sky view pans when a kid flies all the way up.
+const SKY_PAN = 0.62;
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const FONT = '"Trebuchet MS", "Avenir Next", system-ui, sans-serif';
 
@@ -13,6 +16,11 @@ export const CHARACTERS = [
   { id: 'bunny', name: 'Bunny', body: '#f4f4f8', limb: '#d8d8e4', head: '#f4f4f8', belly: '#ffc4d6' },
   { id: 'panda', name: 'Panda', body: '#2b2b33', limb: '#2b2b33', head: '#f8f8f8', belly: '#f8f8f8' },
   { id: 'dino', name: 'Dino', body: '#9b6bff', limb: '#7444d8', head: '#9b6bff', belly: '#e2d4ff' },
+  { id: 'ninja', name: 'Ninja', body: '#2b2b3a', limb: '#1f1f2a', head: '#2b2b3a', belly: '#e63946' },
+  { id: 'hedgehog', name: 'Hedgehog', body: '#3f7fe0', limb: '#2f62b8', head: '#3f7fe0', belly: '#f5e2c0' },
+  { id: 'axolotl', name: 'Axolotl', body: '#ff9ec7', limb: '#f27fb0', head: '#ff9ec7', belly: '#ffd6e8' },
+  { id: 'firefighter', name: 'Firefighter', body: '#f4c430', limb: '#3a3a44', head: '#ffd2a8', belly: '#d8dce6' },
+  { id: 'cow', name: 'Cow', body: '#f8f8f8', limb: '#2b2b33', head: '#f8f8f8', belly: '#ffc4d6' },
 ];
 
 export const THEMES = {
@@ -81,6 +89,22 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   ctx.clip();
   if (p.shake > 0) ctx.translate(R(Math.sin(time * 90) * L.S * 0.18 * p.shake / 0.3), R(Math.cos(time * 70) * L.S * 0.12 * p.shake / 0.3));
 
+  // Bubble time: the view follows the kid up into the sky.
+  const B = p.throwing?.type === 'bubbles' ? p.throwing : null;
+  const pan = B ? B.alt * L.h * SKY_PAN : 0;
+  if (B) {
+    rect(ctx, L.x, 0, L.w, L.h, mix(shade(theme.sky[0], -0.08), shade(theme.sky[0], 0), 0.5));
+    ctx.translate(0, R(pan));
+    // High clouds drift by as they climb.
+    for (let c = 0; c < 5; c++) {
+      const u = L.S * 0.4;
+      const cx = L.x + ((c * 0.37 + time * 0.03 * (1 + c % 2)) % 1.3) * L.w - L.w * 0.15;
+      const cy = -L.h * SKY_PAN * (c + 0.5) / 5;
+      rect(ctx, cx, cy, u * 5, u * 1.2, theme.cloud);
+      rect(ctx, cx + u, cy - u, u * 3, u, theme.cloud);
+    }
+  }
+
   // Sky in flat bands.
   const top = shade(theme.sky[0], 0), bottom = shade(theme.sky[1], 0);
   const bands = 5;
@@ -148,10 +172,12 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     const z = (o.arrive - p.clock) / o.travel;
     if (z <= 1.02) items.push({ z, draw: () => drawObstacle(ctx, L, o, z) });
   }
-  if (p.throwing) items.push({ z: TOWER_Z, draw: () => drawTower(ctx, L, p.throwing) });
+  const T = p.throwing;
+  if (T && T.type !== 'bubbles') items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) } : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
   items.push({ z: 0.015, draw: () => drawAvatar(ctx, L, p, time, character) });
   items.sort((a, b) => b.z - a.z).forEach(it => it.draw());
-  if (p.throwing) drawBalls(ctx, L, p.throwing);
+  if (T?.balls) drawBalls(ctx, L, T);
+  if (B) drawBubbles(ctx, L, B, time);
 
   drawBursts(ctx, L, p);
 
@@ -244,6 +270,16 @@ function drawObstacle(ctx, L, o, z) {
       rect(ctx, L.cx - Math.max(1, u * 0.08), top, Math.max(2, u * 0.16), hang - top, '#d9b16a');
       rect(ctx, L.cx - u * 0.16, hang - u * 0.1, u * 0.32, u * 0.3, '#b88a3e');       // knot
     }
+  } else if (o.kind === 'gear') {
+    // A floating prize, bobbing and sparkling at head height.
+    const hu = u * 1.3 / 8, bob = Math.sin(z * 25) * u * 0.2;
+    const cx = L.cx, cy = y - u * 3.1 + bob;
+    ctx.globalAlpha *= 0.35;
+    rect(ctx, cx - u * 0.9, cy - u * 0.9, u * 1.8, u * 1.8, '#ffffff');
+    ctx.globalAlpha = 1;
+    drawGearItem(ctx, o.item.id, cx - hu * 4, cy - hu * 1, hu);
+    const tw = Math.floor(z * 30) % 2;
+    rect(ctx, cx + u * (tw ? 0.8 : -0.9), cy - u * (tw ? 0.8 : 0.3), u * 0.18, u * 0.18, '#ffe14d');
   } else if (o.kind === 'crate') {
     const off = o.side === 'left' ? -1.2 : o.side === 'right' ? 1.2 : 0;
     const size = u * 1.1;
@@ -268,6 +304,7 @@ function canBox(L, c) {
 function drawTower(ctx, L, T) {
   const { y, s } = project(L, TOWER_Z);
   const u = L.S * s;
+  if (T.type === 'snowman') { drawSnowman(ctx, L, T, u * SNOW_SCALE, y); return; }
   block(ctx, L.cx - u * 1.4, y - u * 1.1, u * 2.8, u * 0.3, '#8a5220', 0.3);
   rect(ctx, L.cx - u * 1.2, y - u * 0.8, u * 0.2, u * 0.8, '#6b3e18');
   rect(ctx, L.cx + u, y - u * 0.8, u * 0.2, u * 0.8, '#6b3e18');
@@ -283,10 +320,104 @@ function drawTower(ctx, L, T) {
     ctx.restore();
   }
 }
+// Snowman: three stacked snowballs, bigger than a can. Hit ones tumble away.
+const SNOW_SCALE = 1.5;
+function snowmanBox(L, c, u, ground) {
+  let y = ground;
+  for (let r = 0; r < c.row; r++) y -= u * [1.25, 1, 0.75][r] * 0.92;
+  const d = u * c.size;
+  return { x: L.cx + c.x * u, y: y + c.y * 0 - d / 2, d };
+}
+function drawSnowman(ctx, L, T, u, ground) {
+  for (const c of T.cans) {
+    const b = snowmanBox(L, c, u, ground);
+    ctx.save();
+    ctx.translate(b.x, b.y + (c.down ? (c.y + c.row) * u : 0));
+    ctx.rotate(c.rot);
+    const d = b.d;
+    rect(ctx, -d / 2, -d * 0.35, d, d * 0.7, '#ffffff');
+    rect(ctx, -d * 0.35, -d / 2, d * 0.7, d, '#ffffff');
+    rect(ctx, -d * 0.35, d * 0.3, d * 0.7, d * 0.2, '#cfe3f5');
+    if (c.row === 2) {
+      rect(ctx, -d * 0.25, -d * 0.15, d * 0.12, d * 0.12, '#1b1b22');
+      rect(ctx, d * 0.13, -d * 0.15, d * 0.12, d * 0.12, '#1b1b22');
+      rect(ctx, -d * 0.05, 0, d * 0.35, d * 0.1, '#ff8a2a');
+      rect(ctx, -d * 0.4, -d * 0.62, d * 0.8, d * 0.12, '#1b1b22');
+      rect(ctx, -d * 0.25, -d * 1.0, d * 0.5, d * 0.4, '#1b1b22');
+    } else if (c.row === 1) {
+      rect(ctx, -d * 0.05, -d * 0.2, d * 0.1, d * 0.1, '#1b1b22');
+      rect(ctx, -d * 0.05, d * 0.05, d * 0.1, d * 0.1, '#1b1b22');
+      rect(ctx, -d * 0.5, -d * 0.45, d, d * 0.12, '#e63946');
+    }
+    ctx.restore();
+  }
+}
+// Karate time: boards across two bricks. Chopped boards snap and fly.
+const KARATE_Z = 0.12;
+function drawBoards(ctx, L, T) {
+  const { y, s } = project(L, KARATE_Z);
+  const u = L.S * s;
+  block(ctx, L.cx - u * 1.5, y - u * 1.0, u * 0.6, u * 1.0, '#9aa7b8', 0.2);
+  block(ctx, L.cx + u * 0.9, y - u * 1.0, u * 0.6, u * 1.0, '#9aa7b8', 0.2);
+  const bh = u * 0.24;
+  for (const b of T.boards) {
+    const by = y - u * 1.0 - bh * (b.i + 1) - u * 0.02 * b.i;
+    if (!b.down) { block(ctx, L.cx - u * 1.6, by, u * 3.2, bh, '#e0b070', 0.3); continue; }
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(L.cx + side * (u * 0.8 + b.x * u * 0.8), by + b.y * u * 0.6);
+      ctx.rotate(side * b.rot);
+      rect(ctx, -u * 0.8, 0, u * 1.6, bh, '#e0b070');
+      ctx.restore();
+    }
+  }
+}
+// Bubble time: a big wobbly bubble up in the sky, and the pops left behind.
+function bubbleY(L, h) {
+  return L.ground - 1.65 * L.S - h * (L.h * SKY_PAN + L.S * 2.2) - 2.2 * L.S;
+}
+function drawBubbles(ctx, L, T, time) {
+  const b = T.bubble;
+  if (b) {
+    const r = L.S * (0.95 + 0.06 * Math.sin(b.t * 6));
+    const x = L.cx + b.x * L.S * 0.6, y = bubbleY(L, b.h) + Math.sin(b.t * 2.5) * L.S * 0.15;
+    const hue = (time * 80) % 360;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(190,240,255,0.3)';
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, L.S * 0.14);
+    ctx.strokeStyle = `hsl(${hue},95%,72%)`;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.86, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.strokeStyle = `hsla(${(hue + 150) % 360},95%,72%,0.7)`;
+    ctx.lineWidth = Math.max(1, L.S * 0.08);
+    ctx.stroke();
+    rect(ctx, x - r * 0.55, y - r * 0.55, r * 0.3, r * 0.22, '#ffffff');
+    rect(ctx, x - r * 0.62, y - r * 0.28, r * 0.12, r * 0.18, '#ffffff');
+    ctx.restore();
+  }
+  for (const q of T.pops) {
+    const k = q.t / 0.6;
+    const x = L.cx + q.x * L.S * 0.6, y = bubbleY(L, q.h);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2, d = L.S * (0.6 + 1.6 * k);
+      const sz = Math.max(1, L.S * 0.2 * (1 - k));
+      rect(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d, sz, sz, i % 2 ? '#ffffff' : '#9be7ff');
+    }
+  }
+}
 function drawBalls(ctx, L, T) {
   for (const b of T.balls) {
     const k = Math.min(1, b.t / b.dur);
-    const c = canBox(L, b.target);
+    let c = canBox(L, b.target);
+    if (T.type === 'snowman') {
+      const { y: g, s } = project(L, TOWER_Z);
+      const sb = snowmanBox(L, b.target, L.S * s * SNOW_SCALE, g);
+      c = { x: sb.x, y: sb.y + sb.d / 2, ch: sb.d };
+    }
     const sx = L.cx + b.side * L.S * 0.7, sy = L.ground - L.S * 3.4;
     // A miss sails just over the top of the pyramid.
     const tx = c.x, ty = b.hit ? c.y - c.ch / 2 : c.y - c.ch * 3;
@@ -372,9 +503,12 @@ export function cartoonPose(act = {}, bob = 0) {
 }
 
 // Real pose from the camera, relative to the kid's calibrated standing pose.
+// The avatar stays centred in its lane: x is measured from the kid's hips
+// right now (so a lean still shows), y from their calibrated standing height.
 function cameraPose(p) {
   const B = p.base, pts = p.pts, t = B.torso;
-  const g = i => [clamp((pts[i].x - B.hipX) / t, -2.2, 2.2), clamp((pts[i].y - B.hipY) / t, -2.6, 2)];
+  const hipX = p.f ? p.f.hip.x : B.hipX;
+  const g = i => [clamp((pts[i].x - hipX) / t, -2.2, 2.2), clamp((pts[i].y - B.hipY) / t, -2.6, 2)];
   // The image is mirrored, so the person's right side shows on screen-left.
   const P = {
     nose: g(LM.nose), ls: g(LM.rSh), rs: g(LM.lSh), le: g(LM.rEl), re: g(LM.lEl),
@@ -395,7 +529,12 @@ function cameraPose(p) {
 
 function drawAvatar(ctx, L, p, time, ch) {
   let P;
-  if (p.pts && p.base) P = cameraPose(p);
+  if (p.pts && p.base) {
+    // Smooth out camera jitter so the character doesn't twitch.
+    const raw = cameraPose(p), prev = p.drawPose;
+    P = prev ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [prev[k][0] + (v[0] - prev[k][0]) * 0.45, prev[k][1] + (v[1] - prev[k][1]) * 0.45]])) : raw;
+    p.drawPose = P;
+  }
   else P = cartoonPose(p.act, Math.sin(time * 8 + p.index) * 0.04);
   const S = L.S;
   let lift = p.lift * S * 0.9;
@@ -414,17 +553,60 @@ function drawAvatar(ctx, L, p, time, ch) {
     ctx.lineTo(L.cx + dx, handY);
     ctx.stroke();
   }
+  const T = p.throwing;
+  if (T?.type === 'bubbles') {
+    lift += T.alt * (L.h * SKY_PAN + S * 2.2);
+    if (!(p.pts && p.base)) P = cartoonPose({ reach: T.vel > 0.2 && Math.floor(time * 8) % 2 === 0, jump: T.alt > 0.02 });
+  }
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
   const sw = S * (1.3 - p.lift * 0.4);
   rect(ctx, L.cx - sw / 2, L.ground - S * 0.12, sw, S * 0.24, 'rgba(0,0,0,0.25)');
   const flash = p.bonk > 0 && Math.floor(time * 12) % 2 === 0;
-  drawCharacter(ctx, L.cx + shake + dx, L.ground - 1.65 * S - lift, S, P, ch, flash);
+  const ox = L.cx + shake + dx, oy = L.ground - 1.65 * S - lift;
+  if (p.charged) drawSparks(ctx, ox, oy, S, time, true);
+  drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear);
+  if (p.charged) drawSparks(ctx, ox, oy, S, time, false);
+}
+
+// Super charged: a crackling glow behind and lightning zigzags in front.
+function drawSparks(ctx, ox, oy, S, time, behind) {
+  const f = Math.floor(time * 20);
+  if (behind) {
+    // A soft rounded glow made of stacked bands, flickering.
+    ctx.save();
+    ctx.globalAlpha = 0.16 + 0.08 * (f % 2);
+    for (const [w, h] of [[1.0, 2.6], [0.8, 2.9], [0.55, 3.1]]) rect(ctx, ox - S * w, oy - S * (h + 0.4) + S * 0.9, S * w * 2, S * h * 2 - S * 1.4, '#7df9ff');
+    ctx.restore();
+    return;
+  }
+  for (let k = 0; k < 4; k++) {
+    const seed = (f * 7 + k * 13) % 17;
+    const a = (seed / 17) * Math.PI * 2;
+    let x = ox + Math.cos(a) * S * 1.1, y = oy - S * 0.8 + Math.sin(a) * S * 1.9;
+    const col = (f + k) % 2 ? '#ffffff' : '#7df9ff';
+    for (let j = 0; j < 4; j++) {
+      const nx = x + (j % 2 ? 1 : -1) * S * 0.25, ny = y + S * 0.22;
+      rect(ctx, Math.min(x, nx), y, Math.abs(nx - x) + Math.max(1, S * 0.1), Math.max(1, S * 0.1), col);
+      x = nx; y = ny;
+    }
+  }
 }
 
 // Draws a blocky character with hip centre at (ox, oy).
-export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false) {
+export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}) {
   const X = v => ox + v[0] * S, Y = v => oy + v[1] * S;
+  if (gear?.back === 'cape') {
+    // Cape flowing behind, from the shoulders to the knees.
+    ctx.fillStyle = '#e63946';
+    ctx.beginPath();
+    ctx.moveTo(X(P.ls) - S * 0.1, Y(P.ls));
+    ctx.lineTo(X(P.rs) + S * 0.1, Y(P.rs));
+    ctx.lineTo(X(P.rk) + S * 0.5, Y(P.rk));
+    ctx.lineTo(X(P.lk) - S * 0.5, Y(P.lk));
+    ctx.closePath();
+    ctx.fill();
+  }
   const body = flash ? '#ffffff' : ch.body;
   const limbCol = flash ? '#ffffff' : ch.limb;
   const limb = (a, b, c, w, col) => {
@@ -460,10 +642,10 @@ export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false) {
   const neck = [(P.ls[0] + P.rs[0]) / 2, (P.ls[1] + P.rs[1]) / 2];
   const hcx = X([neck[0] * 0.4 + P.nose[0] * 0.6, 0]);
   const hcy = Math.min(Y(P.nose), Y(neck) - S * 0.45);
-  drawHead(ctx, hcx, hcy, S, ch, flash);
+  drawHead(ctx, hcx, hcy, S, ch, flash, gear || {});
 }
 
-function drawHead(ctx, x, y, S, ch, flash) {
+function drawHead(ctx, x, y, S, ch, flash, gear = {}) {
   const hs = S * 1.0; // head size
   const left = x - hs / 2, top = y - hs / 2;
   const head = flash ? '#ffffff' : ch.head;
@@ -476,6 +658,23 @@ function drawHead(ctx, x, y, S, ch, flash) {
   if (ch.id === 'panda') { px(-0.5, -1, 2.5, 2.5, '#2b2b33'); px(6, -1, 2.5, 2.5, '#2b2b33'); }
   if (ch.id === 'robot') { px(3.5, -3, 1, 3, '#6b788a'); px(3, -4, 2, 1.5, '#ff4d4d'); }
   if (ch.id === 'dino') { px(1, -1.5, 1.5, 1.5, '#ffd23f'); px(3.3, -2, 1.5, 2, '#ffd23f'); px(5.6, -1.5, 1.5, 1.5, '#ffd23f'); }
+  if (ch.id === 'hedgehog') {
+    // Soft round prickles all over the back of the head.
+    const q = '#2a56a8';
+    px(-1, 0.5, 1.5, 2, q); px(-1.2, 3, 1.5, 2, q); px(7.5, 0.5, 1.5, 2, q); px(7.7, 3, 1.5, 2, q);
+    px(0.3, -1.3, 1.8, 1.8, q); px(2.6, -1.8, 1.8, 2, q); px(4.9, -1.6, 1.8, 2, q); px(6.6, -0.9, 1.5, 1.6, q);
+  }
+  if (ch.id === 'axolotl') {
+    // Frilly pink gills on both sides.
+    const g = '#ff5fa2';
+    px(-2, 0.4, 2, 1, g); px(-2.6, 2.4, 2.6, 1, g); px(-2, 4.4, 2, 1, g);
+    px(8, 0.4, 2, 1, g); px(8, 2.4, 2.6, 1, g); px(8, 4.4, 2, 1, g);
+  }
+  if (ch.id === 'cow') {
+    px(-0.4, -1.6, 1.2, 1.8, '#f0e0c0'); px(7.2, -1.6, 1.2, 1.8, '#f0e0c0');
+    px(-1.6, 1.2, 1.8, 1.1, '#2b2b33'); px(7.8, 1.2, 1.8, 1.1, '#2b2b33');
+  }
+  if (ch.id === 'ninja') { px(8, 1, 2, 0.8, '#e63946'); px(8.6, 1.8, 1.6, 0.7, '#e63946'); }
 
   block(ctx, left, top, hs, hs, head, 0.18);
 
@@ -504,6 +703,78 @@ function drawHead(ctx, x, y, S, ch, flash) {
       break;
     case 'dino':
       eye(1.5, 2.8); eye(5.1, 2.8); px(1.5, 5.6, 5, 0.6, '#4a2a9a'); px(2.2, 6.2, 0.6, 0.6, '#ffffff'); px(5.2, 6.2, 0.6, 0.6, '#ffffff');
+      break;
+    case 'ninja':
+      px(0, 2.4, 8, 2.4, '#ffd2a8'); px(0, 1, 8, 1, '#e63946');
+      eye(1.5, 2.8); eye(5.1, 2.8);
+      break;
+    case 'hedgehog':
+      px(1.2, 3.6, 5.6, 4.4, '#f5e2c0'); eye(1.6, 2.4); eye(5, 2.4);
+      px(3.3, 4.6, 1.4, 1, '#1b1b22'); px(2.8, 6.3, 2.4, 0.6, '#b0603a');
+      break;
+    case 'axolotl':
+      px(1, 3, 1.2, 1.2, '#1b1b22'); px(5.8, 3, 1.2, 1.2, '#1b1b22');
+      px(0.6, 4.8, 1.2, 0.7, '#ff7fb5'); px(6.2, 4.8, 1.2, 0.7, '#ff7fb5');
+      px(2.5, 5.4, 3, 0.6, '#c2185b'); px(2.2, 4.9, 0.6, 0.6, '#c2185b'); px(5.2, 4.9, 0.6, 0.6, '#c2185b');
+      break;
+    case 'firefighter':
+      eye(1.5, 2.8); eye(5.1, 2.8); px(2.6, 5.6, 2.8, 0.7, '#b0603a'); px(0.6, 4.6, 1.1, 0.7, '#ffb0a0'); px(6.3, 4.6, 1.1, 0.7, '#ffb0a0');
+      // Red helmet with a wide brim and a gold badge (a picked-up hat replaces it).
+      if (!gear.hat) { px(-1, -0.2, 10, 1.2, '#b81d2b'); px(0.5, -2.6, 7, 2.6, '#e63946'); px(3.2, -2.2, 1.6, 1.6, '#ffd23f'); }
+      break;
+    case 'cow':
+      px(0.6, 0.6, 2.6, 2, '#2b2b33'); px(5.4, 0.2, 2, 1.4, '#2b2b33');
+      eye(1.5, 2.6); eye(5.1, 2.6);
+      px(1, 5, 6, 3, '#ffb3c7'); px(2.2, 6, 1, 1, '#c25a7a'); px(4.8, 6, 1, 1, '#c25a7a');
+      break;
+  }
+  if (gear.face) drawGearItem(ctx, gear.face, left, top, u);
+  if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
+}
+
+// Hats and accessories in head "pixels" (u), relative to the head's top-left.
+export function drawGearItem(ctx, id, left, top, u) {
+  const px = (i, j, w, h, c) => rect(ctx, left + i * u, top + j * u, w * u, h * u, c);
+  switch (id) {
+    case 'crown':
+      px(1, -2, 6, 2, '#ffd23f'); px(1, -3, 1, 1, '#ffd23f'); px(3.5, -3.2, 1, 1.2, '#ffd23f'); px(6, -3, 1, 1, '#ffd23f');
+      px(3.5, -1.5, 1, 1, '#e63946'); px(1.6, -1.3, 0.8, 0.8, '#3fa7ff'); px(5.6, -1.3, 0.8, 0.8, '#3ddc84');
+      break;
+    case 'tophat':
+      px(-0.5, -1, 9, 1, '#1b1b22'); px(1.5, -5, 5, 4, '#1b1b22'); px(1.5, -2, 5, 0.8, '#e63946');
+      break;
+    case 'cowboy':
+      px(-2, -0.8, 12, 1, '#8a5220'); px(-2, -1.4, 1.2, 0.8, '#8a5220'); px(8.8, -1.4, 1.2, 0.8, '#8a5220');
+      px(1.5, -3.6, 5, 2.8, '#a8672c'); px(1.5, -1.5, 5, 0.6, '#5a3416');
+      break;
+    case 'party':
+      px(3.2, -5, 1.6, 1, '#ff5d73'); px(2.6, -4, 2.8, 1.3, '#3fa7ff'); px(2, -2.7, 4, 1.4, '#ff5d73'); px(1.4, -1.3, 5.2, 1.3, '#3fa7ff');
+      px(3.3, -6, 1.4, 1.2, '#ffe14d');
+      break;
+    case 'pirate':
+      px(-0.5, -2.2, 9, 2.4, '#1b1b22'); px(1, -3, 6, 1, '#1b1b22'); px(3.4, -1.7, 1.2, 1.2, '#ffffff');
+      px(1, 2.6, 2.2, 2, '#1b1b22'); px(0, 2, 8, 0.4, '#1b1b22');
+      break;
+    case 'viking':
+      px(0.3, -2.2, 7.4, 2.4, '#9aa7b8'); px(0.3, -0.4, 7.4, 0.6, '#6b788a'); px(3.5, -2.2, 1, 2.4, '#ffd23f');
+      px(-1.4, -3.6, 1.4, 2.4, '#fff3e0'); px(8, -3.6, 1.4, 2.4, '#fff3e0'); px(-1.8, -4.4, 1, 1, '#fff3e0'); px(8.8, -4.4, 1, 1, '#fff3e0');
+      break;
+    case 'wizard':
+      px(-1, -0.8, 10, 1, '#5b2bb5'); px(1.5, -3, 5, 2.2, '#7444d8'); px(2.5, -5, 3, 2, '#7444d8'); px(3.3, -6.6, 1.5, 1.6, '#7444d8');
+      px(4.6, -7, 1, 0.8, '#7444d8'); px(3, -2.4, 1, 1, '#ffe14d'); px(5, -4, 0.8, 0.8, '#ffe14d');
+      break;
+    case 'propeller':
+      px(1, -1.6, 6, 1.8, '#3fa7ff'); px(1, -1.6, 2, 1.8, '#ffe14d'); px(5, -1.6, 2, 1.8, '#ff5d73');
+      px(3.6, -2.6, 0.8, 1, '#1b1b22');
+      if (Math.floor(performance.now() / 80) % 2) px(0.5, -3.2, 7, 0.6, '#e63946'); else px(2.5, -3.2, 3, 0.6, '#e63946');
+      break;
+    case 'shades':
+      px(0.6, 2.6, 3, 1.6, '#1b1b22'); px(4.4, 2.6, 3, 1.6, '#1b1b22'); px(3.4, 2.8, 1.2, 0.5, '#1b1b22');
+      px(1, 2.9, 1, 0.5, '#7df9ff'); px(4.8, 2.9, 1, 0.5, '#7df9ff');
+      break;
+    case 'cape':
+      // Shown as a little cape on a hanger when floating as a prize.
+      px(1, 1, 6, 1, '#b81d2b'); px(0.5, 2, 7, 4, '#e63946'); px(3.4, 0, 1.2, 1, '#ffd23f');
       break;
   }
 }
@@ -546,14 +817,16 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
   // Picture cue for the next obstacle, so non-readers know what to do.
   const next = p.obstacles
     .map(o => ({ o, z: (o.arrive - p.clock) / o.travel }))
-    .filter(e => !e.o.result && e.z > -0.05 && e.z < 0.8)
+    .filter(e => !e.o.result && KIND_INFO[e.o.kind] && e.z > -0.05 && e.z < 0.8)
     .sort((a, b) => a.z - b.z)[0];
   if (p.throwing) {
     const size = clamp(L.w * 0.1, 22, 64);
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
-    cueIcon(ctx, { kind: 'throw' }, L.cx, y - size * 0.3 + bob, size);
-    text(ctx, 'THROW!', L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
+    const type = p.throwing.type;
+    const kind = type === 'bubbles' ? 'flap' : type === 'karate' ? 'chop' : 'throw';
+    cueIcon(ctx, { kind }, L.cx, y - size * 0.3 + bob, size);
+    text(ctx, { flap: 'FLAP!', chop: 'CHOP!', throw: 'THROW!' }[kind], L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
   } else if (next) {
     const k = 1 - next.z / 0.8;
     const info = KIND_INFO[next.o.kind];
@@ -572,10 +845,11 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     if (e.type === 'kapow') {
       // Comic-book starburst with a big silly word.
       const pop = k < 0.12 ? k / 0.12 * 1.25 : k < 0.22 ? 1.25 - (k - 0.12) * 2.5 : 1;
-      const r = Math.min(L.w * 0.3, L.h * 0.17) * pop;
-      const cx = L.cx + Math.sin(e.hue) * L.w * 0.08, cy = L.horizon + L.depth * 0.22;
+      // Kept see-through and down by the avatar, so it never hides what's coming.
+      const r = Math.min(L.w * 0.24, L.h * 0.12) * pop;
+      const cx = L.cx + (e.hue % 2 ? 1 : -1) * L.w * 0.18, cy = L.ground - L.depth * 0.3;
       ctx.save();
-      ctx.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
+      ctx.globalAlpha = 0.5 * (k > 0.75 ? (1 - k) / 0.25 : 1);
       ctx.translate(cx, cy);
       ctx.rotate(e.rot + Math.sin(e.t * 30) * 0.04);
       ctx.beginPath();
@@ -603,7 +877,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     }
     if (e.type === 'points') {
       ctx.save();
-      ctx.globalAlpha = 1 - k * k;
+      ctx.globalAlpha = 0.85 * (1 - k * k);
       const hue = (e.t * 900) % 360;
       text(ctx, e.text, L.cx + L.w * 0.22, L.horizon + L.depth * 0.42 - k * L.h * 0.1, clamp(L.w * 0.11, 20, 60) * (1.3 - 0.3 * k), `hsl(${hue},100%,60%)`);
       ctx.restore();
@@ -612,13 +886,13 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     if (e.type === 'fire') {
       // Streak milestone: wobbling flame-coloured text and pixel flames.
       ctx.save();
-      ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+      ctx.globalAlpha = 0.6 * (k > 0.8 ? (1 - k) / 0.2 : 1);
       const cols = ['#ff3b30', '#ff9f1c', '#ffe14d'];
-      const size = clamp(L.w * 0.13, 24, 80) * (1 + 0.08 * Math.sin(e.t * 20));
-      text(ctx, e.text, L.cx + Math.sin(e.t * 25) * 4, L.h * 0.5, size, cols[Math.floor(e.t * 12) % 3]);
+      const size = clamp(L.w * 0.11, 22, 64) * (1 + 0.08 * Math.sin(e.t * 20));
+      text(ctx, e.text, L.cx + Math.sin(e.t * 25) * 4, L.ground - L.depth * 0.08, size, cols[Math.floor(e.t * 12) % 3]);
       const fw = L.w / 14;
       for (let i = 0; i < 14; i++) {
-        const fh = (0.5 + 0.5 * Math.abs(Math.sin(e.t * 9 + i * 1.7))) * L.h * 0.12;
+        const fh = (0.5 + 0.5 * Math.abs(Math.sin(e.t * 9 + i * 1.7))) * L.h * 0.07;
         ctx.fillStyle = cols[i % 3];
         ctx.fillRect(R(L.x + i * fw), R(L.h - fh), R(fw * 0.8), R(fh));
       }
@@ -627,12 +901,12 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     }
     if (e.type === 'levelup') {
       ctx.save();
-      if (k < 0.25) {
-        ctx.fillStyle = `rgba(255,255,255,${0.55 * (1 - k / 0.25)})`;
+      if (k < 0.2) {
+        ctx.fillStyle = `rgba(255,255,255,${0.3 * (1 - k / 0.2)})`;
         ctx.fillRect(L.x, 0, L.w, L.h);
       }
-      ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
-      const cy = L.h * 0.36;
+      ctx.globalAlpha = 0.5 * (k > 0.8 ? (1 - k) / 0.2 : 1);
+      const cy = L.ground - L.depth * 0.25;
       ctx.translate(L.cx, cy);
       ctx.rotate(e.t * 1.5);
       ctx.fillStyle = 'rgba(255,225,77,0.35)';
@@ -642,8 +916,17 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
       }
       ctx.restore();
       ctx.save();
-      ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
-      text(ctx, e.text, L.cx, cy, clamp(L.w * 0.12, 22, 70) * (k < 0.15 ? 0.5 + k / 0.3 : 1), '#ffe14d');
+      ctx.globalAlpha = 0.8 * (k > 0.8 ? (1 - k) / 0.2 : 1);
+      text(ctx, e.text, L.cx, cy, clamp(L.w * 0.1, 20, 60) * (k < 0.15 ? 0.5 + k / 0.3 : 1), '#ffe14d');
+      ctx.restore();
+      continue;
+    }
+    if (e.type === 'super' || e.type === 'gear') {
+      ctx.save();
+      ctx.globalAlpha = 0.8 * (k > 0.8 ? (1 - k) / 0.2 : 1);
+      const col = e.type === 'super' ? (Math.floor(e.t * 16) % 2 ? '#7df9ff' : '#ffffff') : '#ffe14d';
+      const size = clamp(L.w * 0.1, 20, 58) * (k < 0.1 ? 0.6 + k * 4 : 1);
+      text(ctx, e.text, L.cx + (e.type === 'super' ? Math.sin(e.t * 50) * 3 : 0), L.ground - L.depth * 0.42, size, col);
       ctx.restore();
       continue;
     }
@@ -652,6 +935,24 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     ctx.globalAlpha = 1 - k * k;
     text(ctx, e.text, L.cx, L.horizon + L.depth * 0.2 - k * L.h * 0.08, clamp(L.w * 0.12, 22, 64) * (1 + 0.25 * (1 - k)), e.color);
     ctx.restore();
+  }
+
+  // Super charged: the lane edges crackle with electricity.
+  if (p.charged) {
+    const f = Math.floor(performance.now() / 50);
+    ctx.save();
+    ctx.globalAlpha = 0.55 + 0.3 * (f % 2);
+    ctx.strokeStyle = f % 2 ? '#7df9ff' : '#ffffff';
+    ctx.lineWidth = Math.max(4, L.w * 0.012);
+    ctx.beginPath();
+    for (const side of [0, 1]) {
+      const x = L.x + side * L.w + (side ? -1 : 1) * ctx.lineWidth;
+      ctx.moveTo(x, 0);
+      for (let y = 0; y <= L.h; y += L.h / 12) ctx.lineTo(x + (((y / L.h * 12 + f) % 2) ? 1 : -1) * L.w * 0.012, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    text(ctx, '⚡ SUPER ⚡', L.cx, L.horizon * 0.66 + clamp(L.w * 0.1, 22, 64) * 1.6, clamp(L.w * 0.055, 14, 30), '#7df9ff');
   }
 
   drawBubble(ctx, L, p);
@@ -673,7 +974,10 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
 // heart rate underneath (filled in after the heart check).
 function drawBubble(ctx, L, p) {
   const r = clamp(Math.min(L.w * 0.11, L.h * 0.065), 22, 70);
-  const x = L.x + r + clamp(L.w * 0.04, 8, 24), y = L.h - r - L.h * 0.07;
+  // The score bubble rattles and swells each time points go up.
+  const k = p.bump > 0 ? p.bump / 0.5 : 0;
+  const jig = k * r * 0.12 * Math.sin(performance.now() / 18);
+  const x = L.x + r + clamp(L.w * 0.04, 8, 24) + jig, y = L.h - r - L.h * 0.07;
   ctx.save();
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -698,7 +1002,12 @@ function drawBubble(ctx, L, p) {
   ctx.font = `bold ${R(bf)}px ${FONT}`;
   const bw = Math.max(bf * 1.6, ctx.measureText(label).width + bf * 0.9), bh = bf * 1.45;
   const bx = x + r * 0.55, by = y - r * 1.05;
-  ctx.fillStyle = '#ff3b30';
+  ctx.save();
+  ctx.translate(bx + bw / 2, by + bh / 2);
+  ctx.scale(1 + 0.45 * k, 1 + 0.45 * k);
+  ctx.rotate(k * 0.25 * Math.sin(performance.now() / 25));
+  ctx.translate(-(bx + bw / 2), -(by + bh / 2));
+  ctx.fillStyle = k > 0.5 ? '#ffb02e' : '#ff3b30';
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = Math.max(2, bf * 0.12);
   ctx.beginPath();
@@ -708,6 +1017,7 @@ function drawBubble(ctx, L, p) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, bx + bw / 2, by + bh / 2 + 1);
+  ctx.restore();
 
   // Heart rate slot.
   text(ctx, `♥ ${p.heartRate ? p.heartRate : '--'}`, x, y + r + r * 0.42, r * 0.5, '#ff6b81');
@@ -733,9 +1043,13 @@ function cueIcon(ctx, o, x, y, size) {
   const BOTH = ['.#.#.', '##.##', '#####', '##.##', '.#.#.'];
   const HANDS = ['#...#', '#...#', '#.#.#', '.###.', '..#..'];
   const BALL = ['.###.', '#####', '#####', '#####', '.###.'];
-  const color = o.kind === 'throw' ? '#ffb02e' : KIND_INFO[o.kind].color;
+  const WINGS = ['#...#', '##.##', '.###.', '..#..', '.....'];
+  const HAND = ['#####', '#####', '.....', '#####', '#####'];
+  const color = KIND_INFO[o.kind]?.color || '#ffb02e';
   let rows;
-  if (o.kind === 'log') rows = UP;
+  if (o.kind === 'flap') rows = Math.floor(performance.now() / 250) % 2 ? WINGS : WINGS.slice().reverse();
+  else if (o.kind === 'chop') rows = HAND;
+  else if (o.kind === 'log') rows = UP;
   else if (o.kind === 'rope') rows = HANDS;
   else if (o.kind === 'throw') rows = BALL;
   else if (o.kind === 'bird') rows = o.side === 'left' ? RIGHT : LEFT; // lean away from the bird

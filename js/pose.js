@@ -62,6 +62,8 @@ export async function createTracker(video, players = 4) {
   const perFrame = Math.min(tiles.length, 2);
 
   return {
+    players,
+    close() { for (const t of tiles) { try { t.landmarker.close(); } catch { } } },
     // Returns { aspect, poses }. Each pose is 33 points in "height units":
     // x is mirrored (so the screen acts like a mirror) and scaled by the aspect
     // ratio, so x and y distances are comparable. y grows downwards.

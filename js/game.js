@@ -21,10 +21,32 @@ export const LM = {
 //   rope  - puddle with a rope over it: BOTH HANDS UP to grab and swing
 export const KINDS = ['log', 'crate', 'bird', 'rope'];
 
+// Stop-and-do breaks. Cans and the snowman are thrown at, boards are chopped
+// (same overhand arm swing), and bubbles are popped by flapping up to them.
+export const BREAKS = ['cans', 'karate', 'bubbles', 'snowman'];
+
+// Hats and accessories that float down the road now and then. Running into
+// one puts it on; the newest one in each slot replaces the old one.
+export const GEAR = [
+  { id: 'crown', slot: 'hat', name: 'Crown' },
+  { id: 'tophat', slot: 'hat', name: 'Top hat' },
+  { id: 'cowboy', slot: 'hat', name: 'Cowboy hat' },
+  { id: 'party', slot: 'hat', name: 'Party hat' },
+  { id: 'pirate', slot: 'hat', name: 'Pirate hat' },
+  { id: 'viking', slot: 'hat', name: 'Viking helmet' },
+  { id: 'wizard', slot: 'hat', name: 'Wizard hat' },
+  { id: 'propeller', slot: 'hat', name: 'Propeller cap' },
+  { id: 'shades', slot: 'face', name: 'Cool shades' },
+  { id: 'cape', slot: 'back', name: 'Super cape' },
+];
+
+// A streak this long electrifies the kid: crackling sparks and bonus points.
+export const SUPER_STREAK = 8;
+
 // Where a kid of this age starts. Everyone starts a bit below their age and
 // the game climbs quickly in the first few obstacles to find their level.
 export function startSkill(age) {
-  return clamp((age - 4) * 0.8, 0, 6);
+  return clamp((age - 4) * 0.7, 0, 5.5);
 }
 
 // Everything that gets harder with skill lives here.
@@ -68,6 +90,7 @@ export class Player {
     this.name = name || `Player ${index + 1}`;
     this.age = age;
     this.color = COLORS[index];
+    this.gear = {}; // kept between rounds
     this.reset();
   }
 
@@ -82,7 +105,7 @@ export class Player {
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;
@@ -100,6 +123,9 @@ export class Player {
     this.shake = 0;
     this.throwing = null;
     this.wristUp = [-9, -9];
+    this.wristHigh = [-9, -9];
+    this.bump = 0;
+    this.lastGear = 0;
   }
 
   // ---------- Body tracking ----------
@@ -125,7 +151,7 @@ export class Player {
       leanR: lean > 0.3 * t,
       throw: false,
     };
-    let up = 0;
+    let up = 0, flap = false;
     f.wrists.forEach((w, i) => {
       if (w.v < 0.3) return;
       // An arm counts as "punching" when the hand is lifted to chest height or
@@ -136,6 +162,9 @@ export class Player {
       if (w.y < f.nose.y) { up++; this.wristUp[i] = now; }
       // Throw: a hand that was up by the head comes down in front within a moment.
       else if (w.y > f.sh.y + 0.15 * t && now - this.wristUp[i] < 0.6) { raw.throw = true; this.wristUp[i] = -9; }
+      // Flap: an arm swings from above the shoulder down past the chest.
+      if (w.y < f.sh.y - 0.05 * t) this.wristHigh[i] = now;
+      else if (w.y > f.sh.y + 0.3 * t && now - this.wristHigh[i] < 0.7) { flap = true; this.wristHigh[i] = -9; }
     });
     raw.reach = up === 2;
 
@@ -145,7 +174,8 @@ export class Player {
       if (raw[k]) this.lastTrue[k] = now;
       latched[k] = now - this.lastTrue[k] < 0.15;
     }
-    if (raw.throw) this.onThrow();
+    if (this.throwing?.type === 'bubbles') { if (flap) this.flap(); }
+    else if (raw.throw) this.onThrow();
     this.setActions(latched);
 
     // Slowly follow the kid if they drift closer/further while standing normally.
@@ -197,6 +227,7 @@ export class Player {
     this.bonk = Math.max(0, this.bonk - dt);
     this.swing = Math.max(0, this.swing - dt);
     this.shake = Math.max(0, this.shake - dt);
+    this.bump = Math.max(0, this.bump - dt);
     this.fx = this.fx.filter(e => (e.t += dt) < e.life);
     if (this.throwing) this.updateThrow(dt);
     if (!playing) return;
@@ -209,6 +240,7 @@ export class Player {
     for (const o of this.obstacles) {
       if (o.result) continue;
       const d = this.clock - o.arrive;
+      if (o.kind === 'gear') { if (d >= 0) this.collect(o); continue; }
       if (d < -o.window) continue;
       if (d <= o.window * 0.75) {
         if (this.matches(o)) this.succeed(o);
@@ -218,7 +250,7 @@ export class Player {
     }
     // Smashed crates vanish; everything else rolls past.
     this.obstacles = this.obstacles.filter(o => this.clock - o.arrive < 1.2 &&
-      !(o.result === 'hit' && o.kind === 'crate'));
+      !(o.result === 'hit' && (o.kind === 'crate' || o.kind === 'gear')));
   }
 
   // Tutorial: one slow, scripted obstacle that does not affect skill.
@@ -273,6 +305,17 @@ export class Player {
 
   spawn() {
     const tn = tuning(this.skill + (this.ramp || 0));
+    // Now and then a hat floats down the road instead: a free prize.
+    if (this.judged >= 4 && this.clock - this.lastGear > 22 && Math.random() < 0.4) {
+      const worn = new Set(Object.values(this.gear));
+      const item = pick(GEAR.filter(g => !worn.has(g.id)));
+      const arrive = Math.max(this.clock + tn.travel, this.lastArrive + 0.9);
+      this.obstacles.push({ kind: 'gear', item, arrive, travel: arrive - this.clock, window: 0.3, result: null, called: true });
+      this.lastArrive = arrive;
+      this.lastGear = this.clock;
+      this.nextSpawn = this.clock + tn.gap * 0.7;
+      return;
+    }
     const kind = this.pickKind(tn);
     this.lastType = kind;
     const lr = () => (Math.random() < 0.5 ? 'left' : 'right');
@@ -287,10 +330,14 @@ export class Player {
     this.nextSpawn = this.clock + gap;
   }
 
-  // Throw time: obstacles pause and each kid gets a tower of cans to knock down.
-  startThrowing() {
+  // Break time: obstacles pause and each kid gets a stop-and-do game.
+  startBreak(type = 'cans') {
     this.obstacles = [];
-    this.throwing = { cans: tower(), balls: [], cooldown: 0, cleared: 0 };
+    const B = { type, balls: [], cooldown: 0, cleared: 0 };
+    if (type === 'bubbles') { B.alt = 0; B.vel = 0; B.bubble = this.newBubble(); B.pops = []; }
+    else if (type === 'karate') B.boards = boards();
+    else B.cans = type === 'snowman' ? snowman() : tower();
+    this.throwing = B;
   }
 
   stopThrowing() {
@@ -299,21 +346,85 @@ export class Player {
     this.lastArrive = this.clock;
   }
 
+  // Break points follow the kid's level too, so older kids aren't outscored.
+  get breakMult() { return 0.6 + 0.08 * this.skill; }
+
+  // An overhand arm swing: throws a ball, or chops a board in karate time.
   onThrow() {
     const T = this.throwing;
     if (!T || T.cooldown > 0) return;
+    if (T.type === 'bubbles') { this.flap(); return; }
     T.cooldown = 0.35;
-    // Aim a little toward the side of the throwing arm.
+    if (T.type === 'karate') { this.chop(); return; }
     const alive = T.cans.filter(c => !c.down);
     if (!alive.length) return;
-    const target = pick(alive);
+    // A snowman is hit from the top down; cans are anybody's guess.
+    const target = T.type === 'snowman' ? alive[alive.length - 1] : pick(alive);
     T.balls.push({ t: 0, dur: 0.55, target, hit: Math.random() < 0.85, side: this.act.left ? -1 : this.act.right ? 1 : 0 });
     this.onEvent?.('throw');
+  }
+
+  chop() {
+    const T = this.throwing;
+    const board = T.boards.find(b => !b.down);
+    if (!board) return;
+    board.down = true;
+    board.vx = rand(1.5, 3); board.vy = rand(-3, -1.5); board.spin = rand(4, 9);
+    this.counts.chop++;
+    this.addPoints(60 * this.breakMult, Math.random() < 0.35 ? pick(['CHOP!', 'HI-YAH!', 'KRAK!']) : false);
+    this.onEvent?.('chop');
+  }
+
+  flap() {
+    const T = this.throwing;
+    if (!T || T.type !== 'bubbles' || T.cooldown > 0) return;
+    T.cooldown = 0.15;
+    T.vel = Math.min(T.vel + 1.15, 1.7);
+    this.onEvent?.('flap');
+  }
+
+  // Bubbles float higher for kids on higher levels.
+  newBubble() {
+    return { h: clamp(rand(0.3, 0.5 + 0.045 * this.skill), 0.25, 0.92), t: 0, x: rand(-0.5, 0.5) };
   }
 
   updateThrow(dt) {
     const T = this.throwing;
     T.cooldown = Math.max(0, T.cooldown - dt);
+    if (T.type === 'bubbles') {
+      T.vel -= 1.9 * dt;
+      T.alt += T.vel * dt;
+      if (T.alt <= 0) { T.alt = 0; T.vel = Math.max(0, T.vel); }
+      if (T.alt >= 1) { T.alt = 1; T.vel = Math.min(0, T.vel); }
+      T.pops = T.pops.filter(q => (q.t += dt) < 0.6);
+      const b = T.bubble;
+      if (b) {
+        b.t += dt;
+        if (Math.abs(T.alt - b.h) < 0.09) {
+          T.pops.push({ h: b.h, x: b.x, t: 0 });
+          T.bubble = null;
+          T.next = this.clock + 0.6;
+          T.cleared++;
+          this.counts.pop++;
+          this.addPoints(120 * this.breakMult, pick(['POP!', 'BLOOP!', 'SPLOOSH!']));
+          this.onEvent?.('pop');
+        }
+      } else if (this.clock >= T.next) {
+        T.bubble = this.newBubble();
+      }
+      return;
+    }
+    if (T.type === 'karate') {
+      for (const c of T.boards) if (c.down) { c.vy += 9 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.spin * dt; }
+      if (T.boards.every(c => c.down) && !T.refill) {
+        T.refill = this.clock + 1.2;
+        T.cleared++;
+        this.addPoints(300 * this.breakMult, 'BLACK BELT!');
+        this.onEvent?.('strike');
+      }
+      if (T.refill && this.clock >= T.refill) { T.boards = boards(); T.refill = 0; }
+      return;
+    }
     for (const b of T.balls) {
       b.t += dt;
       if (b.t >= b.dur && !b.done) {
@@ -330,10 +441,10 @@ export class Player {
     if (T.cans.every(c => c.down) && !T.refill) {
       T.refill = this.clock + 1.2;
       T.cleared++;
-      this.addPoints(300, 'STRIKE!');
+      this.addPoints(300 * this.breakMult, T.type === 'snowman' ? 'SNOW-PLOSION!' : 'STRIKE!');
       this.onEvent?.('strike');
     }
-    if (T.refill && this.clock >= T.refill) { T.cans = tower(); T.refill = 0; }
+    if (T.refill && this.clock >= T.refill) { T.cans = T.type === 'snowman' ? snowman() : tower(); T.refill = 0; }
   }
 
   knock(can) {
@@ -345,9 +456,21 @@ export class Player {
       c.vx = rand(-3, 3); c.vy = rand(-4, -1.5); c.spin = rand(-12, 12);
     }
     this.counts.knock += fall.length;
-    this.addPoints(50 * fall.length, null);
+    this.addPoints(50 * fall.length * this.breakMult, false);
     this.onEvent?.('knock');
   }
+
+  // Ran into a floating hat: put it on.
+  collect(o) {
+    o.result = 'hit';
+    this.gear[o.item.slot] = o.item.id;
+    this.counts.gear++;
+    this.addPoints(200 * this.breakMult, false);
+    this.fx.push({ type: 'gear', text: o.item.name.toUpperCase() + '!', t: 0, life: 1.6 });
+    this.onEvent?.('gear', o);
+  }
+
+  get charged() { return this.streak >= SUPER_STREAK; }
 
   record(o, ok) {
     const s = (this.typeStats[o.kind] ||= { hit: 0, miss: 0 });
@@ -356,11 +479,14 @@ export class Player {
   }
 
   addPoints(pts, word) {
-    const gained = Math.round(pts * (this.rush ? 2 : 1));
+    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1);
+    const gained = Math.max(10, Math.round((pts * mult) / 10) * 10);
     this.score += gained;
     this.shake = 0.3;
+    this.bump = 0.5;
     this.fx.push({ type: 'points', text: `+${gained}`, t: 0, life: 1.0 });
-    this.fx.push({ type: 'kapow', text: word || pick(BIG_WORDS), t: 0, life: 0.85, rot: rand(-0.25, 0.25), hue: Math.floor(rand(0, 360)) });
+    // word: the comic-book word to show; left out picks a random one, false shows none.
+    if (word !== false) this.fx.push({ type: 'kapow', text: word || pick(BIG_WORDS), t: 0, life: 0.85, rot: rand(-0.25, 0.25), hue: Math.floor(rand(0, 360)) });
     this.confetti();
     return gained;
   }
@@ -373,14 +499,20 @@ export class Player {
     this.streak++;
     this.missRun = 0;
     this.bestStreak = Math.max(this.bestStreak, this.streak);
-    const base = o.kind === 'rope' ? 150 : 100;
-    this.addPoints(base + 10 * Math.min(this.streak, 20), WORDS[o.kind] && Math.random() < 0.5 ? pick(WORDS[o.kind]) : null);
+    // Harder levels are worth more, so a younger kid on an easier level
+    // doesn't run away with the score.
+    const base = (50 + 12 * (this.skill + (this.ramp || 0))) * (o.kind === 'rope' ? 1.4 : 1);
+    if (this.streak === SUPER_STREAK) {
+      this.fx.push({ type: 'super', text: 'SUPER CHARGED!', t: 0, life: 1.8 });
+      this.onEvent?.('super');
+    }
+    this.addPoints(base + 5 * Math.min(this.streak, 20), WORDS[o.kind] && Math.random() < 0.5 ? pick(WORDS[o.kind]) : null);
     this.counts[{ log: 'jump', crate: 'punch', bird: 'dodge', rope: 'swing' }[o.kind]]++;
     if (o.kind === 'rope') this.swing = 0.9;
     // Climb fast while we are still finding their level, then gently.
     // Up +0.2 / down -0.8 settles around an 80% success rate.
     if (!o.tutorial) this.setSkill(this.skill + (this.judged <= 8 ? 0.45 : 0.2));
-    if (this.streak >= 5 && this.streak % 5 === 0) {
+    if (this.streak >= 5 && this.streak % 5 === 0 && this.streak !== SUPER_STREAK) {
       this.fx.push({ type: 'fire', text: this.streak >= 15 ? 'UNSTOPPABLE!' : this.streak >= 10 ? 'ON FIRE!' : `${this.streak} IN A ROW!`, t: 0, life: 1.6 });
       this.onEvent?.('streak');
     }
@@ -442,6 +574,17 @@ function sprinkle(n) {
   const parts = [];
   for (let i = 0; i < n; i++) parts.push({ a: rand(0, Math.PI * 2), sp: rand(0.6, 1.6), r: rand(0.06, 0.14) });
   return parts;
+}
+
+// A snowman: three snowballs, smallest on top, wearing a hat.
+function snowman() {
+  return [[0, 1.25], [1, 1], [2, 0.75]].map(([row, size]) =>
+    ({ row, col: 0, size, x: 0, y: -row, rot: 0, down: false, color: '#ffffff' }));
+}
+
+// A stack of five boards for karate time, chopped from the top.
+function boards() {
+  return [4, 3, 2, 1, 0].map(i => ({ i, x: 0, y: 0, rot: 0, down: false }));
 }
 
 // A 3-2-1 pyramid of cans, in can-sized units around the tower centre.
