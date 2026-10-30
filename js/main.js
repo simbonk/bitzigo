@@ -77,8 +77,33 @@ seg('#intro', 'intro', 'intro', v => v === '1');
 $('#camRow').classList.toggle('hidden', settings.mode !== 'camera');
 renderPlayerRows();
 
+// Full screen: real fullscreen where the browser allows it (Chrome, iPad
+// Safari, desktop). iPhone Safari doesn't, so it points to Add to Home Screen,
+// which opens the game with no browser bars.
+const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const canFs = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (fsEl() || standalone) return;
+  try {
+    const r = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen?.();
+    r?.then?.(() => screen.orientation?.lock?.('landscape').catch(() => { })).catch(() => { });
+  } catch { }
+}
+function toggleFullscreen() {
+  if (!canFs) { $('#fsTip').classList.toggle('hidden'); return; }
+  if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else enterFullscreen();
+}
+if (standalone) $('#fs').classList.add('hidden');
+$('#fs').onclick = toggleFullscreen;
+$('#btnFs').onclick = toggleFullscreen;
+if (standalone || !canFs) $('#btnFs').classList.add('hidden');
+
 $('#go').onclick = async () => {
   unlockAudio();
+  if (canFs) enterFullscreen();
   $('#status').textContent = '';
   awake.start();
   players = settings.players.slice(0, settings.count).map((cfg, i) => new Player(i, cfg));
