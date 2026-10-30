@@ -61,6 +61,29 @@ function seg(id, attr, key, parse = v => v) {
 
 const colorOf = i => settings.players[i]?.color || COLORS[i];
 
+// Every kid who has played is remembered on this device by name: age, colour
+// and favourite character. Typing (or picking) a known name fills those in.
+const KIDS_KEY = 'bitzigo-kids';
+let kids = {};
+try { kids = JSON.parse(localStorage.getItem(KIDS_KEY) || '{}'); } catch { }
+const isDefaultName = n => !n.trim() || /^player \d$/i.test(n.trim());
+function rememberKid(cfg) {
+  if (isDefaultName(cfg.name)) return;
+  kids[cfg.name.trim().toLowerCase()] = { name: cfg.name.trim(), age: cfg.age, color: cfg.color, char: cfg.char, at: Date.now() };
+  // Keep the 20 most recent.
+  const keep = Object.entries(kids).sort((a, b) => b[1].at - a[1].at).slice(0, 20);
+  kids = Object.fromEntries(keep);
+  try { localStorage.setItem(KIDS_KEY, JSON.stringify(kids)); } catch { }
+  updateKidList();
+}
+function updateKidList() {
+  let dl = $('#kidNames');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'kidNames'; document.body.appendChild(dl); }
+  dl.innerHTML = Object.values(kids).sort((a, b) => b.at - a.at).map(k => `<option value="${k.name.replace(/"/g, '&quot;')}"></option>`).join('');
+}
+updateKidList();
+const charIndex = id => Math.max(0, CHARACTERS.findIndex(c => c.id === id));
+
 function renderPlayerRows() {
   const box = $('#players');
   box.innerHTML = '';
@@ -69,7 +92,7 @@ function renderPlayerRows() {
     const row = document.createElement('div');
     row.className = 'player';
     const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>${a === 12 ? 'age 12+' : `age ${a}`}</option>`).join('');
-    row.innerHTML = `<button class="dot" title="Tap to change colour" style="background:${colorOf(i)}"></button><input maxlength="12" value=""><select>${ages}</select>`;
+    row.innerHTML = `<button class="dot" title="Tap to change colour" style="background:${colorOf(i)}"></button><input maxlength="12" value="" list="kidNames" autocomplete="off"><select>${ages}</select>`;
     // Tap the dot for the next colour nobody else has.
     row.querySelector('.dot').onclick = e => {
       const taken = settings.players.slice(0, settings.count).map((q, j) => j !== i && colorOf(j));
@@ -78,11 +101,25 @@ function renderPlayerRows() {
       p.color = PALETTE[k];
       e.target.style.background = p.color;
       save();
+      rememberKid(p);
     };
     const input = row.querySelector('input');
     input.value = p.name;
-    input.oninput = () => { p.name = input.value; save(); };
-    row.querySelector('select').onchange = e => { p.age = Number(e.target.value); save(); };
+    input.oninput = () => {
+      p.name = input.value;
+      // A remembered kid: bring back their age, colour and character.
+      const k = kids[input.value.trim().toLowerCase()];
+      if (k) {
+        p.age = k.age;
+        p.char = k.char;
+        const taken = settings.players.slice(0, settings.count).map((q, j) => j !== i && colorOf(j));
+        if (k.color && !taken.includes(k.color)) p.color = k.color;
+        row.querySelector('select').value = String(p.age);
+        row.querySelector('.dot').style.background = colorOf(i);
+      }
+      save();
+    };
+    row.querySelector('select').onchange = e => { p.age = Number(e.target.value); save(); rememberKid(p); };
     box.appendChild(row);
   }
 }
@@ -180,6 +217,7 @@ $('#go').onclick = async () => {
   $('#status').textContent = '';
   awake.start();
   players = settings.players.slice(0, settings.count).map((cfg, i) => new Player(i, cfg));
+  players.forEach((p, i) => { const id = settings.players[i].char; slotChar[i] = id ? charIndex(id) : i % CHARACTERS.length; });
   players.forEach(p => { p.gear = { ...(slotGear[p.index] || {}) }; });
   if (settings.mode === 'camera') {
     // Ask for the camera before going full screen: on iPad the permission
@@ -296,7 +334,16 @@ $('#nextStop').onclick = () => { cancelNext(); showResults(); };
 
 function startReady() {
   // Everyone found (or the parent pressed Start): calibrate and count down.
-  players.forEach(p => { p.clearCalibration(); p.character = CHARACTERS[slotChar[p.index]]; });
+  players.forEach(p => {
+    p.clearCalibration();
+    p.character = CHARACTERS[slotChar[p.index]];
+    // Remember the character each kid picked, for next time.
+    const cfg = settings.players[p.index];
+    cfg.char = p.character.id;
+    cfg.color = colorOf(p.index);
+    rememberKid(cfg);
+  });
+  save();
   setHomes();
   together = settings.course !== 'own' && players.length > 1;
   setState('ready');
