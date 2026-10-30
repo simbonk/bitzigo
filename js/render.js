@@ -180,11 +180,16 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     if (z <= 1.02) items.push({ z, draw: () => drawObstacle(ctx, L, o, z) });
   }
   const T = p.throwing;
-  if (T && T.type !== 'bubbles') items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) } : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
+  if (T && T.type !== 'bubbles') {
+    items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
+      : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
+      : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
+  }
   items.push({ z: 0.015, draw: () => drawAvatar(ctx, L, p, time, character) });
   items.sort((a, b) => b.z - a.z).forEach(it => it.draw());
   if (T?.balls) drawBalls(ctx, L, T);
   if (B) drawBubbles(ctx, L, B, time);
+  if (T?.type === 'fire' && T.on) drawWater(ctx, L, T, time);
 
   drawBursts(ctx, L, p);
 
@@ -379,6 +384,56 @@ function drawBoards(ctx, L, T) {
     }
   }
 }
+// Fire time: a little house with fires on it, and the kid's hose spray.
+function houseGeom(L) {
+  const { y, s } = project(L, TOWER_Z);
+  const u = L.S * s * 1.5;
+  return { y, u, fireX: x => L.cx + x * u * 1.3, fireY: y - u * 1.9 };
+}
+function drawHouse(ctx, L, T, time) {
+  const { y, u, fireX, fireY } = houseGeom(L);
+  block(ctx, L.cx - u * 1.9, y - u * 1.9, u * 3.8, u * 1.9, '#e8d3b0', 0.08);       // walls
+  for (let k = 0; k < 4; k++) block(ctx, L.cx - u * (2.1 - k * 0.35), y - u * (2.3 + k * 0.32), u * (4.2 - k * 0.7), u * 0.36, '#b8452f', 0.3); // roof
+  rect(ctx, L.cx - u * 0.3, y - u * 1.0, u * 0.6, u * 1.0, '#7a4a24');                // door
+  for (const sx of [-1.25, 0.75]) { rect(ctx, L.cx + sx * u, y - u * 1.5, u * 0.5, u * 0.5, '#5aa7f0'); }
+  for (const f of T.fires) {
+    const x = fireX(f.x);
+    if (f.out) {
+      // Puffs of steam drifting up where the fire was.
+      if (f.outT < 1.2) for (let i = 0; i < 4; i++) {
+        const k = (f.outT + i * 0.25) % 1.2 / 1.2, sz = u * (0.3 + 0.3 * k);
+        ctx.globalAlpha = 0.6 * (1 - k);
+        rect(ctx, x - sz / 2 + Math.sin(i * 2 + f.outT * 3) * u * 0.2, fireY - k * u * 2, sz, sz, '#e8eef5');
+      }
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    const k = Math.max(0.25, f.hp / f.max), fl = Math.floor(time * 10 + f.x * 7) % 2;
+    const w = u * 0.9 * k, h = u * 1.4 * k;
+    rect(ctx, x - w / 2, fireY - h * 0.45, w, h * 0.45, '#ff3b30');
+    rect(ctx, x - w * 0.35, fireY - h * (fl ? 0.8 : 0.72), w * 0.7, h * 0.4, '#ff9f1c');
+    rect(ctx, x - w * 0.18, fireY - h * (fl ? 1.0 : 0.9), w * 0.36, h * 0.35, '#ffe14d');
+    rect(ctx, x + (fl ? w * 0.25 : -w * 0.4), fireY - h * 0.65, w * 0.15, w * 0.15, '#ff9f1c');
+  }
+}
+function drawWater(ctx, L, T, time) {
+  const { fireX, fireY, u } = houseGeom(L);
+  const S = L.S;
+  const sx = L.cx + (T.aim < 0 ? -1 : 1) * S * 1.2, sy = L.ground - 3.0 * S;
+  const tx = fireX(T.aim), ty = fireY - u * 0.4;
+  for (let i = 0; i < 18; i++) {
+    const k = (i / 18 + time * 2.2) % 1;
+    const x = sx + (tx - sx) * k, y = sy + (ty - sy) * k - Math.sin(k * Math.PI) * S * 1.4;
+    const sz = Math.max(1, S * (0.26 - 0.14 * k));
+    rect(ctx, x - sz / 2, y - sz / 2, sz, sz, i % 3 ? '#5ab4ff' : '#d8f0ff');
+  }
+  // Splash where it lands.
+  for (let i = 0; i < 4; i++) {
+    const a = time * 9 + i * 1.6;
+    rect(ctx, tx + Math.cos(a) * u * 0.4, ty + Math.sin(a) * u * 0.25 - u * 0.1, S * 0.12, S * 0.12, '#bfe3ff');
+  }
+}
+
 // Bubble time: a big wobbly bubble up in the sky, and the pops left behind.
 function bubbleY(L, h) {
   return L.ground - 1.65 * L.S - h * (L.h * SKY_PAN + L.S * 2.2) - 2.2 * L.S;
@@ -582,6 +637,7 @@ function drawAvatar(ctx, L, p, time, ch) {
     lift += T.alt * (L.h * SKY_PAN + S * 2.2);
     if (!(p.pts && p.base)) P = cartoonPose({ reach: T.falling || p.clock - T.flapAt < 0.15, jump: T.alt > 0.02 });
   }
+  if (T?.type === 'fire' && !(p.pts && p.base)) P = cartoonPose(T.aim < -0.2 ? { left: true } : { right: true });
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
   const sw = S * (1.3 - p.lift * 0.4);
@@ -884,9 +940,9 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = type === 'bubbles' ? 'flap' : type === 'karate' ? 'chop' : 'throw';
+    const kind = type === 'bubbles' ? 'flap' : type === 'karate' ? 'chop' : type === 'fire' ? 'spray' : 'throw';
     const B = p.throwing;
-    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!' }[kind];
+    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!' }[kind];
     cueIcon(ctx, { kind }, L.cx, y - size * 0.3 + bob, size);
     text(ctx, word, L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
   } else if (next) {
@@ -1107,9 +1163,11 @@ function cueIcon(ctx, o, x, y, size) {
   const BALL = ['.###.', '#####', '#####', '#####', '.###.'];
   const WINGS = ['#...#', '##.##', '.###.', '..#..', '.....'];
   const HAND = ['#####', '#####', '.....', '#####', '#####'];
-  const color = KIND_INFO[o.kind]?.color || '#ffb02e';
+  const color = KIND_INFO[o.kind]?.color || (o.kind === 'spray' ? '#5ab4ff' : '#ffb02e');
   let rows;
-  if (o.kind === 'flap') rows = Math.floor(performance.now() / 250) % 2 ? WINGS : WINGS.slice().reverse();
+  const DROP = ['..#..', '.###.', '#####', '#####', '.###.'];
+  if (o.kind === 'spray') { rows = DROP; }
+  else if (o.kind === 'flap') rows = Math.floor(performance.now() / 250) % 2 ? WINGS : WINGS.slice().reverse();
   else if (o.kind === 'chop') rows = HAND;
   else if (o.kind === 'log') rows = UP;
   else if (o.kind === 'rope') rows = HANDS;

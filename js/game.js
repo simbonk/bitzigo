@@ -22,8 +22,9 @@ export const LM = {
 export const KINDS = ['log', 'crate', 'bird', 'rope'];
 
 // Stop-and-do breaks. Cans and the snowman are thrown at, boards are chopped
-// (same overhand arm swing), and bubbles are popped by flapping up to them.
-export const BREAKS = ['karate', 'bubbles', 'cans', 'snowman'];
+// (same overhand arm swing), bubbles are popped by flapping up to them, and
+// fires are put out by pointing an arm to aim a water hose.
+export const BREAKS = ['karate', 'bubbles', 'fire', 'cans', 'snowman'];
 
 // Hats and accessories that float down the road now and then. Running into
 // one puts it on; the newest one in each slot replaces the old one.
@@ -105,7 +106,7 @@ export class Player {
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;
@@ -176,6 +177,7 @@ export class Player {
     }
     if (this.charged && !this.throwing) this.watchSpin(pts, now);
     const brk = this.throwing?.type;
+    if (brk === 'fire') this.aimHose(f);
     if (brk === 'bubbles') { if (flap) this.flap(); }
     // A karate chop is any hand coming down hard from shoulder height or above.
     else if (raw.throw || (brk === 'karate' && flap)) this.onThrow();
@@ -342,6 +344,7 @@ export class Player {
     const B = { type, balls: [], cooldown: 0, cleared: 0 };
     if (type === 'bubbles') { B.alt = 0; B.target = 0; B.vel = 0; B.falling = false; B.flapAt = -9; B.bubble = this.newBubble(); B.pops = []; }
     else if (type === 'karate') B.boards = boards();
+    else if (type === 'fire') { B.fires = this.newFires(); B.aim = 0; B.aimTarget = 0; B.on = false; B.hiss = 0; }
     else B.cans = type === 'snowman' ? snowman() : tower();
     this.throwing = B;
   }
@@ -394,6 +397,33 @@ export class Player {
     this.onEvent?.('flap');
   }
 
+  // Fire time: the hose follows whichever arm is held up and out the most.
+  aimHose(f) {
+    const t = f.torso;
+    let best = null;
+    for (const w of f.wrists) {
+      if (w.v < 0.3 || w.y > f.hip.y - 0.2 * t) continue;
+      const ext = (w.x - f.sh.x) / t;
+      if (!best || Math.abs(ext) > Math.abs(best)) best = ext;
+    }
+    this.hoseInput(best == null ? null : clamp(best / 1.1, -1, 1));
+  }
+
+  // aim: -1 (screen left) .. 1 (screen right), or null when no arm is up.
+  hoseInput(aim) {
+    const T = this.throwing;
+    if (T?.type !== 'fire') return;
+    T.on = aim != null;
+    if (T.on) T.aimTarget = aim;
+  }
+
+  // Three fires on the house; older kids' fires take a little longer to put out.
+  newFires() {
+    const spots = [-1, -0.5, 0, 0.5, 1].sort(() => Math.random() - 0.5).slice(0, 3).sort((a, b) => a - b);
+    const max = 0.9 + this.skill * 0.06;
+    return spots.map(x => ({ x, hp: max, max, out: false, outT: 0 }));
+  }
+
   // Older kids get a higher bubble that takes more flaps.
   newBubble() {
     const flaps = Math.round(clamp(3 + this.skill * 0.45, 3, 8));
@@ -432,6 +462,29 @@ export class Player {
       } else if (this.clock >= T.next) {
         T.bubble = this.newBubble();
       }
+      return;
+    }
+    if (T.type === 'fire') {
+      T.aim += (T.aimTarget - T.aim) * Math.min(1, dt * 8);
+      if (T.on && (T.hiss -= dt) <= 0) { T.hiss = 0.25; this.onEvent?.('spray'); }
+      for (const fire of T.fires) {
+        if (fire.out) { fire.outT += dt; continue; }
+        if (T.on && Math.abs(T.aim - fire.x) < 0.38) fire.hp -= dt * 1.1;
+        else fire.hp = Math.min(fire.max, fire.hp + dt * 0.12);
+        if (fire.hp <= 0) {
+          fire.out = true;
+          this.counts.fire++;
+          this.addPoints(100 * this.breakMult, Math.random() < 0.5 ? pick(['SPLOOSH!', 'FSSSHH!', 'DOUSED!']) : false);
+          this.onEvent?.('sizzle');
+        }
+      }
+      if (T.fires.every(fi => fi.out) && !T.refill) {
+        T.refill = this.clock + 1.4;
+        T.cleared++;
+        this.addPoints(300 * this.breakMult, "FIRE'S OUT!");
+        this.onEvent?.('strike');
+      }
+      if (T.refill && this.clock >= T.refill) { T.fires = this.newFires(); T.refill = 0; }
       return;
     }
     if (T.type === 'karate') {

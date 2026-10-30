@@ -1,6 +1,6 @@
-import { Player, Course, COLORS, BREAKS, features, keyActions } from './game.js';
+import { Player, Course, COLORS, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
-import { unlockAudio, sfx, hitSound, missSound, cue, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 
@@ -173,13 +173,6 @@ function playerEvent(type, o) {
   if (type === 'hit') hitSound(o.kind);
   else if (type === 'miss') missSound(o.kind);
   else if (sfx[type]) sfx[type]();
-  if (type === 'super') cue('electric');
-  else if (type === 'gear') cue('new_hat');
-  else if (type === 'level') cue('level_up');
-  else if (type === 'pop') cue('pop');
-  else if (type === 'strike') cue(players[0]?.throwing?.type === 'karate' ? 'hiyah' : 'strike');
-  else if (type === 'chop' && Math.random() < 0.3) cue('chop');
-  else if (type === 'streak') cue(['wow', 'awesome', 'nice'][Math.floor(Math.random() * 3)]);
 }
 
 // ---------------- States ----------------
@@ -194,6 +187,7 @@ function setState(s) {
 
 function enterLobby() {
   course = null;
+  setAnnouncer(true);
   lobby = players.map(() => ({ found: false, ready: false, upSince: 0, armLatch: false }));
   players.forEach(p => { p.reset(); p.clearCalibration(); p.trackX = null; p.homeX = null; p.heartRate = null; p.onEvent = playerEvent; });
   tracks = [];
@@ -263,6 +257,7 @@ const BREAK_INFO = {
   karate: { title: 'KARATE TIME!', sub: 'Chop down hard to break the boards!', clip: 'karate_time' },
   bubbles: { title: 'BUBBLE TIME!', sub: 'Flap your arms to fly up and pop the bubbles!', clip: 'bubble_time' },
   snowman: { title: 'SNOWBALL TIME!', sub: 'Throw snowballs to knock down the snowman!', clip: 'snowball_time' },
+  fire: { title: 'FIRE TIME!', sub: 'Point your arm to spray the hose and put the fires out!', clip: 'fire_time' },
 };
 let throwPlan = [], throwEnd = 0;
 // Starts with karate and bubbles, then carries on between rounds so the next
@@ -279,6 +274,9 @@ function startPlay() {
   const together = settings.course !== 'own' && players.length > 1;
   players.forEach(p => { p.startRound(); p.shared = together; p.paceSkill = null; });
   course = together ? new Course() : null;
+  // The announcer only calls moves when everyone shares one course; with
+  // separate courses it would talk over itself, so each move gets a sound.
+  setAnnouncer(together || players.length === 1);
   course?.resume(players[0].clock);
   showBanner('GO!', settings.seconds ? `${Math.round(settings.seconds / 60)} minute workout` : 'Endless mode', 1.4);
   cue('go');
@@ -359,6 +357,7 @@ function pickAwards(ps) {
     ['Karate Master', p => p.counts.chop],
     ['Bubble Popper', p => p.counts.pop],
     ['Hat Collector', p => p.counts.gear],
+    ['Fire Hero', p => p.counts.fire],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
   const out = new Map();
@@ -690,6 +689,10 @@ function updateGame(t, dt) {
       const a = keyActions(keys, p.index);
       if (p.throwing && a.jump && !p.act.jump) p.onThrow(); // up key throws in throw time
       if (a.spin && p.charged && !p.throwing) p.superSpin(); // down alone spins when super charged
+      if (p.throwing?.type === 'fire') {
+        const [, l, , r] = KEYMAP[p.index];
+        p.hoseInput(keys.has(l) && !keys.has(r) ? -1 : keys.has(r) && !keys.has(l) ? 1 : 0);
+      }
       p.setActions(a);
       if (!p.base) p.base = { hipX: 0, hipY: 0, noseX: 0, noseY: 0, torso: 1 };
     }

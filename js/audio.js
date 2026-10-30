@@ -1,5 +1,5 @@
-// Little synthesised sound effects and music, plus a sound cue for each move
-// (no audio files).
+// Little synthesised sound effects and music, plus a short announcer clip
+// (voice/*.mp3) for each move, with a synthesised cue as the fallback.
 let ac = null;
 let master = null;
 let muted = false;
@@ -14,6 +14,7 @@ export function unlockAudio() {
     master.connect(ac.destination);
     // iPhone/iPad: play even with the ring switch on silent.
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
+    loadVoices();
   }
   if (ac.state === 'suspended') ac.resume();
 }
@@ -86,6 +87,8 @@ export const sfx = {
   gear() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.18, delay: i * 0.05 })); },
   spin() { tone(300, 0.6, { type: 'sawtooth', vol: 0.12, slide: 4 }); [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(f, 0.12, { type: 'triangle', vol: 0.2, delay: 0.3 + i * 0.07 })); noise(0.6, { vol: 0.3, from: 800, to: 6000, q: 3 }); },
   land() { tone(120, 0.12, { type: 'sine', vol: 0.4, slide: 0.6 }); noise(0.1, { vol: 0.3, from: 600, to: 200 }); },
+  sizzle() { noise(0.45, { vol: 0.35, from: 6000, to: 2500, q: 0.8 }); tone(180, 0.15, { type: 'sine', vol: 0.2, slide: 0.5 }); },
+  spray() { noise(0.12, { vol: 0.08, from: 4000, to: 3000, q: 0.6 }); },
   finish() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.18, { vol: 0.18, delay: i * 0.12 })); },
 };
 
@@ -222,11 +225,56 @@ const CUE_FOR = {
   throw_time: () => CUES.fanfare(), snowball_time: () => CUES.fanfare(),
   karate_time: () => { CUES.fanfare(); setTimeout(CUES.gong, 450); },
   bubble_time: () => { CUES.fanfare(); setTimeout(CUES.bubbles, 450); },
+  fire_time: () => { CUES.fanfare(); setTimeout(CUES.siren, 450); },
   final_rush: () => CUES.siren(),
   back: () => sfx.ready(), got_it: () => sfx.level(),
 };
 
-// Plays the sound cue for a game moment, if it has one.
+// ---------- Announcer clips, decoded once and played on the audio clock ----------
+
+const VOICE_LINES = [
+  'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
+  'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
+  'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
+  'got_it', 'lobby', 'heart', 'champions',
+];
+const clips = {};
+let current = null;
+
+function loadVoices() {
+  for (const name of VOICE_LINES) {
+    fetch(`voice/${name}.mp3`)
+      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+      // Older Safari only has the callback form of decodeAudioData.
+      .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
+      .then(b => { clips[name] = b; })
+      .catch(() => { /* falls back to the synthesised cue */ });
+  }
+}
+
+function playClip(name) {
+  const t = ac.currentTime;
+  if (current && current.end > t) { try { current.src.stop(); } catch { } }
+  const src = ac.createBufferSource();
+  src.buffer = clips[name];
+  const g = ac.createGain();
+  g.gain.value = 1.6;
+  src.connect(g).connect(master);
+  src.start(t);
+  current = { src, end: t + clips[name].duration };
+}
+
+let announcer = true;
+export function setAnnouncer(on) { announcer = on; }
+
+// Plays what a game moment calls for: the announcer clip if there is one
+// (and the announcer is on), otherwise its synthesised sound cue.
 export function cue(name) {
+  if (!ac || muted) return;
+  if (announcer && clips[name]) {
+    if (name.endsWith('_time')) CUES.fanfare();
+    playClip(name);
+    return;
+  }
   CUE_FOR[name]?.();
 }
