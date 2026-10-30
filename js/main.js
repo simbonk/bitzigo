@@ -385,6 +385,7 @@ function pickAwards(ps) {
     ['Super Goalie', p => p.counts.saves],
     ['Beanstalk Climber', p => p.counts.climb],
     ['Pancake Stacker', p => p.counts.stack],
+    ['Perfect Timing', p => p.tiers[0]],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
   const out = new Map();

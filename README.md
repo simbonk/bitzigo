@@ -23,6 +23,7 @@ Every kid has their own skill level (shown as LV in their lane):
 - Each success nudges it up (quickly for the first few obstacles while the game is finding their level, then gently); each miss drops it four times as much. That settles where a kid succeeds about 80% of the time.
 - After two misses in a row the game gives a longer gap and the kind of obstacle that kid is best at.
 - Higher levels bring faster obstacles, shorter gaps, tighter timing, left/right crates, stars and quick pairs.
+- Scoring is about timing. A move right as the obstacle arrives is PERFECT (100), a little off is GREAT (70), and anything else that still counts is GOOD (40), plus a streak bonus. How close counts as PERFECT depends on age, so a 4 year old gets more leeway than a 10 year old, and the same move is worth the same points to everyone. In breaks, younger kids get a points boost instead.
 - On top of that, the whole squad ramps up a little as the workout timer counts down, and the last 15 seconds are double points.
 
 Nobody is ever knocked out; a miss just breaks the streak.

@@ -102,6 +102,7 @@ export class Player {
     this.peakSkill = this.skill;
     this.score = 0;
     this.streak = 0;
+    this.tiers = [0, 0, 0]; // perfect, great, good
     this.bestStreak = 0;
     this.hits = 0;
     this.misses = 0;
@@ -362,7 +363,13 @@ export class Player {
   }
 
   // Break points follow the kid's level too, so older kids aren't outscored.
-  get breakMult() { return 0.6 + 0.08 * this.skill; }
+  // Breaks have no timing to judge, and older kids naturally manage more
+  // reps, so younger kids get a boost here instead.
+  get breakMult() { return clamp(1 + 0.07 * (10 - this.age), 0.85, 1.4); }
+
+  // How close to the beat counts as PERFECT, in seconds. Generous at 4,
+  // tight for an adult, and it doesn't change as the level climbs.
+  get perfectTol() { return lerp(0.25, 0.1, clamp((this.age - 4) / 8, 0, 1)); }
 
   // An overhand arm swing: throws a ball, or chops a board in karate time.
   onThrow() {
@@ -606,14 +613,18 @@ export class Player {
     this.streak++;
     this.missRun = 0;
     this.bestStreak = Math.max(this.bestStreak, this.streak);
-    // Harder levels are worth more, so a younger kid on an easier level
-    // doesn't run away with the score.
-    const base = (50 + 12 * (this.skill + (this.ramp || 0))) * (o.kind === 'rope' ? 1.4 : 1);
+    // Points come from timing: how close to the obstacle's arrival the move
+    // landed, judged against a tolerance set by age.
+    const off = Math.abs(this.clock - o.arrive), tol = this.perfectTol;
+    const tier = off <= tol ? 0 : off <= tol * 2 ? 1 : 2;
+    o.tier = tier;
+    this.tiers[tier]++;
+    const base = [100, 70, 40][tier] * (o.kind === 'rope' ? 1.4 : 1);
     if (this.streak === SUPER_STREAK) {
       this.fx.push({ type: 'super', text: 'SUPER CHARGED!', t: 0, life: 1.8 });
       this.onEvent?.('super');
     }
-    this.addPoints(base + 5 * Math.min(this.streak, 20), WORDS[o.kind] && Math.random() < 0.5 ? pick(WORDS[o.kind]) : null);
+    this.addPoints(base + 5 * Math.min(this.streak, 20), ['PERFECT!', 'GREAT!', false][tier]);
     this.counts[{ log: 'jump', crate: 'punch', bird: 'dodge', rope: 'swing' }[o.kind]]++;
     if (o.kind === 'rope') this.swing = 0.9;
     // Climb fast while we are still finding their level, then gently.
