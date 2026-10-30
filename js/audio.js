@@ -267,7 +267,7 @@ const CUE_FOR = {
   bubble_time: () => { CUES.fanfare(); setTimeout(CUES.bubbles, 450); },
   fire_time: () => { CUES.fanfare(); setTimeout(CUES.siren, 450); },
   dance_time: () => CUES.fanfare(), kaiju_time: () => { CUES.fanfare(); setTimeout(() => sfx.stomp(), 450); },
-  bugs_time: () => CUES.fanfare(), goalie_time: () => CUES.fanfare(), climb_time: () => CUES.fanfare(), tray_time: () => CUES.fanfare(),
+  bugs_time: () => CUES.fanfare(), goalie_time: () => CUES.fanfare(), climb_time: () => CUES.fanfare(), tray_time: () => CUES.fanfare(), wyr_time: () => CUES.fanfare(),
   final_rush: () => CUES.siren(),
   back: () => sfx.ready(), got_it: () => sfx.level(),
 };
@@ -277,7 +277,7 @@ const CUE_FOR = {
 const VOICE_LINES = [
   'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
   'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
-  'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time',
+  'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time', 'wyr_time',
   'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
   'got_it', 'lobby', 'heart', 'champions',
 ];

@@ -1,5 +1,5 @@
 {
   "headers": [
-    { "source": "/(vendor|models)/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }] }
+    { "source": "/(vendor|models|img)/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }] }
   ]
 }

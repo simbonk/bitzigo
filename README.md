@@ -1,6 +1,6 @@
 # Bitzigo
 
-A living-room motion game for up to four kids at once. A phone or laptop camera watches the kids standing in place; each one becomes a blocky character running down their own lane, and they **jump** over brick walls, **punch** crates, **lean their head** away from crazy birds and put **both hands up** to grab a rope and swing over puddles. A few times per workout everyone stops for a break game: **throw time** (knock down cans), **snowball time** (knock down a snowman), **karate time** (chop down to break boards), **fire time** (point an arm to aim a hose and put out the fires) and **bubble time** (flap, flap, flap up to a bubble, pop it with your head and drop back down). Hats and accessories float down the road as free prizes, and 8 in a row makes a kid **super charged**: electric sparks and 1.5× points until they miss, or spin all the way round to cash it in for a mega bonus. Everyone runs the same course at the same time (or their own course, from setup). Eleven characters to pick from, including a ninja, a blue hedgehog, a pink axolotl, a firefighter and a cow. Built as a proof of concept to see how the mechanics feel.
+A living-room motion game for up to four kids at once. A phone or laptop camera watches the kids standing in place; each one becomes a blocky character running down their own lane, and they **jump** over brick walls, **punch** crates, **lean their head** away from crazy birds and put **both hands up** to grab a rope and swing over puddles. A few times per workout everyone stops for a break game: **throw time** (knock down cans), **snowball time** (knock down a snowman), **karate time** (chop down to break boards), **fire time** (point an arm to aim a hose and put out the fires) and **bubble time** (flap, flap, flap up to a bubble, pop it with your head and drop back down), plus **Would You Rather?** (everyone gets the same silly question with two to four picture cards, and picks one by holding the pose drawn under it: one arm up on the left or right, both arms up, or hands together in front; then everyone sees who picked the same thing). Hats and accessories float down the road as free prizes, and 8 in a row makes a kid **super charged**: electric sparks and 1.5× points until they miss, or spin all the way round to cash it in for a mega bonus. Everyone runs the same course at the same time (or their own course, from setup). Eleven characters to pick from, including a ninja, a blue hedgehog, a pink axolotl, a firefighter and a cow. Built as a proof of concept to see how the mechanics feel.
 
 Everything runs in the browser. There is no server, no account, and the camera picture never leaves the device.
 
@@ -31,6 +31,18 @@ Nobody is ever knocked out; a miss just breaks the streak.
 ## Testing without kids
 
 Choose **Keyboard** on the setup screen. P1 uses W/A/S/D, P2 T/F/G/H, P3 I/J/K/L and P4 the arrow keys: up jumps (or throws, chops or flaps in the break games), left/right punches, left+right together is hands up, and down plus left/right leans.
+
+## Would You Rather pictures
+
+The 100 questions live in `tools/wyr-questions.txt` (question, then each answer as `label ; emoji ; picture description`). The pixel-art cards in `img/wyr/` were drawn once with Google's Gemini image model and shrunk to 48px sprites (under 1 KB each); the game never calls Gemini. After changing the questions:
+
+```
+python3 tools/wyr.py                                   # rebuild js/wyr-questions.js
+GEMINI_API_KEY=... python3 tools/wyr.py --images       # draw only the missing pictures (about 4 cents per question)
+GEMINI_API_KEY=... python3 tools/wyr.py --images --only 105 --force   # redraw one question
+```
+
+A card shows its emoji until its picture exists.
 
 ## Hosting
 

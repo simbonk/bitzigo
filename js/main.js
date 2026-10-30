@@ -1,6 +1,7 @@
 import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
-import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
+import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES, drawWyrQuestion } from './render.js';
+import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
@@ -413,8 +414,10 @@ const BREAK_INFO = {
   chops: { title: 'KARATE FRENZY!', sub: 'Chop, chop, chop as fast as you can!', clip: 'chops_time' },
   rain: { title: 'RAINSTORM!', sub: 'Hands over your head like a roof, then lean to pour into the bucket!', clip: 'rain_time' },
   tray: { title: 'PANCAKE TOWER!', sub: 'Move your hands to catch pancakes. Dodge the boots!', clip: 'tray_time' },
+  wyr: { title: 'WOULD YOU RATHER?', sub: 'Strike the pose under the picture you pick!', clip: 'wyr_time' },
 };
 let throwPlan = [], throwEnd = 0, pumpEnd = 0;
+let wyr = null;         // the shared Would You Rather round, during that break
 // Breaks come out of a shuffled bag, so every game is different and nothing
 // repeats until they've all had a turn.
 let breakBag = [];
@@ -433,6 +436,7 @@ function startPlay() {
   throwPlan = planThrows(settings.seconds);
   throwEnd = 0;
   pumpEnd = 0;
+  wyr = null;
   if (together) {
     // Line every lane up on the same clock before the course starts.
     const c = Math.max(...players.map(p => p.clock));
@@ -475,6 +479,7 @@ function endRound(manual = false) {
   stopMusic();
   songTurn++;
   players.forEach(p => p.throwing && p.stopThrowing());
+  wyr = null;
   sfx.finish();
   cue('great');
   if (roundT > 10) saveGame(players, { theme: themeNow().name, seconds: roundT });
@@ -969,14 +974,25 @@ function updateGame(t, dt) {
       throwEnd = roundT + THROW_SECS;
       const type = nextBreak();
       players.forEach(p => p.startBreak(type));
+      if (type === 'wyr') {
+        // As many questions as fit, leaving the last 15 seconds for running.
+        const secs = Math.min(WYR_SECS, dur ? dur - roundT - 15 : WYR_SECS);
+        wyr = startWyr(players, secs);
+        throwEnd = roundT + secs;
+      }
       const info = BREAK_INFO[type];
       showBanner(info.title, info.sub, 2.8);
       cue(info.clip);
     } else if (throwPlan.length && dur && roundT >= throwPlan[0] && !throwEnd) {
       throwPlan.shift();
     }
+    if (wyr) {
+      updateWyr(wyr, players, dt);
+      if (wyr.done) throwEnd = Math.min(throwEnd, roundT);
+    }
     if (throwEnd && roundT >= throwEnd) {
       throwEnd = 0;
+      wyr = null;
       players.forEach(p => p.stopThrowing());
       course?.resume(players[0].clock);
       showBanner('Back to running!', 'Pump your arms!', 2.4);
@@ -1049,6 +1065,7 @@ function draw(t) {
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: String(p.index + 1) }));
     drawCamera(ctx, video, frame.aspect, x, y, cw, ch, people);
   }
+  if (wyr && state === 'play') drawWyrQuestion(ctx, wyr, W, hudBottom(n) + (settings.seconds ? H * 0.075 : H * 0.01), H);
 
   drawBanner(t);
 }
@@ -1174,6 +1191,10 @@ if (new URLSearchParams(location.search).has('debug')) {
   window.qs = {
     get frame() { return frame; }, get players() { return players; }, get state() { return state; },
     get tracker() { return tracker; }, advance(sec) { roundT += sec; },
-    startBreak(type) { throwEnd = roundT + THROW_SECS; players.forEach(p => p.startBreak(type)); },
+    startBreak(type) {
+      throwEnd = roundT + (type === 'wyr' ? WYR_SECS : THROW_SECS);
+      players.forEach(p => p.startBreak(type));
+      wyr = type === 'wyr' ? startWyr(players) : null;
+    },
   };
 }
