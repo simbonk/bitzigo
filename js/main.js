@@ -1,6 +1,6 @@
 import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
-import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES, drawWyrQuestion } from './render.js';
+import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
 import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
@@ -1065,7 +1065,10 @@ function draw(t) {
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: String(p.index + 1) }));
     drawCamera(ctx, video, frame.aspect, x, y, cw, ch, people);
   }
-  if (wyr && state === 'play') drawWyrQuestion(ctx, wyr, W, hudBottom(n) + (settings.seconds ? H * 0.075 : H * 0.01), H);
+  if (wyr && state === 'play') {
+    drawWyrQuestion(ctx, wyr, W, hudBottom(n) + (settings.seconds ? H * 0.075 : H * 0.01), H);
+    drawWyrBoard(ctx, wyr, players, W, H);
+  }
 
   drawBanner(t);
 }
