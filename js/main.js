@@ -167,6 +167,7 @@ $('#go').onclick = async () => {
   // shows a big button for it.
   if (canFs) enterFullscreen();
   $('#setup').classList.add('hidden');
+  newSet();
   enterLobby();
 };
 
@@ -186,18 +187,70 @@ function setState(s) {
   updateFsNudge();
 }
 
-function enterLobby() {
+function enterLobby(auto = false) {
   course = null;
   together = false;
   setAnnouncer(true);
   lobby = players.map(() => ({ found: false, ready: false, upSince: 0, armLatch: false }));
+  lobby.auto = auto;
   players.forEach(p => { p.reset(); p.clearCalibration(); p.trackX = null; p.homeX = null; p.heartRate = null; p.onEvent = playerEvent; });
   tracks = [];
   if (settings.mode === 'camera') ensureCamera().catch(e => console.error(e));
   setState('lobby');
   updateFsNudge();
-  if (settings.mode === 'camera') cue('lobby');
+  if (auto) showBanner(`Round ${setRound} of ${SET_ROUNDS}: ${themeNow().name}!`, 'Back to your spots!', 3);
+  else if (settings.mode === 'camera') cue('lobby');
 }
+
+// A short timed game rolls straight into another round with a new theme,
+// keeping everyone's characters, until SET_ROUNDS rounds have been played.
+const SET_ROUNDS = 5, NEXT_SECS = 15;
+let setRound = 1, roundTheme = settings.theme, setThemes = [], nextTimer = null;
+let setScores = [];     // running total for each player slot across the set
+const total = p => setScores[p.index] ?? p.score;
+const themeNow = () => THEMES[roundTheme] || THEMES.forest;
+function newSet() {
+  setRound = 1;
+  roundTheme = settings.theme;
+  setThemes = [roundTheme];
+  setScores = [];
+}
+
+function scheduleNext() {
+  const all = Object.keys(THEMES);
+  const fresh = all.filter(k => !setThemes.includes(k));
+  const pool = fresh.length ? fresh : all.filter(k => k !== roundTheme);
+  const next = pool[Math.floor(Math.random() * pool.length)];
+  const until = now() + NEXT_SECS;
+  const box = $('#nextRound');
+  const tick = () => {
+    const left = Math.ceil(until - now());
+    if (left <= 0) return continueSet(next);
+    box.querySelector('span').innerHTML = `Round ${setRound + 1} of ${SET_ROUNDS}: <b>${THEMES[next].name}</b> starts in ${left}…`;
+  };
+  box.classList.remove('hidden');
+  document.body.classList.add('between');
+  tick();
+  nextTimer = setInterval(tick, 250);
+  $('#nextGo').onclick = () => continueSet(next);
+}
+
+function cancelNext() {
+  clearInterval(nextTimer);
+  nextTimer = null;
+  $('#nextRound').classList.add('hidden');
+  document.body.classList.remove('between');
+}
+
+function continueSet(next) {
+  cancelNext();
+  $('#end').classList.add('hidden');
+  setRound++;
+  roundTheme = next;
+  setThemes.push(next);
+  enterLobby(true);
+}
+$('#nextStop').onclick = () => { cancelNext(); showResults(); };
 
 function startReady() {
   // Everyone found (or the parent pressed Start): calibrate and count down.
@@ -275,7 +328,7 @@ let throwPlan = [], throwEnd = 0;
 let breakBag = [];
 function nextBreak() {
   if (!breakBag.length) {
-    breakBag = BREAKS.filter(b => b !== (settings.theme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
+    breakBag = BREAKS.filter(b => b !== (roundTheme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
   }
   return breakBag.shift();
 }
@@ -293,6 +346,10 @@ function startPlay() {
     players.forEach(p => { p.clock = c; p.obstacles = []; });
   }
   players.forEach(p => { p.startRound(); p.shared = together; p.paceSkill = null; });
+  // Later rounds of a set quietly give whoever is behind a few extra points
+  // per move (up to +30%), so nobody falls hopelessly out of the running.
+  const lead = Math.max(1, ...players.map(p => setScores[p.index] || 0));
+  players.forEach(p => { p.boost = setRound > 1 ? 1 + 0.3 * Math.min(1, (lead - (setScores[p.index] || 0)) / lead) : 1; });
   course = together ? new Course() : null;
   // The announcer only calls moves when everyone shares one course; with
   // separate courses it would talk over itself, so each move gets a sound.
@@ -303,14 +360,15 @@ function startPlay() {
   sfx.beep(true);
 }
 
-function endRound() {
+function endRound(manual = false) {
   setState('end');
   stopMusic();
   songTurn++;
   players.forEach(p => p.throwing && p.stopThrowing());
   sfx.finish();
   cue('great');
-  players.forEach(p => { slotGear[p.index] = { ...p.gear }; });
+  players.forEach(p => { slotGear[p.index] = { ...p.gear }; setScores[p.index] = (setScores[p.index] || 0) + p.score; });
+  if (!manual && settings.seconds && setRound < SET_ROUNDS) scheduleNext();
   showResults();
 }
 
@@ -325,14 +383,17 @@ function showResults() {
   const box = $('#results');
   box.innerHTML = '';
   const awards = pickAwards(players);
-  [...players].sort((a, b) => b.score - a.score).forEach(p => {
+  const multi = setRound > 1;
+  $('#end h1').textContent = nextTimer ? `Round ${setRound} of ${SET_ROUNDS} done!` : 'Great moving, squad!';
+  [...players].sort((a, b) => total(b) - total(a)).forEach(p => {
     const div = document.createElement('div');
     div.className = 'result';
     const face = p.face ? `<img class="face" src="${p.face}" alt="">` : `<span class="face noface" style="background:${p.color}">${p.index + 1}</span>`;
-    div.innerHTML = `<span class="bubble" style="border-color:${p.color}">${face}<span class="badge">${shortScore(p.score)}</span></span>
+    div.innerHTML = `<span class="bubble" style="border-color:${p.color}">${face}<span class="badge">${shortScore(total(p))}</span></span>
       <div class="who"><div class="name"></div><div class="award"></div>
       <div class="sub">Level ${Math.floor(p.peakSkill) + 1} · ${p.hits} moves · best streak ${p.bestStreak}</div></div>
-      <div class="nums"><div class="score">${p.score.toLocaleString()}</div>
+      <div class="nums"><div class="score">${total(p).toLocaleString()}</div>
+      ${multi ? `<div class="sub">+${p.score.toLocaleString()} this round</div>` : ''}
       <div class="hr">♥ ${p.heartRate ? `${p.heartRate} bpm` : '--'}</div></div>`;
     div.querySelector('.name').textContent = `${p.name} the ${p.character?.name || 'Mover'}`;
     div.querySelector('.award').textContent = awards.get(p);
@@ -353,9 +414,9 @@ function splashHtml() {
   if (!players.length) return '';
   const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const face = p => p.face ? `<img class="face" src="${p.face}" alt="">` : `<span class="face noface" style="background:${p.color}">${p.index + 1}</span>`;
-  const top = players.reduce((a, b) => (b.score > a.score ? b : a));
+  const top = players.reduce((a, b) => (total(b) > total(a) ? b : a));
   let html = `<div class="champ"><div class="bubble lg" style="border-color:${top.color}">${face(top)}</div>
-    <div><div class="label">Highest score</div><div class="champName">${esc(top.name)}</div><div class="champVal">${top.score.toLocaleString()}</div></div></div>`;
+    <div><div class="label">${nextTimer ? 'In the lead' : 'Highest score'}</div><div class="champName">${esc(top.name)}</div><div class="champVal">${total(top).toLocaleString()}</div></div></div>`;
   const hrs = players.filter(p => p.heartRate);
   if (hrs.length) {
     const h = hrs.reduce((a, b) => (b.heartRate > a.heartRate ? b : a));
@@ -400,9 +461,10 @@ function pickAwards(ps) {
   return out;
 }
 
-$('#again').onclick = () => { $('#end').classList.add('hidden'); unlockAudio(); enterLobby(); };
-$('#menu').onclick = () => { $('#end').classList.add('hidden'); setState('setup'); $('#setup').classList.remove('hidden'); };
+$('#again').onclick = () => { cancelNext(); setRound = 1; setThemes = [roundTheme]; setScores = []; $('#end').classList.add('hidden'); unlockAudio(); enterLobby(); };
+$('#menu').onclick = () => { cancelNext(); $('#end').classList.add('hidden'); setState('setup'); $('#setup').classList.remove('hidden'); };
 $('#heart').onclick = async () => {
+  cancelNext();
   $('#end').classList.add('hidden');
   // The camera rests during the heart check; the tracker is kept for later.
   stopCamera(video);
@@ -427,13 +489,13 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyC' && (state === 'play' || state === 'tutorial')) recalibrate();
   if (e.code === 'Enter' && state === 'lobby') startReady();
-  if (e.code === 'Escape' && ['lobby', 'ready', 'tutorial', 'play'].includes(state)) endRound();
+  if (e.code === 'Escape' && ['lobby', 'ready', 'tutorial', 'play'].includes(state)) endRound(true);
 });
 addEventListener('keyup', e => keys.delete(e.code));
 $('#btnStart').onclick = () => state === 'lobby' && startReady();
 $('#btnCam').onclick = () => { showCam = !showCam; };
 $('#btnMute').onclick = toggleMute;
-$('#btnStop').onclick = () => endRound();
+$('#btnStop').onclick = () => endRound(true);
 
 function toggleMute() {
   muted = !muted;
@@ -708,6 +770,13 @@ function updateLobby(t) {
     }
     if (!L.ready) allReady = false;
   });
+  if (lobby.auto) {
+    // Next round of a set: no hands-up needed, just everyone back in view
+    // (or whoever is there after a while).
+    const all = lobby.every(L => L.found);
+    if ((all && t - stateT > 3) || (t - stateT > 10 && lobby.some(L => L.found))) startReady();
+    return;
+  }
   if (allReady && t - stateT > 1) startReady();
 }
 
@@ -753,7 +822,7 @@ function updateGame(t, dt) {
       }
       if (n <= 0) {
         banner = null;
-        settings.intro ? startTutorial() : startPlay();
+        settings.intro && setRound === 1 ? startTutorial() : startPlay();
       }
     }
   }
@@ -838,7 +907,7 @@ function draw(t) {
     drawLobby(t);
     return;
   }
-  const theme = THEMES[settings.theme] || THEMES.forest;
+  const theme = themeNow();
   const n = players.length;
   lctx.clearRect(0, 0, low.width, low.height);
   for (const p of players) drawLaneWorld(lctx, laneBox(p.index, n, low.width, low.height), p, t, p.character || CHARACTERS[0], theme);
@@ -890,7 +959,7 @@ function drawBanner(t) {
 
 // Behind the setup and results panels: the squad running along.
 function drawAttract(t) {
-  const theme = THEMES[settings.theme] || THEMES.forest;
+  const theme = themeNow();
   const n = 4;
   lctx.clearRect(0, 0, low.width, low.height);
   for (let i = 0; i < n; i++) {
@@ -907,7 +976,7 @@ const attractPlayers = [0, 1, 2, 3].map(i => ({
 }));
 
 function drawLobby(t) {
-  const theme = THEMES[settings.theme] || THEMES.forest;
+  const theme = themeNow();
   const n = players.length;
   const cam = settings.mode === 'camera';
 

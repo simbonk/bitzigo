@@ -28,7 +28,10 @@ export const THEMES = {
   forest: { name: 'Forest', sky: ['#5ec8f2', '#c8f0ff'], grass: ['#6cc644', '#5fb83b'], road: ['#d9b980', '#cfad70'], edge: '#a8864e', prop: 'pine', cloud: '#ffffff' },
   snow: { name: 'Snow', sky: ['#8fb8de', '#e8f4ff'], grass: ['#f2f7fb', '#e3edf5'], road: ['#a9c7e0', '#9dbcd6'], edge: '#7a9cba', prop: 'snowpine', cloud: '#ffffff' },
   desert: { name: 'Desert', sky: ['#ff9e5e', '#ffe0a3'], grass: ['#f2cf7a', '#e8c36a'], road: ['#c98e52', '#bf8448'], edge: '#9a6534', prop: 'cactus', cloud: '#fff4e0' },
-  space: { name: 'Space', sky: ['#0b0b2a', '#3a1e6e'], grass: ['#3b3561', '#332e56'], road: ['#6a5fa8', '#5f549c'], edge: '#9d8cff', prop: 'crystal', cloud: '#ffffff' },
+  space: { name: 'Space', sky: ['#0b0b2a', '#3a1e6e'], grass: ['#3b3561', '#332e56'], road: ['#6a5fa8', '#5f549c'], edge: '#9d8cff', prop: 'crystal', cloud: '#ffffff', stars: true },
+  beach: { name: 'Beach', sky: ['#3fb6f0', '#b8ecff'], grass: ['#f6dfa0', '#eed291'], road: ['#c9935a', '#bd8850'], edge: '#8a5a2e', prop: 'palm', cloud: '#ffffff', sea: true },
+  candy: { name: 'Candy', sky: ['#ff9fd6', '#ffe4f4'], grass: ['#a5ecc9', '#93e0b9'], road: ['#fff1d2', '#ffe4b3'], edge: '#ff5fa2', prop: 'lollipop', cloud: '#ffffff' },
+  spooky: { name: 'Spooky', sky: ['#1b1033', '#5a2a6c'], grass: ['#34502e', '#2c4628'], road: ['#6e5c4a', '#625240'], edge: '#ff8c1a', prop: 'pumpkin', cloud: '#c9c3e6', stars: true, moon: true },
 };
 
 const KIND_INFO = {
@@ -133,10 +136,25 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     ctx.fillStyle = mix(top, bottom, k);
     ctx.fillRect(L.x, R((L.horizon * b) / bands), L.w, R(L.horizon / bands) + 1);
   }
-  if (theme.prop === 'crystal') {
+  if (theme.moon) {
+    const m = L.S * 0.7, mx = L.x + L.w * 0.72, my = L.horizon * 0.28;
+    rect(ctx, mx - m / 2, my - m / 2, m, m, '#fff4c2');
+    rect(ctx, mx - m * 0.65, my - m * 0.3, m * 1.3, m * 0.6, '#fff4c2');
+    rect(ctx, mx - m * 0.3, my - m * 0.65, m * 0.6, m * 1.3, '#fff4c2');
+    rect(ctx, mx + m * 0.05, my - m * 0.15, m * 0.2, m * 0.2, '#e8d890');
+  }
+  if (theme.stars) {
     for (let k = 0; k < 9; k++) {
       const sx = L.x + ((k * 37 + p.index * 13) % 100) / 100 * L.w, sy = ((k * 53) % 90) / 100 * L.horizon;
       rect(ctx, sx, sy, Math.max(1, L.S * 0.08), Math.max(1, L.S * 0.08), Math.sin(time * 3 + k) > 0 ? '#ffffff' : '#9d8cff');
+    }
+  }
+  if (theme.sea) {
+    const sh = L.horizon * 0.12;
+    rect(ctx, L.x, L.horizon - sh, L.w, sh + 1, '#1f8fd6');
+    for (let k = 0; k < 6; k++) {
+      const wx = L.x + (((k * 0.19 + time * 0.03) % 1.1) - 0.05) * L.w;
+      rect(ctx, wx, L.horizon - sh * (0.35 + 0.3 * (k % 2)), L.S * 0.5, Math.max(1, sh * 0.12), '#bfe8ff');
     }
   }
   // Blocky clouds drifting.
@@ -144,7 +162,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     const cx = L.x + ((c * 0.55 + time * 0.012 * (c + 1) + p.index * 0.3) % 1.2) * L.w - L.w * 0.1;
     const cy = L.horizon * (0.5 + 0.22 * c);
     const u = L.S * 0.35;
-    ctx.globalAlpha = theme.prop === 'crystal' ? 0.25 : 1;
+    ctx.globalAlpha = theme.stars ? 0.25 : 1;
     rect(ctx, cx, cy, u * 4, u, theme.cloud);
     rect(ctx, cx + u, cy - u, u * 2, u, theme.cloud);
     ctx.globalAlpha = 1;
@@ -232,6 +250,44 @@ function drawTree(ctx, L, z, side, prop) {
     rect(ctx, x - u * 0.75, y - u * 1.0, u * 0.5, u * 0.25, '#3f9e4a');
     block(ctx, x + u * 0.45, y - u * 1.9, u * 0.3, u * 0.8, '#3f9e4a', 0.15);
     rect(ctx, x + u * 0.25, y - u * 1.2, u * 0.5, u * 0.25, '#3f9e4a');
+    return;
+  }
+  if (prop === 'palm') {
+    const trunk = '#9a6a3a';
+    for (let k = 0; k < 4; k++) rect(ctx, x - u * 0.18 + side * k * u * 0.06, y - u * (0.8 + k * 0.7), u * 0.36, u * 0.75, k % 2 ? trunk : shade(trunk, -0.08));
+    const tx = x + side * u * 0.2, ty = y - u * 3.0;
+    block(ctx, tx - u * 1.1, ty, u * 2.2, u * 0.35, '#2fa84f', 0.3);
+    block(ctx, tx - u * 0.6, ty - u * 0.35, u * 1.2, u * 0.4, '#3cbf5c', 0.3);
+    rect(ctx, tx - u * 1.3, ty + u * 0.3, u * 0.35, u * 0.35, '#2fa84f');
+    rect(ctx, tx + u * 0.95, ty + u * 0.3, u * 0.35, u * 0.35, '#2fa84f');
+    rect(ctx, tx - u * 0.25, ty + u * 0.35, u * 0.22, u * 0.22, '#6b4423');
+    rect(ctx, tx + u * 0.05, ty + u * 0.4, u * 0.22, u * 0.22, '#6b4423');
+    return;
+  }
+  if (prop === 'lollipop') {
+    const c = side < 0 ? '#ff4f8b' : '#7a5cff';
+    rect(ctx, x - u * 0.08, y - u * 2.0, u * 0.16, u * 2.0, '#ffffff');
+    block(ctx, x - u * 0.7, y - u * 3.2, u * 1.4, u * 1.3, c, 0.15);
+    rect(ctx, x - u * 0.45, y - u * 2.95, u * 0.9, u * 0.2, '#ffffff');
+    rect(ctx, x - u * 0.45, y - u * 2.55, u * 0.9, u * 0.2, '#ffffff');
+    rect(ctx, x - u * 0.15, y - u * 2.75, u * 0.3, u * 0.2, shade(c, 0.2));
+    return;
+  }
+  if (prop === 'pumpkin') {
+    if (side < 0) {
+      block(ctx, x - u * 0.6, y - u * 0.9, u * 1.2, u * 0.9, '#ff8c1a', 0.15);
+      rect(ctx, x - u * 0.25, y - u * 0.88, u * 0.08, u * 0.8, '#d96a00');
+      rect(ctx, x + u * 0.17, y - u * 0.88, u * 0.08, u * 0.8, '#d96a00');
+      rect(ctx, x - u * 0.08, y - u * 1.15, u * 0.16, u * 0.3, '#3f7a2a');
+      rect(ctx, x - u * 0.4, y - u * 0.65, u * 0.2, u * 0.18, '#ffe14d');
+      rect(ctx, x + u * 0.2, y - u * 0.65, u * 0.2, u * 0.18, '#ffe14d');
+      rect(ctx, x - u * 0.3, y - u * 0.35, u * 0.6, u * 0.12, '#ffe14d');
+    } else {
+      block(ctx, x - u * 0.45, y - u * 1.4, u * 0.9, u * 1.4, '#8a8aa0', 0.12);
+      rect(ctx, x - u * 0.3, y - u * 1.6, u * 0.6, u * 0.25, '#8a8aa0');
+      rect(ctx, x - u * 0.05, y - u * 1.2, u * 0.1, u * 0.55, '#5c5c70');
+      rect(ctx, x - u * 0.22, y - u * 1.05, u * 0.44, u * 0.1, '#5c5c70');
+    }
     return;
   }
   if (prop === 'crystal') {

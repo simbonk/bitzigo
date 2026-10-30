@@ -593,7 +593,7 @@ export class Player {
   }
 
   addPoints(pts, word) {
-    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1);
+    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1) * (this.boost || 1);
     const gained = Math.max(10, Math.round((pts * mult) / 10) * 10);
     this.score += gained;
     this.shake = 0.3;
