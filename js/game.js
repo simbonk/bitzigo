@@ -597,11 +597,13 @@ export class Player {
     if (!o.tutorial) (this.recent ||= []).push(ok ? 1 : 0), this.recent.length > 8 && this.recent.shift();
   }
 
-  // A rough calorie guess from minutes of movement: an active video game is
-  // about 5 METs, with body weight guessed from age.
+  // A rough calorie guess from minutes of movement: jumping, punching and
+  // arm games are vigorous play (about 6.5 METs), body weight is guessed from
+  // age, and kids burn a bit more per kilo than adults.
   get kcal() {
-    const kg = this.age >= 12 ? 70 : 2 * this.age + 8;
-    return Math.round((5 * 3.5 * kg / 200) * (this.activeSecs / 60));
+    const kid = this.age < 12;
+    const kg = kid ? 2.6 * this.age + 6 : 70;
+    return Math.round((6.5 * 3.5 * kg / 200) * (kid ? 1.25 : 1) * (this.activeSecs / 60));
   }
 
   // How the last few moves went (1 = all hit), for easing off the speed.
