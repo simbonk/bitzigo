@@ -158,3 +158,7 @@ body.between #heart, body.between .result .hr { display: none; }
 .link { background: none; border: none; color: #ffd23f; font: inherit; font-size: 0.9em; padding: 0 0 4px; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
 .wide .col { min-width: 0; }
 .wide #theme { flex-wrap: wrap; row-gap: 4px; }
+.wide .head { position: relative; }
+.setupBtn { position: absolute; top: 0; right: 0; background: #24305a; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: 0.35em 0.8em; font: inherit; font-weight: bold; cursor: pointer; }
+/* Keyboard mode is for testing only: shown with ?debug or ?keys in the address. */
+body:not(.testing) .testOnly { display: none; }
