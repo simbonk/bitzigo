@@ -121,20 +121,23 @@ const METRICS = [
   ['Perfect timing', rs => avg(rs.map(r => r.timing).filter(v => v != null)), v => `${v}%`, 100],
 ];
 
+// A line graph: an SVG line through each bucket that has games, with a dot per
+// point. Columns sit on top as tap targets that show the number.
 function chartHtml([title, fn, fmt, max], bs, kid, color) {
   const vals = bs.map(b => { const rs = b.games.map(g => g.players.find(r => r.name === kid)).filter(Boolean); return fn(rs, b.games); });
-  const top = max || Math.max(1, ...vals.filter(v => v != null));
-  const total = vals.filter(v => v != null);
-  const many = bs.length > 12;
-  let html = `<div class="chart"><div class="chartHead"><b>${title}</b><span class="chartVal"></span></div><div class="bars${many ? ' many' : ''}">`;
+  const top = max || Math.max(1, ...vals.filter(v => v != null)) * 1.1;
+  const n = bs.length, x = i => ((i + 0.5) * 100) / n, y = v => 100 - (100 * v) / top;
+  const pts = vals.map((v, i) => (v == null ? null : `${x(i).toFixed(2)},${y(v).toFixed(2)}`)).filter(Boolean);
+  const many = n > 12;
+  let html = `<div class="chart"><div class="chartHead"><b>${title}</b><span class="chartVal"></span></div><div class="bars">` +
+    `<svg class="line" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
   bs.forEach((b, i) => {
     const v = vals[i];
-    const h = v == null ? 0 : Math.max(3, (100 * v) / top);
     const tip = `${b.label}: ${v == null ? 'no games' : fmt(v)}`;
-    const lab = !many || i % 5 === 0 || i === bs.length - 1 ? esc(b.label) : '';
-    html += `<div class="bar" data-tip="${esc(tip)}" title="${esc(tip)}"><div class="fill${v == null ? ' none' : ''}" style="height:${h}%;${v == null ? '' : `background:${color}`}"></div><span>${lab}</span></div>`;
+    const lab = !many || i % 5 === 0 || i === n - 1 ? esc(b.label) : '';
+    html += `<div class="bar" data-tip="${esc(tip)}" title="${esc(tip)}">${v == null ? '' : `<i class="pt" style="bottom:${(100 - y(v)).toFixed(2)}%;background:${color}"></i>`}<span>${lab}</span></div>`;
   });
-  if (!total.length) html += '<p class="noData">No games</p>';
+  if (!pts.length) html += '<p class="noData">No games</p>';
   return html + '</div></div>';
 }
 
@@ -159,7 +162,7 @@ export function statsHtml() {
       .map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
     if (!mine.length) return html + `<p class="empty">No games for ${esc(kid)} in this time.</p>`;
     const bs = buckets(view.period, mine);
-    html += '<p class="note">Tap a bar to see its number.</p><div class="charts">' + METRICS.map(m => chartHtml(m, bs, kid, colors.get(kid) || '#ffd23f')).join('') + '</div>';
+    html += '<p class="note">Tap the graph to see a number.</p><div class="charts">' + METRICS.map(m => chartHtml(m, bs, kid, colors.get(kid) || '#ffd23f')).join('') + '</div>';
     return html + '<p class="note">* Calories are a rough guess from minutes of movement and age, not a measurement.</p>';
   }
 
