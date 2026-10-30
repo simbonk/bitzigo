@@ -197,7 +197,7 @@ function renderRoom() {
   const msg = {
     starting: 'Making a code…',
     joining: `Joining ${room.code}…`,
-    waiting: 'Text this code to your friend, then press Let\'s go.',
+    waiting: 'Send your friend the link (it joins by itself), then press Let\'s go.',
     connected: room.role === 'host' ? 'Friend joined! Press Let\'s go and you\'ll start together.'
       : 'Joined! Press Let\'s go. The code maker picks the world and workout length.',
     lost: 'Lost the connection to your friend.',
@@ -205,7 +205,8 @@ function renderRoom() {
   const el = $('#roomText');
   el.textContent = msg;
   el.className = `roomText ${s === 'connected' ? 'good' : s === 'lost' ? 'bad' : ''}`;
-  $('#roomShare').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  $('#roomCopy').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  $('#roomShare').classList.toggle('hidden', room.role !== 'host' || !room.code || !navigator.share);
   if (s === 'error') $('#status').textContent = room.error;
   if (s === 'off') {
     lastFriend = null;
@@ -227,15 +228,23 @@ $('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch
 $('#roomJoin').onclick = () => { $('#status').textContent = ''; joinRoom($('#roomCode').value).catch(e => console.error(e)); };
 $('#roomCode').onkeydown = e => { if (e.key === 'Enter') $('#roomJoin').click(); };
 $('#roomLeave').onclick = () => leaveRoom();
-$('#roomShare').onclick = async () => {
-  const url = `${location.origin}${location.pathname}?room=${room.code}`;
-  const words = `Race us in Bitzigo! Open ${url} or type the code ${room.code}`;
-  try {
-    if (navigator.share) { await navigator.share({ title: 'Bitzigo', text: words }); return; }
-    await navigator.clipboard.writeText(words);
-    $('#roomShare').textContent = 'Copied!';
-    setTimeout(() => { $('#roomShare').textContent = 'Text it'; }, 2000);
-  } catch { }
+// The link joins the room by itself when the friend opens it: no typing.
+const roomLink = () => `${location.origin}${location.pathname}?room=${room.code}`;
+$('#roomCopy').onclick = async () => {
+  const url = roomLink();
+  try { await navigator.clipboard.writeText(url); } catch {
+    // Older browsers: copy from a hidden text box.
+    const box = Object.assign(document.createElement('textarea'), { value: url });
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); } catch { }
+    box.remove();
+  }
+  $('#roomCopy').textContent = '✓ Copied';
+  setTimeout(() => { $('#roomCopy').textContent = '🔗 Copy link'; }, 2000);
+};
+$('#roomShare').onclick = () => {
+  navigator.share?.({ title: 'Bitzigo', text: 'Race us in Bitzigo! Tap to join:', url: roomLink() }).catch(() => { });
 };
 // A shared link (…?room=FROG-42) joins straight away.
 {
