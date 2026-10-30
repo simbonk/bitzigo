@@ -1032,7 +1032,24 @@ export function drawGearItem(ctx, id, left, top, u) {
 // ---------------- HUD (full-res canvas) ----------------
 
 export function text(ctx, str, x, y, size, color, align = 'center') {
+  // Too wide for the screen (a phone held upright): split into two lines, or shrink.
+  const maxW = ctx.canvas.width * 0.94;
   ctx.font = `bold ${R(size)}px ${FONT}`;
+  const w = ctx.measureText(str).width;
+  if (w > maxW / 0.75 && align === 'center') {
+    const mid = str.length / 2;
+    let cut = -1;
+    for (let i = 0; i < str.length; i++) if (str[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i;
+    if (cut > 0) {
+      const a = str.slice(0, cut), b = str.slice(cut + 1), s2 = size * 0.9;
+      ctx.font = `bold ${R(s2)}px ${FONT}`;
+      const fit = Math.min(1, maxW / Math.max(ctx.measureText(a).width, ctx.measureText(b).width));
+      text(ctx, a, x, y - s2 * fit * 0.55, s2 * fit, color, align);
+      text(ctx, b, x, y + s2 * fit * 0.55, s2 * fit, color, align);
+      return;
+    }
+  }
+  if (w > maxW) { size *= maxW / w; ctx.font = `bold ${R(size)}px ${FONT}`; }
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.lineWidth = Math.max(3, size * 0.2);

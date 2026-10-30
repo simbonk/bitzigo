@@ -103,7 +103,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 /* Portrait phones: ask for landscape (the heart check works either way). */
 #rotate { display: none; }
 @media (orientation: portrait) and (max-width: 600px) {
-  body:not(.heart-mode) #rotate {
+  body:not(.heart-mode):not(.solo) #rotate {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
     position: fixed; inset: 0; z-index: 10; background: #101830; text-align: center; padding: 24px;
   }
@@ -279,3 +279,13 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #fsTip { position: fixed; z-index: 31; top: calc(max(6px, env(safe-area-inset-top)) + 42px); right: calc(6px + var(--safeX)); width: min(320px, calc(100vw - 24px - 2 * var(--safeX))); background: #101830; border: 2px solid #ffd23f; border-radius: 14px; padding: 10px 12px; color: #fff; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
 #fsTip p { margin: 6px 0 8px; line-height: 1.35; }
 #fsTip .shareIco { display: inline-block; border: 1px solid #fff8; border-radius: 4px; padding: 0 4px; }
+/* A phone held upright (one player): setup in one column. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .panel.wide { font-size: 14px; padding: 12px 14px; }
+  .wide .head { padding-right: 0; }
+  .topBtns { position: static; margin-top: 6px; }
+  .wide .cols { grid-template-columns: 1fr; }
+  .wide .seg { flex-wrap: wrap; }
+  .wide .seg button { padding: .35em .6em; }
+  .wide .label { width: 4.6em; }
+}
