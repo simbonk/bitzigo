@@ -6,7 +6,7 @@ import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 import { saveGame, addHeartRates, clearStats, showStats } from './stats.js';
-import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere } from './net.js';
+import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere, friendTicks, MAX_DEVICES } from './net.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#stage');
@@ -183,14 +183,23 @@ seg('#course', 'course', 'course');
 renderPlayerRows();
 
 // ---------------- Play with a friend ----------------
-// One household makes a code and texts it; the other types it in (or opens
-// the shared link). See net.js.
+// One household makes a code and texts it; up to three others type it in
+// (or open the shared link). See net.js.
 
-let lastFriend = null;  // the friends' latest update, kept for the results after they leave
+let lastFriends = [];   // the friends' latest updates, kept for the results after they leave
 let ownSettings = null; // the guest's own length and tutorial, while the code maker's are in use
+let ownCount = null;    // the player count from before a big room, given back on leaving
+// Four lanes in all: 2 kids per device with one friend's device, 1 each with 3 or 4 devices.
+const kidsPerDevice = () => (room.devices > 2 ? 1 : MAX_KIDS);
 function renderRoom() {
   const s = room.status;
   const on = s !== 'off' && s !== 'error';
+  const cap = on ? kidsPerDevice() : MAX_KIDS;
+  document.querySelectorAll('#count button').forEach(b => { b.disabled = Number(b.dataset.n) > cap; });
+  if (settings.count > cap) { ownCount ??= settings.count; settings.count = cap; }
+  else if (!on && ownCount != null) { settings.count = ownCount; ownCount = null; }
+  document.querySelectorAll('#count button').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === settings.count));
+  if (document.querySelectorAll('#players .player').length !== settings.count) renderPlayerRows();
   $('#roomIdle').classList.toggle('hidden', on);
   $('#roomOn').classList.toggle('hidden', !on);
   $('#roomBadge').textContent = on ? room.code || '' : '';
@@ -198,8 +207,8 @@ function renderRoom() {
     starting: 'Making a code…',
     joining: `Joining ${room.code}…`,
     waiting: 'Send your friend the invite, then press Let\'s go.',
-    connected: room.role === 'host' ? 'Friend joined! Press Let\'s go and you\'ll start together.'
-      : 'Joined! Press Let\'s go. The code maker picks the world and workout length.',
+    connected: (room.role === 'host' ? `${room.devices - 1} friend${room.devices > 2 ? 's' : ''} joined! Press Let's go and you'll all start together.`
+      : `Joined (${room.devices} devices)! Press Let's go. The code maker picks the world and workout length.`) + (room.devices > 2 ? ' One player each.' : ''),
     lost: 'Lost the connection to your friend.',
   }[s] || '';
   const el = $('#roomText');
@@ -209,7 +218,7 @@ function renderRoom() {
   $('#roomShare').classList.toggle('hidden', room.role !== 'host' || !room.code || !navigator.share);
   if (s === 'error') $('#status').textContent = room.error;
   if (s === 'off') {
-    lastFriend = null;
+    lastFriends = [];
     if (ownSettings) {
       Object.assign(settings, ownSettings);
       ownSettings = null;
@@ -221,7 +230,7 @@ function renderRoom() {
 }
 onRoom(msg => {
   if (msg.type === 'status') renderRoom();
-  if (msg.type === 'tick') { lastFriend = msg; if (state === 'end') renderFriendResults(); }
+  if (msg.type === 'tick') { lastFriends = friendTicks(); if (state === 'end') renderFriendResults(); }
   if (msg.type === 'go') friendSaysGo(msg);
 });
 $('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch(e => console.error(e)); };
@@ -641,17 +650,17 @@ function showResults() {
 // The friends' scores under ours, and which squad is ahead.
 function renderFriendResults() {
   const box = $('#friendResults');
-  const f = lastFriend;
+  const kids = lastFriends.flatMap(f => f.kids || []);
   let html = '';
-  if (f?.kids?.length && players.length) {
+  if (kids.length && players.length) {
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const ours = players.reduce((a, p) => a + total(p), 0);
-    const theirs = f.kids.reduce((a, k) => a + (k.total || 0), 0);
-    const done = f.state === 'end';
+    const theirs = kids.reduce((a, k) => a + (k.total || 0), 0);
+    const done = lastFriends.every(f => f.state === 'end' || f.state === 'heart');
     const verdict = !done ? 'They are still playing…' : ours > theirs ? 'Your squad wins this one!' : ours < theirs ? 'Your friends win this one!' : 'It\'s a tie!';
     html = `<h3>🤝 Friends${room.code ? ` (${esc(room.code)})` : ''}</h3>
       <div class="vs">Your squad ${ours.toLocaleString()} · Friends ${theirs.toLocaleString()}. ${verdict}</div>` +
-      [...f.kids].sort((a, b) => b.total - a.total).map(k => `<div class="fk"><span class="sw" style="background:${esc(k.color)}"></span><span class="n">${esc(k.name)}</span><span class="s">${(k.total || 0).toLocaleString()}</span></div>`).join('');
+      [...kids].sort((a, b) => b.total - a.total).map(k => `<div class="fk"><span class="sw" style="background:${esc(k.color)}"></span><span class="n">${esc(k.name)}</span><span class="s">${(k.total || 0).toLocaleString()}</span></div>`).join('');
   }
   if (box.dataset.html !== html) { box.dataset.html = html; box.innerHTML = html; }
 }
@@ -1055,14 +1064,14 @@ function updateLobby(t) {
   if (allReady && t - stateT > 1) lobbyDone();
 }
 
-// Our squad is ready. With a friend, both households start together: each
-// says when it is ready, and the code maker starts the race for both. If the
-// friend goes away, we just play.
+// Our squad is ready. With friends, every household starts together: each
+// says when it is ready, and the code maker starts the race for all. If the
+// friends go away, we just play.
 function lobbyDone() {
   if (!friendHere() && room.status !== 'waiting') return startReady();
   if (!lobby.waiting) lobby.waiting = now();
-  const f = room.friend;
-  if (room.role === 'host' && friendHere() && f?.state === 'lobby' && f.waiting) {
+  const fs = friendTicks();
+  if (room.role === 'host' && friendHere() && fs.length && fs.every(f => f.state === 'lobby' && f.waiting)) {
     if (!breakBag.length) fillBreakBag();
     sendRoom({ type: 'go', theme: roundTheme, seconds: settings.seconds, intro: settings.intro, round: setRound, breaks: breakBag });
     startReady();
@@ -1097,6 +1106,13 @@ function shareTick(t) {
       name: p.name, color: p.color, char: (p.character || CHARACTERS[slotChar[p.index]]).id,
       score: p.score, total: total(p), streak: p.streak, skill: Math.round(p.skill * 100) / 100, lift: Math.round(p.lift * 100) / 100,
       act: Object.fromEntries(Object.entries(p.act).filter(([, v]) => v === true)), gear: p.gear,
+      // What they're facing, so the friends see it in their lane: obstacles
+      // coming up, the break game (cans, pancakes, bubbles…) and score pops.
+      ...(busy && {
+        clock: p.clock, run: p.run, paceSkill: p.paceSkill, swing: p.swing, bonk: p.bonk, shake: p.shake, spin: p.spin,
+        hands: p.hands, throwing: p.throwing, fx: p.fx,
+        obstacles: p.obstacles.filter(o => o.arrive - p.clock > -1),
+      }),
     })),
   });
 }
@@ -1284,33 +1300,44 @@ function draw(t) {
   drawBanner(t);
 }
 
-// The friends' kids get their own lanes after ours: the road scrolls and
-// their character does whatever move their kid is doing right now. Their
-// obstacles aren't sent, so the lane has none.
+// The friends' kids get their own lanes after ours, showing what their kid
+// is doing and facing right now: their moves, obstacles, break game and
+// score pops. Their clock runs on from the last update, so things keep
+// moving smoothly between updates.
 let friendKids = [];
 function friendLanes(t) {
-  const f = room.friend;
-  if (!friendHere() || !f?.kids?.length) { friendKids = []; return friendKids; }
-  const kids = f.kids.slice(0, MAX_KIDS);
+  // Every friend device's kids, in the order they joined, up to 4 lanes in all.
+  const kids = friendHere() ? friendTicks().flatMap(f => (f.kids || []).map(k => ({ ...k, house: f }))).slice(0, 4 - players.length) : [];
+  // Two houses can pick the same colour: a repeat gets the next free one.
+  const used = players.map(p => p.color);
+  kids.forEach(k => {
+    if (used.includes(k.color)) k.color = PALETTE.find(c => !used.includes(c)) || k.color;
+    used.push(k.color);
+  });
   friendKids = kids.map((k, i) => {
     const q = friendKids[i] || { obstacles: [], fx: [], bonk: 0, bump: 0, throwing: null, misses: 0, hits: 0 };
     if (q.score != null && k.score > q.score) q.bump = 0.5; // the score bubble jiggles, as for our kids
     q.bump = Math.max(0, (q.bump || 0) - 1 / 60);
+    const ahead = Math.min(0.5, Math.max(0, t - k.house.at));
     return Object.assign(q, {
       index: players.length + i, name: `🤝 ${k.name}`, color: k.color || '#8fd3ff', character: CHARACTERS[charIndex(k.char)],
       score: k.score || 0, streak: k.streak || 0, skill: k.skill ?? 2, act: k.act || {}, lift: k.lift || 0,
-      gear: k.gear || {}, clock: t, level: Math.floor(k.skill ?? 2) + 1,
+      gear: k.gear || {}, level: Math.floor(k.skill ?? 2) + 1, charged: (k.streak || 0) >= 8,
+      clock: k.clock != null ? k.clock + ahead : t, run: k.run != null ? k.run + (k.throwing ? 0 : ahead) : undefined,
+      paceSkill: k.paceSkill ?? null, swing: k.swing || 0, bonk: k.bonk || 0, shake: k.shake || 0, spin: k.spin || 0,
+      hands: k.hands || null, throwing: k.throwing || null, fx: k.fx || [], obstacles: k.obstacles || [], house: k.house,
     });
   });
   return friendKids;
 }
 
-// Both squads' totals under the timer. Returns the height it took.
+// Both squads' totals under the timer, with one friend's house. With more
+// houses it's one kid each, and every lane already shows its own score.
 function drawSquadScores(y) {
-  const f = room.friend;
-  if (!friendHere() || !f?.kids?.length) return 0;
+  const fs = friendHere() ? friendTicks().filter(f => f.kids?.length) : [];
+  if (fs.length !== 1) return 0;
   const ours = players.reduce((a, p) => a + total(p), 0);
-  const theirs = f.kids.reduce((a, q) => a + (q.total || 0), 0);
+  const theirs = fs[0].kids.reduce((a, q) => a + (q.total || 0), 0);
   const size = H * 0.032;
   text(ctx, `Us ${ours.toLocaleString()}  ·  Friends ${theirs.toLocaleString()}`, W / 2, y + size * 0.6, size, ours >= theirs ? '#3ddc84' : '#ffe14d');
   return size * 1.4;
@@ -1379,8 +1406,8 @@ function drawLobby(t) {
     drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
     lctx.globalAlpha = 1;
   });
-  const fr = room.friend;
   fl.forEach((q, i) => {
+    const fr = q.house;
     const L = laneBox(q.index, n, low.width, low.height);
     const S = Math.min(low.height * 0.05, L.w * 0.12);
     const P = cartoonPose(q.act, Math.sin(t * 6 + q.index) * 0.05);
@@ -1450,6 +1477,7 @@ function drawLobby(t) {
     ctx.fillStyle = q.color;
     ctx.fillRect(L.x + L.w * 0.1, H * 0.80, L.w * 0.8, H * 0.08);
     text(ctx, `${q.name} · ${q.character.name}`, L.cx, H * 0.825, fs, '#ffffff');
+    const fr = q.house;
     const status = fr.state !== 'lobby' ? 'Not here yet' : fr.waiting ? 'READY!' : 'Getting ready…';
     text(ctx, status, L.cx, H * 0.86, fs * 0.8, fr.waiting ? '#3ddc84' : '#ffffff');
   });
@@ -1457,12 +1485,15 @@ function drawLobby(t) {
 
 // What the friends are up to, for the bottom of the lobby.
 function friendLine() {
-  if (room.status === 'waiting') return `🤝 Code ${room.code}: waiting for your friend to join`;
+  if (room.status === 'waiting') return `🤝 Code ${room.code}: waiting for friends to join`;
   if (room.status === 'lost') return '🤝 Lost the connection to your friends';
-  const f = room.friend;
-  if (!friendHere() || !f) return '';
-  const n = f.kids?.length || 0;
-  if (f.state === 'lobby') return f.waiting ? '🤝 Your friends are ready!' : `🤝 Friends: found ${f.found} of ${n}`;
+  const fs = friendTicks();
+  if (!friendHere() || !fs.length) return '';
+  const here = fs.filter(f => f.state === 'lobby'), ready = here.filter(f => f.waiting);
+  if (ready.length === fs.length) return fs.length > 1 ? '🤝 All your friends are ready!' : '🤝 Your friends are ready!';
+  if (fs.length > 1) return `🤝 ${ready.length} of ${fs.length} friends ready`;
+  const f = fs[0], n = f.kids?.length || 0;
+  if (f.state === 'lobby') return `🤝 Friends: found ${f.found} of ${n}`;
   if (f.state === 'setup') return '🤝 Your friends are on the home screen';
   if (f.state === 'end' || f.state === 'heart') return '🤝 Your friends are looking at their scores';
   return '🤝 Your friends are playing';

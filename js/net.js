@@ -1,5 +1,6 @@
-// Play with a friend: two households join with a short room code and race at
-// the same time. Each phone still does its own body tracking; only tiny game
+// Play with friends: up to 4 devices join with a short room code and race at
+// the same time. The code maker's device links to each of the others and
+// passes their updates along, so everyone sees everyone. Each phone still does its own body tracking; only tiny game
 // updates (scores, which move each character is doing) go between them, over
 // a direct browser-to-browser WebRTC data channel. No video is sent.
 //
@@ -18,10 +19,13 @@ export const room = {
   code: null,      // e.g. FROG-42
   status: 'off',   // off | starting | waiting | joining | connected | lost | error
   error: '',
-  friend: null,    // the latest update from the other household
-  heard: 0,        // when we last heard from them (seconds)
+  friends: new Map(), // device id → that device's latest update (with .at, when it arrived)
+  heard: 0,        // when we last heard from anyone (seconds)
+  devices: 1,      // devices in the room, counting this one
 };
-let peer = null, conn = null;
+export const MAX_DEVICES = 4;
+let peer = null;
+const links = new Map(); // device id → link (the code maker: every guest; a guest: just the code maker)
 const listeners = new Set();
 export const onRoom = fn => listeners.add(fn);
 const tell = (msg) => listeners.forEach(fn => fn(msg));
@@ -29,6 +33,8 @@ const now = () => performance.now() / 1000;
 const setStatus = (s, error = '') => { room.status = s; room.error = error; tell({ type: 'status' }); };
 
 export const connected = () => room.status === 'connected' && now() - room.heard < 6;
+// The other devices' latest updates, leaving out any that have gone quiet.
+export const friendTicks = () => [...room.friends.values()].filter(m => now() - m.at < 6);
 
 // "frog 42", "Frog-42" and "FROG42" are all the same code.
 export const cleanCode = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -75,7 +81,7 @@ function peerOptions() {
   return o;
 }
 
-// Make a new room and wait for the friend to join it.
+// Make a new room and wait for friends to join it.
 export async function host() {
   leave();
   setStatus('starting');
@@ -88,8 +94,8 @@ export async function host() {
       room.code = code;
       setStatus('waiting');
       peer.on('connection', c => {
-        // One friend per room: a second household gets turned away.
-        if (conn && conn.open) { c.on('open', () => { c.send({ type: 'full' }); setTimeout(() => c.close(), 500); }); return; }
+        // Up to 4 devices per room: a fifth gets turned away.
+        if (links.size >= MAX_DEVICES - 1) { c.on('open', () => { c.send({ type: 'full' }); setTimeout(() => c.close(), 500); }); return; }
         use(c);
       });
       return code;
@@ -116,7 +122,7 @@ export async function join(code) {
   use(dc);
   // No answer within 15 seconds: the code is wrong, or the network blocks it.
   setTimeout(() => {
-    if (conn === dc && !dc.open && room.status === 'joining') setStatus('error', `Couldn't reach ${room.code}. Check the code, and that the other phone is on the Bitzigo home screen.`);
+    if (!dc.open && room.status === 'joining') setStatus('error', `Couldn't reach ${room.code}. Check the code, and that the other phone is on the Bitzigo home screen.`);
   }, 15000);
 }
 
@@ -127,7 +133,7 @@ function openPeer(id) {
     p.on('open', () => ok());
     p.on('error', e => {
       if (p !== peer) return;
-      if (room.status === 'starting' || room.status === 'joining' && !conn) { p.destroy(); peer = null; fail(e); return; }
+      if (room.status === 'starting' || room.status === 'joining' && !links.size) { p.destroy(); peer = null; fail(e); return; }
       if (e.type === 'peer-unavailable') setStatus('error', `No game is waiting on ${room.code}. Check the code, and that the other phone is on the Bitzigo home screen.`);
       else if (e.type === 'network' || e.type === 'disconnected' || e.type === 'server-error') { /* matchmaking server blip; the direct link carries on */ }
       else if (!connected()) setStatus('error', friendly(e));
@@ -138,40 +144,64 @@ function openPeer(id) {
 }
 
 function use(c) {
-  conn?.close();
-  conn = c;
   c.on('open', () => {
-    if (c !== conn) return;
+    links.set(c.peer, c);
     room.heard = now();
     setStatus('connected');
+    if (room.role === 'host') sendRoster();
   });
   c.on('data', msg => {
-    if (c !== conn || !msg || typeof msg !== 'object') return;
+    if (!msg || typeof msg !== 'object' || !links.has(c.peer)) return;
     room.heard = now();
-    if (msg.type === 'full') { setStatus('error', 'That room already has a friend in it.'); return; }
-    if (msg.type === 'tick') room.friend = msg;
+    if (msg.type === 'full') { setStatus('error', 'That room already has 4 devices in it.'); return; }
+    if (msg.type === 'tick') {
+      // The code maker passes each guest's update on to the other guests.
+      const from = msg.from || c.peer;
+      if (room.role === 'host') for (const [id, l] of links) if (id !== c.peer && l.open) l.send({ ...msg, from });
+      if (from !== peer?.id) room.friends.set(from, { ...msg, from, at: now() });
+    }
+    if (msg.type === 'roster' && room.role === 'guest') {
+      room.devices = msg.ids.length;
+      for (const id of room.friends.keys()) if (!msg.ids.includes(id)) room.friends.delete(id);
+      tell({ type: 'status' });
+    }
     tell(msg);
   });
   c.on('close', () => {
-    if (c !== conn) return;
-    conn = null;
-    // The host keeps the code open so the friend can come back.
-    setStatus(room.role === 'host' ? 'waiting' : 'lost');
-    room.friend = null;
+    if (links.get(c.peer) !== c) return;
+    links.delete(c.peer);
+    room.friends.delete(c.peer);
+    if (room.role === 'host') {
+      // The code stays open so a friend can come back.
+      sendRoster();
+      setStatus(links.size ? 'connected' : 'waiting');
+    } else {
+      room.friends.clear();
+      setStatus('lost');
+    }
   });
   c.on('error', e => console.warn('friend link', e));
 }
 
+// The code maker tells everyone who is in the room.
+function sendRoster() {
+  const ids = [peer.id, ...links.keys()];
+  room.devices = ids.length;
+  send({ type: 'roster', ids });
+  tell({ type: 'status' });
+}
+
 export function send(msg) {
-  if (conn?.open) { try { conn.send(msg); } catch (e) { console.warn(e); } }
+  for (const l of links.values()) if (l.open) { try { l.send(msg); } catch (e) { console.warn(e); } }
 }
 
 export function leave() {
-  conn?.close();
-  conn = null;
+  for (const l of links.values()) l.close();
+  links.clear();
   peer?.destroy();
   peer = null;
-  Object.assign(room, { role: null, code: null, friend: null });
+  room.friends.clear();
+  Object.assign(room, { role: null, code: null, devices: 1 });
   setStatus('off');
 }
 
