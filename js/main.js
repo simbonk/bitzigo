@@ -85,6 +85,38 @@ function updateKidList() {
 updateKidList();
 const charIndex = id => Math.max(0, CHARACTERS.findIndex(c => c.id === id));
 
+// Pick list under a player's dot: saved kids first, then colours.
+function openKidPicker(i, row) {
+  closeKidPicker();
+  const p = settings.players[i];
+  const others = settings.players.slice(0, settings.count).filter((q, j) => j !== i);
+  const inUse = new Set(others.map(q => q.name.trim().toLowerCase()));
+  const taken = others.map((q, j) => colorOf(settings.players.indexOf(q)));
+  const box = document.createElement('div');
+  box.id = 'kidPick';
+  const list = Object.values(kids).sort((a, b) => b.at - a.at);
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  box.innerHTML = (list.length ? `<div class="pickHead">Who is this?</div><div class="kidList">${list.map(k => {
+    const busy = inUse.has(k.name.toLowerCase());
+    const ch = CHARACTERS[charIndex(k.char)];
+    return `<button class="kid" data-k="${esc(k.name.toLowerCase())}" ${busy ? 'disabled' : ''}><span class="sw" style="background:${k.color || '#888'}"></span>${esc(k.name)}<span class="meta">${k.age === 12 ? '12+' : k.age} · ${k.char ? ch.name : ''}</span></button>`;
+  }).join('')}</div>` : `<div class="pickHead">Saved kids show up here after they play.</div>`) +
+    `<div class="pickHead">Colour</div><div class="swatches">${PALETTE.map(c => `<button class="sw big" data-c="${c}" style="background:${c}" ${taken.includes(c) ? 'disabled' : ''}></button>`).join('')}</div>`;
+  box.querySelectorAll('.kid').forEach(b => b.onclick = () => {
+    const k = kids[b.dataset.k];
+    p.name = k.name; p.age = k.age; p.char = k.char;
+    if (k.color && !taken.includes(k.color)) p.color = k.color;
+    save(); closeKidPicker(); renderPlayerRows();
+  });
+  box.querySelectorAll('.swatches .sw').forEach(b => b.onclick = () => {
+    p.color = b.dataset.c; save(); rememberKid(p); closeKidPicker(); renderPlayerRows();
+  });
+  box.onclick = e => e.stopPropagation();
+  row.after(box);
+}
+function closeKidPicker() { $('#kidPick')?.remove(); }
+document.addEventListener('click', closeKidPicker);
+
 function renderPlayerRows() {
   const box = $('#players');
   box.innerHTML = '';
@@ -93,17 +125,9 @@ function renderPlayerRows() {
     const row = document.createElement('div');
     row.className = 'player';
     const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>${a === 12 ? 'age 12+' : `age ${a}`}</option>`).join('');
-    row.innerHTML = `<button class="dot" title="Tap to change colour" style="background:${colorOf(i)}"></button><input maxlength="12" value="" list="kidNames" autocomplete="off"><select>${ages}</select>`;
-    // Tap the dot for the next colour nobody else has.
-    row.querySelector('.dot').onclick = e => {
-      const taken = settings.players.slice(0, settings.count).map((q, j) => j !== i && colorOf(j));
-      let k = PALETTE.indexOf(colorOf(i));
-      do { k = (k + 1) % PALETTE.length; } while (taken.includes(PALETTE[k]));
-      p.color = PALETTE[k];
-      e.target.style.background = p.color;
-      save();
-      rememberKid(p);
-    };
+    row.innerHTML = `<button class="dot" title="Pick a kid or colour" style="background:${colorOf(i)}"></button><input maxlength="12" value="" list="kidNames" autocomplete="off"><select>${ages}</select>`;
+    // Tap the dot to pick a saved kid (or just a colour).
+    row.querySelector('.dot').onclick = e => { e.stopPropagation(); openKidPicker(i, row); };
     const input = row.querySelector('input');
     input.value = p.name;
     input.oninput = () => {

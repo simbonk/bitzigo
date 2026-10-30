@@ -182,3 +182,14 @@ button.dot { padding: 0; cursor: pointer; border: 3px solid #fff; -webkit-tap-hi
 
 /* No double-tap zoom when kids tap buttons quickly (iPhone and iPad). */
 html, body, button, select, input, .panel { touch-action: manipulation; }
+
+#kidPick { background: #0d1430; border: 2px solid #3a4a80; border-radius: 14px; padding: 8px 10px; margin: 2px 0 8px; }
+#kidPick .pickHead { font-size: .85em; opacity: .75; margin: 2px 0 6px; }
+#kidPick .kidList { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+#kidPick .kid { display: flex; align-items: center; gap: 6px; background: #24305a; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: .35em .6em; font: inherit; font-weight: bold; cursor: pointer; }
+#kidPick .kid:disabled { opacity: .35; }
+#kidPick .meta { font-weight: normal; opacity: .7; font-size: .85em; }
+#kidPick .sw { display: inline-block; width: 1em; height: 1em; border-radius: 50%; border: 2px solid #fff; padding: 0; }
+#kidPick .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+#kidPick .sw.big { width: 1.4em; height: 1.4em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#kidPick .sw.big:disabled { opacity: .25; }
