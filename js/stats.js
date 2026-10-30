@@ -69,7 +69,7 @@ function kidColors(games) {
   try { kids = JSON.parse(localStorage.getItem('bitzigo-kids') || '{}'); } catch { }
   const out = new Map();
   for (const g of games) for (const r of g.players) if (r.color) out.set(r.name, r.color);
-  for (const k of Object.values(kids)) if (k.color && out.has(k.name)) out.set(k.name, k.color);
+  for (const k of Object.values(kids)) if (k.color) out.set(k.name, k.color);
   return out;
 }
 
