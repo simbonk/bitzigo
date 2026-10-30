@@ -110,10 +110,10 @@ function button(el, sel) {
   return new Promise(r => el.querySelectorAll(sel).forEach(b => { b.onclick = () => r(b.dataset.v); }));
 }
 
-export async function runHeartCheck(players, { voice, sfx }) {
+export async function runHeartCheck(players, { cue, sfx }) {
   const el = panel();
   const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  voice('heart');
+  cue('heart');
 
   for (let i = 0; i < players.length; i++) {
     const p = players[i];
@@ -192,7 +192,7 @@ export async function runHeartCheck(players, { voice, sfx }) {
       const good = Number.isFinite(hr) && res.quality.grade !== 'poor';
       if (good) {
         p.heartRate = Math.round(hr);
-        voice('heart_done');
+        cue('heart_done');
         el.innerHTML = `
           <div class="hc-who">${faceImg(p, 'face xl')}<div class="hc-name" style="color:${p.color}">${esc(p.name)}</div></div>
           <div class="hc-heart"><span class="heartIcon" style="animation-duration:${60 / p.heartRate}s">♥</span><span class="hc-count">${p.heartRate}</span></div>
@@ -202,7 +202,7 @@ export async function runHeartCheck(players, { voice, sfx }) {
         const c = await button(el, 'button');
         done = c !== 'again';
       } else {
-        voice('oops');
+        cue('oops');
         el.innerHTML = `<p class="hc-big">Couldn't feel the heartbeat</p>
           <p>Make sure the phone is flat on the middle of the chest, and that nobody moves or talks.</p>
           <button class="big" data-v="again">Try again</button><button class="small" data-v="skip">Skip ${esc(p.name)}</button>`;

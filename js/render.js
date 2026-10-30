@@ -4,7 +4,7 @@
 import { LM, tuning } from './game.js';
 
 // How high (in lane heights) the sky view pans when a kid flies all the way up.
-const SKY_PAN = 0.62;
+const SKY_PAN = 0.38;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const FONT = '"Trebuchet MS", "Avenir Next", system-ui, sans-serif';
@@ -19,7 +19,7 @@ export const CHARACTERS = [
   { id: 'ninja', name: 'Ninja', body: '#2b2b3a', limb: '#1f1f2a', head: '#2b2b3a', belly: '#e63946' },
   { id: 'hedgehog', name: 'Hedgehog', body: '#3f7fe0', limb: '#2f62b8', head: '#3f7fe0', belly: '#f5e2c0' },
   { id: 'axolotl', name: 'Axolotl', body: '#ff9ec7', limb: '#f27fb0', head: '#ff9ec7', belly: '#ffd6e8' },
-  { id: 'firefighter', name: 'Firefighter', body: '#f4c430', limb: '#3a3a44', head: '#ffd2a8', belly: '#d8dce6' },
+  { id: 'firefighter', name: 'Firefighter', body: '#e8a92a', limb: '#d4951c', head: '#ffd2a8', belly: '#e8a92a', hand: '#3a3a44', stripes: true },
   { id: 'cow', name: 'Cow', body: '#f8f8f8', limb: '#2b2b33', head: '#f8f8f8', belly: '#ffc4d6' },
 ];
 
@@ -91,7 +91,14 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
 
   // Bubble time: the view follows the kid up into the sky.
   const B = p.throwing?.type === 'bubbles' ? p.throwing : null;
-  const pan = B ? B.alt * L.h * SKY_PAN : 0;
+  let pan = 0;
+  if (B) {
+    // Follow the kid up, and keep the bubble they're aiming for in view.
+    let want = B.alt * L.h * SKY_PAN;
+    if (B.bubble && !B.falling) want = Math.max(want, Math.min(L.h * 0.1, L.h * 0.2 + L.S - bubbleY(L, B.bubble.h)));
+    B.pan = B.pan == null ? want : B.pan + (want - B.pan) * 0.12;
+    pan = B.pan;
+  }
   if (B) {
     rect(ctx, L.x, 0, L.w, L.h, mix(shade(theme.sky[0], -0.08), shade(theme.sky[0], 0), 0.5));
     ctx.translate(0, R(pan));
@@ -131,7 +138,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   }
 
   // Ground rows that scroll toward the player.
-  const speed = 1 / tuning(p.skill).travel;
+  const speed = 1 / tuning(p.paceSkill ?? p.skill).travel;
   const dist = (p.run ?? p.clock) * speed;
   const dz = 0.08;
   const offset = dist % (dz * 2);
@@ -378,6 +385,22 @@ function bubbleY(L, h) {
 }
 function drawBubbles(ctx, L, T, time) {
   const b = T.bubble;
+  if (b && !T.falling) {
+    // A ladder of up arrows between the kid's head and the bubble: one per
+    // flap still to do, the next one blinking.
+    const left = b.flaps - b.done;
+    const head = L.ground - 1.65 * L.S - T.alt * (L.h * SKY_PAN + L.S * 2.2) - 2.3 * L.S;
+    const top = bubbleY(L, b.h) + L.S * 1.1;
+    const a = L.S * 0.17, blink = Math.floor(time * 6) % 2;
+    for (let k = 1; k <= left; k++) {
+      const y = head + ((top - head) * k) / (left + 1);
+      const col = k === 1 ? (blink ? '#ffe14d' : '#ff9f1c') : 'rgba(255,159,28,0.6)';
+      rect(ctx, L.cx - a * 0.5, y - a, a, a, col);
+      rect(ctx, L.cx - a * 1.5, y, a * 3, a, col);
+      rect(ctx, L.cx - a * 2.5, y + a, a, a, col);
+      rect(ctx, L.cx + a * 1.5, y + a, a, a, col);
+    }
+  }
   if (b) {
     const r = L.S * (0.95 + 0.06 * Math.sin(b.t * 6));
     const x = L.cx + b.x * L.S * 0.6, y = bubbleY(L, b.h) + Math.sin(b.t * 2.5) * L.S * 0.15;
@@ -503,11 +526,12 @@ export function cartoonPose(act = {}, bob = 0) {
 }
 
 // Real pose from the camera, relative to the kid's calibrated standing pose.
-// The avatar stays centred in its lane: x is measured from the kid's hips
-// right now (so a lean still shows), y from their calibrated standing height.
+// The avatar can wiggle a little side to side, but never wanders far from the
+// middle of its lane. y is measured from their calibrated standing height.
 function cameraPose(p) {
   const B = p.base, pts = p.pts, t = B.torso;
-  const hipX = p.f ? p.f.hip.x : B.hipX;
+  const cur = p.f ? p.f.hip.x : B.hipX;
+  const hipX = cur - clamp(cur - B.hipX, -0.7 * t, 0.7 * t);
   const g = i => [clamp((pts[i].x - hipX) / t, -2.2, 2.2), clamp((pts[i].y - B.hipY) / t, -2.6, 2)];
   // The image is mirrored, so the person's right side shows on screen-left.
   const P = {
@@ -556,7 +580,7 @@ function drawAvatar(ctx, L, p, time, ch) {
   const T = p.throwing;
   if (T?.type === 'bubbles') {
     lift += T.alt * (L.h * SKY_PAN + S * 2.2);
-    if (!(p.pts && p.base)) P = cartoonPose({ reach: T.vel > 0.2 && Math.floor(time * 8) % 2 === 0, jump: T.alt > 0.02 });
+    if (!(p.pts && p.base)) P = cartoonPose({ reach: T.falling || p.clock - T.flapAt < 0.15, jump: T.alt > 0.02 });
   }
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
@@ -565,7 +589,15 @@ function drawAvatar(ctx, L, p, time, ch) {
   const flash = p.bonk > 0 && Math.floor(time * 12) % 2 === 0;
   const ox = L.cx + shake + dx, oy = L.ground - 1.65 * S - lift;
   if (p.charged) drawSparks(ctx, ox, oy, S, time, true);
-  drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear);
+  if (p.spin > 0) {
+    // Super spin: the character twirls round twice.
+    ctx.save();
+    ctx.translate(ox, 0);
+    ctx.scale(Math.cos((1 - p.spin / 0.8) * Math.PI * 4) || 0.05, 1);
+    ctx.translate(-ox, 0);
+    drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear);
+    ctx.restore();
+  } else drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear);
   if (p.charged) drawSparks(ctx, ox, oy, S, time, false);
 }
 
@@ -633,10 +665,26 @@ export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}) {
   ctx.fill();
   const cx = (X(P.ls) + X(P.rs) + X(P.lh) + X(P.rh)) / 4, cy = (Y(P.ls) + Y(P.rs) + Y(P.lh) + Y(P.rh)) / 4;
   rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
+  if (ch.stripes && !flash) {
+    // Reflective bands across the coat and on the cuffs, like a real turnout coat.
+    const xl = Math.min(X(P.ls), X(P.lh)) - S * 0.05, xr = Math.max(X(P.rs), X(P.rh)) + S * 0.05;
+    for (const k of [0.45, 0.85]) {
+      const y = Y(P.ls) + (Y(P.lh) - Y(P.ls)) * k;
+      rect(ctx, xl, y, xr - xl, S * 0.14, '#d8dce6');
+      rect(ctx, xl, y + S * 0.04, xr - xl, S * 0.05, '#ffe14d');
+    }
+    rect(ctx, cx - S * 0.06, Y(P.ls), S * 0.12, Y(P.lh) - Y(P.ls), '#b8801a');
+  }
 
   limb(P.ls, P.le, P.lw, S * 0.28, limbCol);
   limb(P.rs, P.re, P.rw, S * 0.28, limbCol);
-  for (const w of [P.lw, P.rw]) rect(ctx, X(w) - S * 0.17, Y(w) - S * 0.17, S * 0.34, S * 0.34, flash ? '#fff' : ch.limb === ch.body ? shade(ch.body, 0.2) : ch.body);
+  for (const w of [P.lw, P.rw]) rect(ctx, X(w) - S * 0.17, Y(w) - S * 0.17, S * 0.34, S * 0.34, flash ? '#fff' : ch.hand || (ch.limb === ch.body ? shade(ch.body, 0.2) : ch.body));
+  if (ch.stripes && !flash) {
+    for (const [a, b] of [[P.le, P.lw], [P.re, P.rw], [P.lk, P.la], [P.rk, P.ra]]) {
+      const x = X(a) + (X(b) - X(a)) * 0.7, y = Y(a) + (Y(b) - Y(a)) * 0.7;
+      rect(ctx, x - S * 0.17, y - S * 0.06, S * 0.34, S * 0.12, '#d8dce6');
+    }
+  }
 
   // Head: a cube sitting on the shoulders, following the nose.
   const neck = [(P.ls[0] + P.rs[0]) / 2, (P.ls[1] + P.rs[1]) / 2];
@@ -675,6 +723,7 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}) {
     px(-1.6, 1.2, 1.8, 1.1, '#2b2b33'); px(7.8, 1.2, 1.8, 1.1, '#2b2b33');
   }
   if (ch.id === 'ninja') { px(8, 1, 2, 0.8, '#e63946'); px(8.6, 1.8, 1.6, 0.7, '#e63946'); }
+  if (ch.id === 'firefighter' && !gear.hat) px(-1.6, 0.3, 11.2, 1.3, '#a81a26'); // helmet's long brim
 
   block(ctx, left, top, hs, hs, head, 0.18);
 
@@ -718,9 +767,20 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}) {
       px(2.5, 5.4, 3, 0.6, '#c2185b'); px(2.2, 4.9, 0.6, 0.6, '#c2185b'); px(5.2, 4.9, 0.6, 0.6, '#c2185b');
       break;
     case 'firefighter':
-      eye(1.5, 2.8); eye(5.1, 2.8); px(2.6, 5.6, 2.8, 0.7, '#b0603a'); px(0.6, 4.6, 1.1, 0.7, '#ffb0a0'); px(6.3, 4.6, 1.1, 0.7, '#ffb0a0');
-      // Red helmet with a wide brim and a gold badge (a picked-up hat replaces it).
-      if (!gear.hat) { px(-1, -0.2, 10, 1.2, '#b81d2b'); px(0.5, -2.6, 7, 2.6, '#e63946'); px(3.2, -2.2, 1.6, 1.6, '#ffd23f'); }
+      eye(1.5, 3.2); eye(5.1, 3.2);
+      px(2.4, 5.6, 0.7, 0.7, '#8a3a2a'); px(3, 6.2, 2, 0.6, '#8a3a2a'); px(4.9, 5.6, 0.7, 0.7, '#8a3a2a'); // smile
+      px(0.5, 5, 1.2, 0.8, '#ffab9a'); px(6.3, 5, 1.2, 0.8, '#ffab9a');
+      px(0, 3.8, 0.5, 3.4, '#3a3a44'); px(7.5, 3.8, 0.5, 3.4, '#3a3a44'); // chin strap
+      // Red helmet with a gold front shield (a picked-up hat replaces it).
+      if (!gear.hat) {
+        px(-0.2, -2.6, 8.4, 4.2, '#e63946');
+        px(0.6, -3.2, 6.8, 0.8, '#e63946');
+        px(0.8, -3.2, 5.2, 0.5, '#ff7b84');
+        px(3.6, -3.8, 0.8, 0.8, '#a81a26');
+        px(2.5, -2.4, 3, 3, '#ffd23f');
+        px(3.4, -1.8, 1.2, 1.8, '#e63946');
+        px(-0.2, 1.1, 8.4, 0.5, '#a81a26');
+      }
       break;
     case 'cow':
       px(0.6, 0.6, 2.6, 2, '#2b2b33'); px(5.4, 0.2, 2, 1.4, '#2b2b33');
@@ -825,8 +885,10 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
     const kind = type === 'bubbles' ? 'flap' : type === 'karate' ? 'chop' : 'throw';
+    const B = p.throwing;
+    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!' }[kind];
     cueIcon(ctx, { kind }, L.cx, y - size * 0.3 + bob, size);
-    text(ctx, { flap: 'FLAP!', chop: 'CHOP!', throw: 'THROW!' }[kind], L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
+    text(ctx, word, L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
   } else if (next) {
     const k = 1 - next.z / 0.8;
     const info = KIND_INFO[next.o.kind];
@@ -952,7 +1014,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     }
     ctx.stroke();
     ctx.restore();
-    text(ctx, '⚡ SUPER ⚡', L.cx, L.horizon * 0.66 + clamp(L.w * 0.1, 22, 64) * 1.6, clamp(L.w * 0.055, 14, 30), '#7df9ff');
+    text(ctx, p.throwing ? '⚡ SUPER ⚡' : '⚡ SPIN AROUND = MEGA BONUS ⚡', L.cx, L.horizon * 0.66 + clamp(L.w * 0.1, 22, 64) * 1.6, clamp(L.w * 0.05, 13, 28), '#7df9ff');
   }
 
   drawBubble(ctx, L, p);

@@ -1,5 +1,5 @@
-// Little synthesised sound effects and music, plus short recorded voice clips
-// (voice/*.mp3) for the cartoon announcer.
+// Little synthesised sound effects and music, plus a sound cue for each move
+// (no audio files).
 let ac = null;
 let master = null;
 let muted = false;
@@ -14,7 +14,6 @@ export function unlockAudio() {
     master.connect(ac.destination);
     // iPhone/iPad: play even with the ring switch on silent.
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
-    loadVoices();
   }
   if (ac.state === 'suspended') ac.resume();
 }
@@ -85,6 +84,8 @@ export const sfx = {
   flap() { noise(0.14, { vol: 0.25, from: 400, to: 1400, q: 2 }); },
   super() { [0, 0.07, 0.14, 0.21].forEach((d, i) => tone(1200 + i * 300, 0.06, { type: 'sawtooth', vol: 0.1, slide: 0.5, delay: d })); noise(0.4, { vol: 0.25, from: 6000, to: 1500, q: 4 }); },
   gear() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.18, delay: i * 0.05 })); },
+  spin() { tone(300, 0.6, { type: 'sawtooth', vol: 0.12, slide: 4 }); [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(f, 0.12, { type: 'triangle', vol: 0.2, delay: 0.3 + i * 0.07 })); noise(0.6, { vol: 0.3, from: 800, to: 6000, q: 3 }); },
+  land() { tone(120, 0.12, { type: 'sine', vol: 0.4, slide: 0.6 }); noise(0.1, { vol: 0.3, from: 600, to: 200 }); },
   finish() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.18, { vol: 0.18, delay: i * 0.12 })); },
 };
 
@@ -184,43 +185,48 @@ export function stopMusic() {
 // 0..1: speeds the music up and fills it out as the timer runs down.
 export function setIntensity(v) { music.intense = Math.max(0, Math.min(1, v)); }
 
-// ---------- Voice: pre-recorded clips, decoded once and played on the audio clock ----------
+// ---------- Cues: a little sound for each thing coming, no voice ----------
 
-export const VOICE_LINES = [
-  'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
-  'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time',
-  'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
-  'got_it', 'lobby', 'heart', 'heart_done', 'champions', 'super', 'level_up', 'strike', 'hiyah',
-  'wow', 'awesome', 'nice', 'oops', 'pop', 'electric', 'chop', 'fly', 'new_hat',
-];
-const clips = {};
-let current = null;
-
-function loadVoices() {
-  for (const name of VOICE_LINES) {
-    fetch(`voice/${name}.mp3`)
-      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
-      // Older Safari only has the callback form of decodeAudioData.
-      .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
-      .then(b => { clips[name] = b; })
-      .catch(() => { /* a missing clip just stays silent */ });
-  }
+// Like tone(), but panned left (-1) or right (+1).
+function panned(pan, fn) {
+  if (!ac || muted) return;
+  const prev = master;
+  const p = ac.createStereoPanner ? ac.createStereoPanner() : null;
+  if (p) { p.pan.value = pan; p.connect(prev); master = p; }
+  try { fn(); } finally { master = prev; }
 }
 
-// Plays a clip, cutting off the one before so calls never pile up.
-// soft: a quick reaction that never interrupts an instruction.
-export function voice(name, { soft = false } = {}) {
-  if (!ac || muted || !clips[name]) return;
-  const t = ac.currentTime;
-  if (current && current.end > t) {
-    if (soft) return;
-    try { current.src.stop(); } catch { }
-  }
-  const src = ac.createBufferSource();
-  src.buffer = clips[name];
-  const g = ac.createGain();
-  g.gain.value = 1.6;
-  src.connect(g).connect(master);
-  src.start(t);
-  current = { src, end: t + clips[name].duration, soft };
+const CUES = {
+  // Jump: two springy hops going up.
+  jump() { tone(330, 0.12, { type: 'triangle', vol: 0.35, slide: 2 }); tone(440, 0.14, { type: 'triangle', vol: 0.35, slide: 2.2, delay: 0.13 }); },
+  // Punch: a double "pow", from the side to punch.
+  punch(pan = 0) { panned(pan, () => { tone(160, 0.09, { vol: 0.35, slide: 0.5 }); noise(0.07, { vol: 0.4, from: 1800, to: 500 }); tone(200, 0.09, { vol: 0.35, slide: 0.5, delay: 0.12 }); noise(0.07, { vol: 0.4, from: 1800, to: 500, delay: 0.12 }); }); },
+  // Bird: angry tweets from the side the bird comes from.
+  bird(pan = 0) { panned(pan, () => [0, 0.1, 0.2].forEach(d => tone(2200, 0.06, { type: 'sine', vol: 0.25, slide: 1.4, delay: d }))); },
+  // Rope: a slide whistle up and down, Tarzan style.
+  rope() { tone(300, 0.25, { type: 'sine', vol: 0.3, slide: 3 }); tone(900, 0.25, { type: 'sine', vol: 0.3, slide: 0.5, delay: 0.25 }); tone(450, 0.3, { type: 'sine', vol: 0.3, slide: 2.5, delay: 0.5 }); },
+  // Break games: a fanfare, plus something that sounds like the game.
+  fanfare() { [523, 523, 659, 784].forEach((f, i) => tone(f, i === 3 ? 0.3 : 0.1, { vol: 0.2, delay: i * 0.11 })); },
+  gong() { tone(98, 1.4, { type: 'sine', vol: 0.5 }); tone(196, 1.0, { type: 'sine', vol: 0.25 }); tone(293, 0.8, { type: 'triangle', vol: 0.12 }); },
+  bubbles() { [400, 520, 650, 800, 980].forEach((f, i) => tone(f, 0.07, { type: 'sine', vol: 0.3, slide: 1.8, delay: i * 0.08 })); },
+  siren() { [0, 0.35, 0.7].forEach(d => { tone(700, 0.17, { type: 'square', vol: 0.12, delay: d }); tone(950, 0.17, { type: 'square', vol: 0.12, delay: d + 0.17 }); }); },
+};
+
+const CUE_FOR = {
+  jump: () => CUES.jump(), lesson_log: () => CUES.jump(),
+  punch: () => CUES.punch(0), lesson_crate: () => CUES.punch(0),
+  punch_left: () => CUES.punch(-0.8), punch_right: () => CUES.punch(0.8),
+  // lean_right means the bird is on the left.
+  lean_right: () => CUES.bird(-0.8), lean_left: () => CUES.bird(0.8), lesson_bird: () => CUES.bird(-0.8),
+  rope: () => CUES.rope(), lesson_rope: () => CUES.rope(),
+  throw_time: () => CUES.fanfare(), snowball_time: () => CUES.fanfare(),
+  karate_time: () => { CUES.fanfare(); setTimeout(CUES.gong, 450); },
+  bubble_time: () => { CUES.fanfare(); setTimeout(CUES.bubbles, 450); },
+  final_rush: () => CUES.siren(),
+  back: () => sfx.ready(), got_it: () => sfx.level(),
+};
+
+// Plays the sound cue for a game moment, if it has one.
+export function cue(name) {
+  CUE_FOR[name]?.();
 }

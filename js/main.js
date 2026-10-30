@@ -1,6 +1,6 @@
-import { Player, COLORS, BREAKS, features, keyActions } from './game.js';
+import { Player, Course, COLORS, BREAKS, features, keyActions } from './game.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
-import { unlockAudio, sfx, hitSound, missSound, voice, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, cue, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 
@@ -12,7 +12,7 @@ const lctx = low.getContext('2d');
 const video = $('#cam');
 
 const settings = {
-  count: 4, mode: 'camera', facing: 'user', seconds: 120, theme: 'forest', intro: true,
+  count: 4, mode: 'camera', facing: 'user', seconds: 120, theme: 'forest', intro: true, course: 'together',
   players: [
     { name: 'Player 1', age: 10 }, { name: 'Player 2', age: 8 },
     { name: 'Player 3', age: 6 }, { name: 'Player 4', age: 4 },
@@ -76,6 +76,7 @@ seg('#facing', 'facing', 'facing');
 seg('#length', 'sec', 'seconds', Number);
 seg('#theme', 'theme', 'theme');
 seg('#intro', 'intro', 'intro', v => v === '1');
+seg('#course', 'course', 'course');
 $('#camRow').classList.toggle('hidden', settings.mode !== 'camera');
 renderPlayerRows();
 
@@ -172,13 +173,13 @@ function playerEvent(type, o) {
   if (type === 'hit') hitSound(o.kind);
   else if (type === 'miss') missSound(o.kind);
   else if (sfx[type]) sfx[type]();
-  if (type === 'super') voice('electric');
-  else if (type === 'gear') voice('new_hat', { soft: true });
-  else if (type === 'level') voice('level_up', { soft: true });
-  else if (type === 'pop') voice('pop', { soft: true });
-  else if (type === 'strike') voice(players[0]?.throwing?.type === 'karate' ? 'hiyah' : 'strike', { soft: true });
-  else if (type === 'chop' && Math.random() < 0.3) voice('chop', { soft: true });
-  else if (type === 'streak') voice(['wow', 'awesome', 'nice'][Math.floor(Math.random() * 3)], { soft: true });
+  if (type === 'super') cue('electric');
+  else if (type === 'gear') cue('new_hat');
+  else if (type === 'level') cue('level_up');
+  else if (type === 'pop') cue('pop');
+  else if (type === 'strike') cue(players[0]?.throwing?.type === 'karate' ? 'hiyah' : 'strike');
+  else if (type === 'chop' && Math.random() < 0.3) cue('chop');
+  else if (type === 'streak') cue(['wow', 'awesome', 'nice'][Math.floor(Math.random() * 3)]);
 }
 
 // ---------------- States ----------------
@@ -192,13 +193,14 @@ function setState(s) {
 }
 
 function enterLobby() {
+  course = null;
   lobby = players.map(() => ({ found: false, ready: false, upSince: 0, armLatch: false }));
   players.forEach(p => { p.reset(); p.clearCalibration(); p.trackX = null; p.homeX = null; p.heartRate = null; p.onEvent = playerEvent; });
   tracks = [];
   if (settings.mode === 'camera') ensureCamera().catch(e => console.error(e));
   setState('lobby');
   updateFsNudge();
-  if (settings.mode === 'camera') voice('lobby');
+  if (settings.mode === 'camera') cue('lobby');
 }
 
 function startReady() {
@@ -207,7 +209,7 @@ function startReady() {
   setHomes();
   setState('ready');
   showBanner('Arms down, stand tall!', 'Get ready…', 2.4);
-  voice('ready');
+  cue('ready');
 }
 
 function startTutorial() {
@@ -242,20 +244,20 @@ function callMoves(t) {
     }
   }
   if (!best || t - lastCall < 1.1) return;
-  // Mark everything due now as called, so the voice doesn't fall behind.
+  // Mark everything due now as called, so the cues don't fall behind.
   for (const p of players) for (const o of p.obstacles) if (!o.called && (o.arrive - p.clock) / o.travel < 0.5) o.called = true;
   lastCall = t;
-  voice(callFor(best.o));
+  cue(callFor(best.o));
 }
 
 // Stop-and-do breaks: once in a 1 minute workout, more in longer ones.
 function planThrows(dur) {
   if (!dur) return [...Array(60)].map((_, i) => 35 + i * 45);
   if (dur < 60) return [];
-  const n = dur >= 240 ? 3 : dur >= 120 ? 2 : 1;
+  const n = dur >= 180 ? 4 : dur >= 120 ? 3 : 1;
   return [...Array(n)].map((_, i) => Math.round((dur * (i + 1)) / (n + 1)));
 }
-const THROW_SECS = 14;
+const THROW_SECS = 13;
 const BREAK_INFO = {
   cans: { title: 'THROW TIME!', sub: 'Throw the ball to knock down the cans!', clip: 'throw_time' },
   karate: { title: 'KARATE TIME!', sub: 'Chop down hard to break the boards!', clip: 'karate_time' },
@@ -263,8 +265,9 @@ const BREAK_INFO = {
   snowman: { title: 'SNOWBALL TIME!', sub: 'Throw snowballs to knock down the snowman!', clip: 'snowball_time' },
 };
 let throwPlan = [], throwEnd = 0;
-// Carries on between rounds, so the next game starts with a different break.
-let breakTurn = Math.floor(Math.random() * BREAKS.length);
+// Starts with karate and bubbles, then carries on between rounds so the next
+// game starts with a different break.
+let breakTurn = 0;
 let slotGear = [];      // hats each player slot has collected
 
 function startPlay() {
@@ -273,9 +276,12 @@ function startPlay() {
   roundT = 0;
   throwPlan = planThrows(settings.seconds);
   throwEnd = 0;
-  players.forEach(p => p.startRound());
+  const together = settings.course !== 'own' && players.length > 1;
+  players.forEach(p => { p.startRound(); p.shared = together; p.paceSkill = null; });
+  course = together ? new Course() : null;
+  course?.resume(players[0].clock);
   showBanner('GO!', settings.seconds ? `${Math.round(settings.seconds / 60)} minute workout` : 'Endless mode', 1.4);
-  voice('go');
+  cue('go');
   sfx.beep(true);
 }
 
@@ -284,7 +290,7 @@ function endRound() {
   stopMusic();
   players.forEach(p => p.throwing && p.stopThrowing());
   sfx.finish();
-  voice('great');
+  cue('great');
   players.forEach(p => { slotGear[p.index] = { ...p.gear }; });
   showResults();
 }
@@ -376,11 +382,11 @@ $('#heart').onclick = async () => {
   frame = null;
   setState('heart');
   document.body.classList.add('heart-mode');
-  await runHeartCheck(players, { voice, sfx });
+  await runHeartCheck(players, { cue, sfx });
   document.body.classList.remove('heart-mode');
   setState('end');
   showResults();
-  if (players.some(p => p.heartRate)) voice('champions');
+  if (players.some(p => p.heartRate)) cue('champions');
 };
 
 // ---------------- Input ----------------
@@ -421,11 +427,21 @@ function poseX(pts, aspect) {
 }
 
 // People in view, smoothed over brief detection drop-outs.
+let course = null;      // shared course in together mode
 let tracks = [];
+let trackWidth = 0.1;   // typical torso length, as a fraction of the picture width
 function updateTracks(t) {
   if (!frame || frame === updateTracks.last) return;
   updateTracks.last = frame;
-  const found = frame.poses.map(pts => ({ pts, ...poseX(pts, frame.aspect) })).filter(o => o.f);
+  const all = frame.poses.map(pts => ({ pts, ...poseX(pts, frame.aspect) })).filter(o => o.f);
+  // One kid seen twice (the tracker looks at overlapping slices of the
+  // picture) would otherwise count as two people: keep the bigger one.
+  const found = [];
+  for (const o of all.sort((a, b) => b.f.torso - a.f.torso)) {
+    const w = o.f.torso / frame.aspect; // torso length as a fraction of the picture width
+    if (!found.some(k => Math.abs(k.x - o.x) < 0.45 * w)) found.push(o);
+  }
+  trackWidth = found.length ? found.reduce((a, o) => a + o.f.torso, 0) / found.length / frame.aspect : trackWidth;
   for (const o of found) {
     let best = null, bd = 0.08;
     for (const tr of tracks) {
@@ -454,7 +470,9 @@ function assignLobby(t) {
     p.trackX = o ? o.x : null;
     if (o) p.lastSeen = t;
   });
-  if (chosen.length === players.length) setHomes();
+  // Lock spots only once everyone is clearly standing apart.
+  const apart = chosen.every((o, k) => k === 0 || o.x - chosen[k - 1].x > 0.6 * trackWidth);
+  if (chosen.length === players.length && apart) setHomes();
   return tracks.length;
 }
 
@@ -472,9 +490,14 @@ function setHomes() {
   // Keep homes in player order (player 1 is furthest left).
   const xs = players.map(p => p.homeX).sort((a, b) => a - b);
   players.forEach((p, i) => { p.homeX = xs[i]; });
-  // Never reach past halfway to a neighbour's spot.
+  updateReach();
+}
+
+// Never reach past halfway to a neighbour's spot.
+function updateReach() {
+  const xs = players.map(p => p.homeX).sort((a, b) => a - b);
   let gap = 1;
-  for (let i = 1; i < n; i++) gap = Math.min(gap, xs[i] - xs[i - 1]);
+  for (let i = 1; i < xs.length; i++) gap = Math.min(gap, xs[i] - xs[i - 1]);
   homeReach = Math.max(0.06, Math.min(0.2, gap * 0.55));
 }
 
@@ -512,6 +535,20 @@ function assignHomes(t, follow) {
     else if (h === 1) i--;
     else j--;
   }
+  // Re-scan: a kid nobody has been matched to for a while takes over a person
+  // standing in the gap between their neighbours, and that becomes their spot.
+  const used = new Set(match.values());
+  let moved = false;
+  ps.forEach((p, k) => {
+    if (match.has(p) || t - (p.lastSeen ?? -9) < 1.2) return;
+    const left = k > 0 ? (match.get(ps[k - 1])?.x ?? ps[k - 1].homeX) : -1;
+    const right = k < n - 1 ? (match.get(ps[k + 1])?.x ?? ps[k + 1].homeX) : 2;
+    const gapMin = 0.6 * trackWidth;
+    const free = os.filter(o => !used.has(o) && o.x > left + gapMin && o.x < right - gapMin)
+      .sort((a, b) => Math.abs(a.x - p.homeX) - Math.abs(b.x - p.homeX))[0];
+    if (free) { used.add(free); match.set(p, free); p.homeX = free.x; moved = true; }
+  });
+  if (moved) updateReach();
   for (const p of players) {
     const o = match.get(p);
     if (!o) { p.trackPose(null, t); continue; }
@@ -652,6 +689,7 @@ function updateGame(t, dt) {
     if (!cam) {
       const a = keyActions(keys, p.index);
       if (p.throwing && a.jump && !p.act.jump) p.onThrow(); // up key throws in throw time
+      if (a.spin && p.charged && !p.throwing) p.superSpin(); // down alone spins when super charged
       p.setActions(a);
       if (!p.base) p.base = { hipX: 0, hipY: 0, noseX: 0, noseY: 0, torso: 1 };
     }
@@ -666,14 +704,14 @@ function updateGame(t, dt) {
       if (allSet || el > 7) {
         banner = { count: 3, at: t };
         sfx.beep(false);
-        voice('three');
+        cue('three');
       }
     }
     if (banner?.count) {
       const n = 3 - Math.floor(t - banner.at);
       if (n !== banner.count) {
         banner.count = n;
-        if (n > 0) { sfx.beep(false); voice(['one', 'two', 'three'][n - 1]); }
+        if (n > 0) { sfx.beep(false); cue(['one', 'two', 'three'][n - 1]); }
       }
       if (n <= 0) {
         banner = null;
@@ -688,13 +726,13 @@ function updateGame(t, dt) {
       tut.step++;
       if (tut.step >= LESSONS.length) {
         showBanner("You've got it!", 'Now the real thing…', 2);
-        voice('got_it');
+        cue('got_it');
         tut.next = Infinity;
         setTimeout(() => state === 'tutorial' && startPlay(), 2200);
       } else {
         const L = LESSONS[tut.step];
         showBanner(L.title, '', 4.2);
-        voice(`lesson_${L.kind}`);
+        cue(`lesson_${L.kind}`);
         players.forEach(p => p.teach(L.kind, L.side || null, 4));
         tut.next = tn + 5.6;
       }
@@ -714,15 +752,16 @@ function updateGame(t, dt) {
       players.forEach(p => p.startBreak(type));
       const info = BREAK_INFO[type];
       showBanner(info.title, info.sub, 2.8);
-      voice(info.clip);
+      cue(info.clip);
     } else if (throwPlan.length && dur && roundT >= throwPlan[0] && !throwEnd) {
       throwPlan.shift();
     }
     if (throwEnd && roundT >= throwEnd) {
       throwEnd = 0;
       players.forEach(p => p.stopThrowing());
+      course?.resume(players[0].clock);
       showBanner('Back to running!', '', 1.6);
-      voice('back');
+      cue('back');
     }
     if (!throwEnd) callMoves(t);
     setIntensity(dur ? roundT / dur : Math.min(1, roundT / 180));
@@ -733,7 +772,7 @@ function updateGame(t, dt) {
       if (rush && !players[0].rush) {
         setIntensity(1);
         showBanner('FINAL RUSH!', 'Double points!', 2);
-        voice('final_rush');
+        cue('final_rush');
       }
       players.forEach(p => { p.rush = rush; });
       if (left <= 3 && Math.ceil(left) !== Math.ceil(left + dt)) sfx.beep(false);
@@ -741,7 +780,12 @@ function updateGame(t, dt) {
     }
   }
   const moving = state === 'play' || state === 'tutorial';
-  for (const p of players) p.update(dt, moving && !p.paused, ramp);
+  if (course && state === 'play') course.update(players, ramp);
+  for (const p of players) {
+    // On a shared course every clock keeps running so the lanes stay in sync.
+    p.absent = !!(course && p.paused);
+    p.update(dt, moving && (course ? true : !p.paused), ramp);
+  }
 }
 
 // ---------------- Drawing ----------------
