@@ -206,7 +206,7 @@ function renderRoom() {
   else if (!on && ownCount != null) { settings.count = ownCount; ownCount = null; }
   document.querySelectorAll('#count button').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === settings.count));
   if (document.querySelectorAll('#players .player').length !== settings.count) renderPlayerRows();
-  if (on) setTab('friends');
+  if (on && settings.tab !== 'friends') setTab('friends');
   $('#roomIdle').classList.toggle('hidden', on);
   $('#roomOn').classList.toggle('hidden', !on);
   $('#roomBadge').textContent = on ? room.code || '' : '';
@@ -238,6 +238,7 @@ function renderRoom() {
       save();
       seg('#length', 'sec', 'seconds', Number);
       seg('#intro', 'intro', 'intro', v => v === '1');
+      renderExtrasSum();
     }
   }
 }
@@ -249,11 +250,17 @@ onRoom(msg => {
 // Two tabs on the home screen: Play here (just this camera) and Play with
 // friends (a room code, then the same setup). Leaving the friends tab leaves
 // the room.
+// Extra settings is a third tab for the rarely changed options; it doesn't
+// change which way you play.
+let showExtras = false;
 function setTab(t) {
-  settings.tab = t === 'friends' ? 'friends' : 'here';
-  document.body.classList.toggle('tabFriends', settings.tab === 'friends');
+  showExtras = t === 'extras';
+  if (!showExtras) settings.tab = t === 'friends' ? 'friends' : 'here';
+  document.body.classList.toggle('tabFriends', !showExtras && settings.tab === 'friends');
+  document.body.classList.toggle('tabExtras', showExtras);
+  renderExtrasSum();
   document.querySelectorAll('#modeTabs button').forEach(b => {
-    const on = b.dataset.mode === settings.tab;
+    const on = b.dataset.mode === (showExtras ? 'extras' : settings.tab);
     b.classList.toggle('on', on);
     b.setAttribute('aria-selected', on);
   });
@@ -268,7 +275,7 @@ function renderGoLabel() {
 onRoom(msg => { if (msg.type === 'status') renderGoLabel(); });
 document.querySelectorAll('#modeTabs button').forEach(b => {
   b.onclick = () => {
-    if (b.dataset.mode === settings.tab) return;
+    if (b.dataset.mode === (showExtras ? 'extras' : settings.tab)) return;
     if (b.dataset.mode === 'here' && room.status !== 'off') {
       if (friendHere() && !confirm('Leave the friend game?')) return;
       leaveRoom();
@@ -279,6 +286,18 @@ document.querySelectorAll('#modeTabs button').forEach(b => {
   };
 });
 setTab(settings.tab);
+// A one-line reminder of the extra settings under the players.
+function renderExtrasSum() {
+  const len = settings.seconds ? `${settings.seconds / 60} min` : 'No time limit';
+  const world = $('#theme').selectedOptions[0]?.textContent || '';
+  const bits = [len, world, settings.intro ? 'Tutorial on' : 'Tutorial off'];
+  if (settings.count > 1) bits.push(settings.course === 'own' ? 'Own pace' : 'Together');
+  $('#extrasSum').textContent = bits.join(' · ');
+}
+$('#extrasCol').addEventListener('click', () => setTimeout(renderExtrasSum));
+$('#theme').addEventListener('change', renderExtrasSum);
+$('#count').addEventListener('click', () => setTimeout(renderExtrasSum));
+$('#extrasSum').onclick = () => setTab('extras');
 
 $('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch(e => console.error(e)); };
 // The last code joined is filled in, so rejoining after a reload is one tap.

@@ -318,3 +318,11 @@ body:not(.tabFriends) .friendRow { display: none; }
   .roomCard #roomMake { margin-top: 0; }
   .tabs button { padding: 0.25em 0.6em; font-size: 1em; }
 }
+
+/* Extra settings tab: the options column only; the other tabs show just the players. */
+body:not(.tabExtras) #extrasCol { display: none; }
+body.tabExtras #playersCol { display: none; }
+.wide .cols { grid-template-columns: 1fr; max-width: 560px; margin-left: auto; margin-right: auto; }
+.extrasSum { margin: clamp(4px, 1.2vh, 10px) 0 0; opacity: .7; font-size: .9em; cursor: pointer; }
+.extrasSum::before { content: '⚙️ '; }
+.tabs button { white-space: nowrap; }

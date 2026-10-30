@@ -26,7 +26,7 @@
   </header>
 
   <div class="tabs" id="modeTabs" role="tablist">
-    <button data-mode="here" class="on" role="tab">🏠 Play here</button><button data-mode="friends" role="tab">🤝 Play with friends</button>
+    <button data-mode="here" class="on" role="tab">🏠 Play here</button><button data-mode="friends" role="tab">🤝 Play with friends</button><button data-mode="extras" role="tab">⚙️ Extra settings</button>
   </div>
 
   <div class="friendRow">
@@ -53,7 +53,7 @@
   </div>
 
   <div class="cols">
-    <div class="col">
+    <div class="col" id="playersCol">
       <div class="row">
         <span class="label">Players</span>
         <div class="seg" id="count">
@@ -61,8 +61,9 @@
         </div>
       </div>
       <div id="players"></div>
+      <p id="extrasSum" class="extrasSum"></p>
     </div>
-    <div class="col">
+    <div class="col" id="extrasCol">
       <div class="row">
         <span class="label">Input</span>
         <div class="seg" id="input">
