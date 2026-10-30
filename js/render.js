@@ -1022,9 +1022,9 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray' }[type] || 'throw';
+    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain' }[type] || 'throw';
     const B = p.throwing;
-    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SLAM & SWAT!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked` }[kind];
+    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SLAM & SWAT!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
     if (kind === 'dance' && B.move) {
       // Picture card of the move to copy, with a shrinking timer bar.
       const m = B.move, k = Math.min(1, m.t / m.dur);
@@ -1253,10 +1253,10 @@ function cueIcon(ctx, o, x, y, size) {
   const BALL = ['.###.', '#####', '#####', '#####', '.###.'];
   const WINGS = ['#...#', '##.##', '.###.', '..#..', '.....'];
   const HAND = ['#####', '#####', '.....', '#####', '#####'];
-  const color = KIND_INFO[o.kind]?.color || (o.kind === 'spray' ? '#5ab4ff' : '#ffb02e');
+  const color = KIND_INFO[o.kind]?.color || (o.kind === 'spray' || o.kind === 'rain' ? '#5ab4ff' : '#ffb02e');
   let rows;
   const DROP = ['..#..', '.###.', '#####', '#####', '.###.'];
-  if (o.kind === 'spray') { rows = DROP; }
+  if (o.kind === 'spray' || o.kind === 'rain') { rows = DROP; }
   else if (o.kind === 'flap') rows = Math.floor(performance.now() / 250) % 2 ? WINGS : WINGS.slice().reverse();
   else if (o.kind === 'chop') rows = HAND;
   else if (o.kind === 'log') rows = UP;
@@ -1408,6 +1408,45 @@ function drawMini(ctx, L, p, T, time) {
       rect(ctx, x + c.side * u, y - u * 0.2, u * 1.4 * c.side, u * 0.3, '#c9304a');
       rect(ctx, x - (rot ? u * 1.6 : u * 0.6), y - u * 0.9, rot ? u * 3.2 : u * 1.2, u * 0.15, '#3a3a44');
       ctx.restore();
+    }
+  } else if (T.type === 'rain') {
+    // Rainstorm: dark streaks, a roof over the hands, and two buckets.
+    const top = L.horizon * 0.2;
+    for (let k = 0; k < 26; k++) {
+      const rx = L.x + ((k * 0.137 + p.index * 0.21) % 1) * L.w;
+      const ry = top + ((time * 1.6 + k * 0.29) % 1) * (L.ground - top);
+      rect(ctx, rx, ry, Math.max(1, S * 0.05), S * 0.35, 'rgba(170,205,255,0.7)');
+    }
+    const hs = (p.hands || []).filter(Boolean);
+    if (T.roof && hs.length === 2) {
+      const a = bodyXY(L, hs[0].x, hs[0].y), b = bodyXY(L, hs[1].x, hs[1].y);
+      const cx = (a.x + b.x) / 2, cy = Math.min(a.y, b.y) - S * 0.15, w = S * 1.9;
+      const tiltY = clamp(T.tilt, -1.2, 1.2) * S * 0.25;
+      ctx.fillStyle = '#c0392b';
+      ctx.beginPath();
+      ctx.moveTo(cx - w / 2, cy + tiltY); ctx.lineTo(cx, cy - S * 0.55); ctx.lineTo(cx + w / 2, cy - tiltY); ctx.closePath();
+      ctx.fill();
+      // Water collected on the roof.
+      rect(ctx, cx - S * 0.45, cy - S * 0.75 - S * 0.4 * T.water, S * 0.9, S * 0.4 * T.water, '#3f86d6');
+    }
+    for (const side of [-1, 1]) {
+      const tip = T.tip?.side === side ? Math.min(1, T.tip.t / 0.4) : 0;
+      const { x, y } = bodyXY(L, side * 1.85, 0.75);
+      const bw = S * 0.9, bh = S * 1.0;
+      ctx.save();
+      ctx.translate(R(x), R(y));
+      ctx.rotate(side * tip * 1.4);
+      if (T.want === side && !T.tip) { ctx.fillStyle = 'rgba(255,225,77,' + (0.5 + 0.4 * Math.sin(time * 8)) + ')'; ctx.fillRect(R(-bw / 2 - S * 0.1), R(-bh - S * 0.1), R(bw + S * 0.2), R(bh + S * 0.2)); }
+      rect(ctx, -bw / 2, -bh, bw, bh, '#8a95a8');
+      rect(ctx, -bw / 2 + S * 0.08, -bh + S * 0.08, bw - S * 0.16, bh - S * 0.16, '#3f86d6');
+      rect(ctx, -bw / 2 + S * 0.08, -bh + S * 0.08, bw - S * 0.16, (bh - S * 0.16) * (1 - T.buckets[side]), '#4a5468');
+      rect(ctx, -bw / 2, -bh, bw, S * 0.1, '#b8c2d4');
+      ctx.restore();
+      if (T.want === side && !T.tip) text(ctx, side < 0 ? '▼' : '▼', x, y - bh - S * 0.35 + Math.sin(time * 6) * S * 0.1, S * 0.5, '#ffe14d');
+      if (T.pour?.side === side) {
+        const k = T.pour.t / 0.6;
+        for (let i = 0; i < 6; i++) rect(ctx, x - S * 0.1 + Math.sin(i + time * 20) * S * 0.08, y - bh - S * (2.4 - i * 0.35) , S * 0.2, S * 0.3, `rgba(80,160,255,${1 - k})`);
+      }
     }
   } else if (T.type === 'tray') {
     // Falling pancakes and boots, and the tray with its tower.

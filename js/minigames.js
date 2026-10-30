@@ -9,7 +9,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (h, x, y) => Math.hypot(h.x - x, h.y - y);
 
-export const MINI = ['dance', 'kaiju', 'bugs', 'goalie', 'climb', 'tray'];
+export const MINI = ['dance', 'kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain'];
 
 // Keyboard stand-in for hands: [up, left, down, right] held.
 export function keyHands(u, l, d, r) {
@@ -23,6 +23,16 @@ export function keyHands(u, l, d, r) {
   if (l) return [{ x: -1.0, y: -2.2 }, { x: 0.6, y: -0.2 }];
   if (r) return [{ x: -0.6, y: -0.2 }, { x: 1.0, y: -2.2 }];
   return [{ x: -0.5, y: -0.1 }, { x: 0.5, y: -0.1 }];
+}
+
+// The keyboard's hands for a break: in the rainstorm, up makes the roof and
+// left/right tips it that way.
+export function keyHandsFor(type, u, l, d, r) {
+  if (type === 'rain' && u) {
+    const s = l && !r ? -1.1 : r && !l ? 1.1 : 0;
+    return [{ x: -0.5 + s, y: -2.2 }, { x: 0.5 + s, y: -2.2 }];
+  }
+  return keyHands(u, l, d, r);
 }
 
 // Dance moves: each is a check on the hands, plus a pose for the picture card.
@@ -48,6 +58,7 @@ export function startMini(p, B) {
     case 'goalie': Object.assign(B, { shots: [], shotT: 1.0 }); break;
     case 'climb': Object.assign(B, { height: 0, lastHand: -1, wasUp: [false, false], pan: 0, reachAt: -9 }); break;
     case 'tray': Object.assign(B, { x: 0, items: [], stack: [], dropT: 1.0, wobble: 0 }); break;
+    case 'rain': Object.assign(B, { roof: false, tilt: 0, water: 0, want: Math.random() < 0.5 ? -1 : 1, buckets: { '-1': 0, '1': 0 }, pour: null, tip: null, poured: false }); break;
   }
 }
 
@@ -116,6 +127,30 @@ export function handsMini(p, B, hands, now) {
     if (hs.length) {
       const mx = hs.reduce((a, h) => a + h.x, 0) / hs.length + (p.hipShift || 0);
       B.target = clamp(mx / 1.0, -1, 1);
+    }
+  } else if (B.type === 'rain') {
+    // Rainstorm: both hands over the head make a roof that catches rain;
+    // tip it (lean or shift the hands) to pour into the bucket on that side.
+    B.roof = hs.length === 2 && hs.every(h => h.y < -1.6) && Math.abs(hs[0].x - hs[1].x) < 1.8;
+    B.tilt = B.roof ? (hs[0].x + hs[1].x) / 2 + (p.hipShift || 0) : 0;
+    const side = B.tilt < -0.6 ? -1 : B.tilt > 0.6 ? 1 : 0;
+    if (!side) B.poured = false;
+    if (B.roof && side && !B.poured && B.water > 0.35) {
+      B.poured = true;
+      const amt = B.water;
+      B.water = 0;
+      B.pour = { side, t: 0 };
+      if (side !== B.want) { p.pop('Other bucket!', '#d0e8ff'); p.onEvent?.('splat'); return; }
+      B.buckets[side] = Math.min(1, B.buckets[side] + amt * 0.4);
+      p.counts.rain++;
+      p.addPoints(60 * p.breakMult, false);
+      p.onEvent?.('spray');
+      if (B.buckets[side] >= 0.99) {
+        p.addPoints(250 * p.breakMult, pick(['BUCKET FULL!', 'SPLOOSH!', 'FILLED UP!']));
+        p.onEvent?.('save');
+        B.tip = { side, t: 0 };
+        B.want = -side;
+      }
     }
   } else if (B.type === 'dance') {
     const m = B.move;
@@ -206,6 +241,13 @@ export function updateMini(p, B, dt) {
         else if (s.t > s.dur + 0.12) { s.done = 'goal'; s.doneT = 0; p.pop('GOAL!', '#ffd0d0'); }
       }
       B.shots = B.shots.filter(s => !s.done || s.doneT < 0.6);
+      break;
+    }
+    case 'rain': {
+      // The roof fills in about a second of holding it up.
+      if (B.roof && Math.abs(B.tilt) <= 0.6) B.water = Math.min(1, B.water + dt / clamp(1.1 - sk * 0.03, 0.8, 1.1));
+      if (B.pour && (B.pour.t += dt) > 0.6) B.pour = null;
+      if (B.tip && (B.tip.t += dt) > 0.9) { B.buckets[B.tip.side] = 0; B.tip = null; }
       break;
     }
     case 'climb':

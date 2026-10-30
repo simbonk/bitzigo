@@ -108,7 +108,7 @@ export class Player {
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;
@@ -190,7 +190,7 @@ export class Player {
     this.setActions(latched);
 
     // Slowly follow the kid if they drift closer/further while standing normally.
-    if (!latched.jump && !latched.leanL && !latched.leanR && brk !== 'tray') {
+    if (!latched.jump && !latched.leanL && !latched.leanR && brk !== 'tray' && brk !== 'rain') {
       const a = 0.02;
       B.hipX = lerp(B.hipX, f.hip.x, 0.008); // slow, so a little wiggle shows on screen
       B.noseX = lerp(B.noseX, f.nose.x, 0.02);

@@ -32,3 +32,4 @@ bugs_time|Bug splat! Slap the bugs!
 goalie_time|Goalie time! Block the balls!
 climb_time|Beanstalk climb! Reach up, one hand at a time!
 tray_time|Pancake tower! Catch the pancakes, and dodge the boots!
+rain_time|Rainstorm! Make a roof with your hands, and fill the buckets!

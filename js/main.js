@@ -1,5 +1,5 @@
 import { Player, Course, COLORS, BREAKS, KEYMAP, features, keyActions } from './game.js';
-import { MINI, keyHands, handsMini } from './minigames.js';
+import { MINI, keyHandsFor, handsMini } from './minigames.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
@@ -332,6 +332,7 @@ const BREAK_INFO = {
   bugs: { title: 'BUG SPLAT!', sub: 'Slap the bugs wherever they pop up!', clip: 'bugs_time' },
   goalie: { title: 'GOALIE TIME!', sub: 'Block the balls with your hands!', clip: 'goalie_time' },
   climb: { title: 'BEANSTALK CLIMB!', sub: 'Reach up with one hand, then the other!', clip: 'climb_time' },
+  rain: { title: 'RAINSTORM!', sub: 'Hands over your head like a roof, then lean to pour into the bucket!', clip: 'rain_time' },
   tray: { title: 'PANCAKE TOWER!', sub: 'Move your hands to catch pancakes. Dodge the boots!', clip: 'tray_time' },
 };
 let throwPlan = [], throwEnd = 0;
@@ -458,6 +459,7 @@ function pickAwards(ps) {
     ['Super Goalie', p => p.counts.saves],
     ['Beanstalk Climber', p => p.counts.climb],
     ['Pancake Stacker', p => p.counts.stack],
+    ['Rain Catcher', p => p.counts.rain],
     ['Perfect Timing', p => p.tiers[0]],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
@@ -802,7 +804,7 @@ function updateGame(t, dt) {
       if (a.spin && p.charged && !p.throwing) p.superSpin(); // down alone spins when super charged
       if (MINI.includes(p.throwing?.type)) {
         const [u, l, d, r] = KEYMAP[p.index];
-        p.hands = keyHands(keys.has(u), keys.has(l), keys.has(d), keys.has(r));
+        p.hands = keyHandsFor(p.throwing.type, keys.has(u), keys.has(l), keys.has(d), keys.has(r));
         handsMini(p, p.throwing, p.hands, t);
       }
       if (p.throwing?.type === 'fire') {
