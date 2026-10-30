@@ -86,9 +86,7 @@
 
   <div class="actions">
     <button id="go" class="big">Let's go!</button>
-    <button id="fs" class="small">⛶ Full screen</button>
   </div>
-  <p id="fsTip" class="tip hidden">This browser can't go full screen from a web page. Tap <b>Share</b> then <b>Add to Home Screen</b>, and open Bitzigo from its icon: it runs full screen with no browser bars.</p>
   <p id="status" class="status"></p>
 </section>
 
@@ -124,13 +122,14 @@
 
 <div id="hudButtons" class="hidden">
   <button id="btnStart" title="Start with who is here (Enter)">Start now</button>
-  <button id="btnFs" title="Full screen">⛶</button>
   <button id="btnCam" title="Camera view (V)">Camera</button>
   <button id="btnMute" title="Sound (M)">Sound</button>
   <button id="btnStop" title="End workout (Esc)">End</button>
 </div>
 
 <button id="fsNudge" class="nudge hidden">⛶ Tap for full screen</button>
+<button id="fsFab" class="hidden" aria-label="Full screen" title="Full screen">⛶</button>
+<div id="fsTip" class="hidden"><b>Full screen on iPhone</b><p>iPhone Safari can't make a web page full screen. To play with no browser bars, tap <b>Share</b> <span class="shareIco">⇪</span> then <b>Add to Home Screen</b>, and open Bitzigo from its new icon.</p><button class="small">OK</button></div>
 
 <div id="rotate">
   <img src="icons/icon-180.png" alt="">

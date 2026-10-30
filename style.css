@@ -274,3 +274,8 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #friendResults .fk .n { flex: 1; }
 #friendResults .fk .s { font-weight: bold; }
 .seg button:disabled { opacity: .35; cursor: default; }
+#fsFab { position: fixed; z-index: 30; top: max(6px, env(safe-area-inset-top)); right: calc(6px + var(--safeX)); width: 34px; height: 34px; border-radius: 10px; border: 2px solid #3a4a80; background: rgba(16, 24, 48, .7); color: #fff; font: bold 18px/1 system-ui, sans-serif; cursor: pointer; opacity: .7; -webkit-tap-highlight-color: transparent; }
+#fsFab:hover { opacity: 1; }
+#fsTip { position: fixed; z-index: 31; top: calc(max(6px, env(safe-area-inset-top)) + 42px); right: calc(6px + var(--safeX)); width: min(320px, calc(100vw - 24px - 2 * var(--safeX))); background: #101830; border: 2px solid #ffd23f; border-radius: 14px; padding: 10px 12px; color: #fff; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+#fsTip p { margin: 6px 0 8px; line-height: 1.35; }
+#fsTip .shareIco { display: inline-block; border: 1px solid #fff8; border-radius: 4px; padding: 0 4px; }

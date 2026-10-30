@@ -269,24 +269,29 @@ function enterFullscreen() {
 }
 function toggleFullscreen() {
   if (!canFs) { $('#fsTip').classList.toggle('hidden'); return; }
-  if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  if (fsEl()) exitFullscreen()?.catch?.(() => { });
   else enterFullscreen();
 }
-if (standalone) $('#fs').classList.add('hidden');
-$('#fs').onclick = toggleFullscreen;
+// One small full screen button in the corner on every screen. It hides when
+// the game already runs full screen from the home screen icon.
+$('#fsFab').classList.toggle('hidden', !!standalone);
+$('#fsFab').onclick = e => { e.stopPropagation(); toggleFullscreen(); };
+$('#fsTip').onclick = e => { e.stopPropagation(); if (e.target.tagName === 'BUTTON') $('#fsTip').classList.add('hidden'); };
+document.addEventListener('click', () => $('#fsTip').classList.add('hidden'));
 $('#helpBtn').onclick = () => { $('#setup').classList.add('hidden'); $('#help').classList.remove('hidden'); };
 $('#statsBtn').onclick = () => { showStats($('#statsBody'), true); $('#setup').classList.add('hidden'); $('#stats').classList.remove('hidden'); };
 $('#statsX').onclick = $('#statsClose').onclick = () => { $('#stats').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
 $('#statsClear').onclick = () => { if (confirm('Clear all saved stats on this device?')) { clearStats(); showStats($('#statsBody')); } };
 $('#helpClose').onclick = () => { $('#help').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
-$('#btnFs').onclick = toggleFullscreen;
-if (standalone || !canFs) $('#btnFs').classList.add('hidden');
 
 const exitFullscreen = () => (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
 document.addEventListener('fullscreenchange', updateFsNudge);
 document.addEventListener('webkitfullscreenchange', updateFsNudge);
 $('#fsNudge').onclick = () => { enterFullscreen(); setTimeout(updateFsNudge, 500); };
 function updateFsNudge() {
+  const full = !!fsEl();
+  $('#fsFab').textContent = full ? '🗗' : '⛶';
+  $('#fsFab').title = $('#fsFab').ariaLabel = full ? 'Leave full screen' : 'Full screen';
   $('#fsNudge').classList.toggle('hidden', state !== 'lobby' || !canFs || standalone || !!fsEl());
 }
 
