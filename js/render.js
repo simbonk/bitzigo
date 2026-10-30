@@ -213,14 +213,15 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   }
   const T = p.throwing;
   if (C?.type === 'climb') items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
-  // The pond sits under everything; other break props draw over the kid.
-  if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
+  // Water over the swimmer's legs.
   if (T?.type === 'swim') items.push({ z: -0.2, draw: () => {
     const wy = L.ground - L.S * 1.1 + Math.sin(time * 4) * L.S * 0.05;
     rect(ctx, L.x, wy, L.w, L.h - wy, 'rgba(47,134,214,0.92)');
     rect(ctx, L.x, wy, L.w, Math.max(1, L.S * 0.08), '#bfe3ff');
     if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, L.cx + (i - 2.5) * L.S * 0.35, wy - L.S * (0.2 + 0.5 * T.splash) - (i % 2) * L.S * 0.2, L.S * 0.15, L.S * 0.15, '#e6f4ff');
   } });
+  // The pond sits under everything; other break props draw over the kid.
+  if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
   else if (T && T.type !== 'bubbles') {
     items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }

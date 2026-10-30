@@ -595,7 +595,16 @@ export class Player {
   }
 
   addPoints(pts, word) {
-    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1) * (this.boost || 1);
+    // Keep the scores close: points are quietly scaled by how far this kid is
+    // from the group's average, so whoever is behind catches up and whoever
+    // is ahead pulls away slowly. Hit rates in Stats still show the real story.
+    let even = 1;
+    const ps = Player.group;
+    if (ps && ps.length > 1) {
+      const avg = ps.reduce((a, q) => a + q.score, 0) / ps.length;
+      even = Math.min(2.2, Math.max(0.45, ((avg + 250) / (this.score + 250)) ** 1.6));
+    }
+    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1) * (this.boost || 1) * even;
     const gained = Math.max(10, Math.round((pts * mult) / 10) * 10);
     this.score += gained;
     this.shake = 0.3;

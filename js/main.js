@@ -468,6 +468,7 @@ function startPlay() {
     players.forEach(p => { p.clock = c; p.obstacles = []; });
   }
   players.forEach(p => { p.startRound(); p.shared = together; p.paceSkill = null; });
+  Player.group = players;
   // Later rounds of a set quietly give whoever is behind a few extra points
   // per move (up to +30%), so nobody falls hopelessly out of the running.
   const lead = Math.max(1, ...players.map(p => setScores[p.index] || 0));
