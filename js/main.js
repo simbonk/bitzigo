@@ -197,7 +197,7 @@ function renderRoom() {
   const msg = {
     starting: 'Making a code…',
     joining: `Joining ${room.code}…`,
-    waiting: 'Send your friend the link (it joins by itself), then press Let\'s go.',
+    waiting: 'Send your friend the invite, then press Let\'s go.',
     connected: room.role === 'host' ? 'Friend joined! Press Let\'s go and you\'ll start together.'
       : 'Joined! Press Let\'s go. The code maker picks the world and workout length.',
     lost: 'Lost the connection to your friend.',
@@ -228,23 +228,31 @@ $('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch
 $('#roomJoin').onclick = () => { $('#status').textContent = ''; joinRoom($('#roomCode').value).catch(e => console.error(e)); };
 $('#roomCode').onkeydown = e => { if (e.key === 'Enter') $('#roomJoin').click(); };
 $('#roomLeave').onclick = () => leaveRoom();
-// The link joins the room by itself when the friend opens it: no typing.
-const roomLink = () => `${location.origin}${location.pathname}?room=${room.code}`;
+// The invite: steps rather than a bare link. A link opened in iPhone Safari
+// can't go full screen, and the Home Screen icon opens without the link's
+// code, so the friend adds Bitzigo to the Home Screen and types the code.
+const roomInvite = () => [
+  `Race us in Bitzigo! Our code is ${room.code}`,
+  `1. Open ${location.origin}${location.pathname} in Safari (Chrome on Android)`,
+  '2. Tap Share, then Add to Home Screen',
+  '3. Open Bitzigo from the new icon',
+  `4. Type ${room.code} next to Friend and tap Join`,
+].join('\n');
 $('#roomCopy').onclick = async () => {
-  const url = roomLink();
-  try { await navigator.clipboard.writeText(url); } catch {
+  const words = roomInvite();
+  try { await navigator.clipboard.writeText(words); } catch {
     // Older browsers: copy from a hidden text box.
-    const box = Object.assign(document.createElement('textarea'), { value: url });
+    const box = Object.assign(document.createElement('textarea'), { value: words });
     document.body.appendChild(box);
     box.select();
     try { document.execCommand('copy'); } catch { }
     box.remove();
   }
   $('#roomCopy').textContent = '✓ Copied';
-  setTimeout(() => { $('#roomCopy').textContent = '🔗 Copy link'; }, 2000);
+  setTimeout(() => { $('#roomCopy').textContent = '📋 Copy invite'; }, 2000);
 };
 $('#roomShare').onclick = () => {
-  navigator.share?.({ title: 'Bitzigo', text: 'Race us in Bitzigo! Tap to join:', url: roomLink() }).catch(() => { });
+  navigator.share?.({ title: 'Bitzigo', text: roomInvite() }).catch(() => { });
 };
 // A shared link (…?room=FROG-42) joins straight away.
 {
