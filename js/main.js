@@ -184,9 +184,18 @@ renderPlayerRows();
 
 let lastFriend = null;  // the friends' latest update, kept for the results after they leave
 let ownSettings = null; // the guest's own length and tutorial, while the code maker's are in use
+// Friend games are 2 kids per house: tracking 3 or 4 on a tablet while
+// keeping the link going is too much.
+const FRIEND_MAX = 2;
+let ownCount = null;    // the player count from before joining, given back on leaving
 function renderRoom() {
   const s = room.status;
   const on = s !== 'off' && s !== 'error';
+  document.querySelectorAll('#count button').forEach(b => { b.disabled = on && Number(b.dataset.n) > FRIEND_MAX; });
+  if (on && settings.count > FRIEND_MAX) { ownCount ??= settings.count; settings.count = FRIEND_MAX; }
+  else if (!on && ownCount != null) { settings.count = ownCount; ownCount = null; save(); }
+  document.querySelectorAll('#count button').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === settings.count));
+  if (document.querySelectorAll('#players .player').length !== settings.count) renderPlayerRows();
   $('#roomIdle').classList.toggle('hidden', on);
   $('#roomOn').classList.toggle('hidden', !on);
   $('#roomBadge').textContent = on ? room.code || '' : '';

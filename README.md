@@ -30,7 +30,7 @@ Nobody is ever knocked out; a miss just breaks the streak.
 
 ## Playing with a friend
 
-Two households can race at the same time. On the home screen one family taps **Make a code** and gets something like `FROG-42`; **Text it** shares the code and a link. The other family types the code (or opens the link) and taps **Join**. Then both press **Let's go**. Each lobby waits until both squads are ready, and the code maker's world, workout length, tutorial setting and break games are used for both. During the race a small window under the timer shows the friends' characters doing their moves, their scores, and the squad totals; the results screen shows both families. If the friends drop out, **Start now** carries on without them.
+Two households can race at the same time, up to 2 kids each (more is too much for a tablet to track while keeping the link going). On the home screen one family taps **Make a code** and gets something like `FROG-42`; **Text it** shares the code and a link. The other family types the code (or opens the link) and taps **Join**. Then both press **Let's go**. Each lobby waits until both squads are ready, and the code maker's world, workout length, tutorial setting and break games are used for both. During the race a small window under the timer shows the friends' characters doing their moves, their scores, and the squad totals; the results screen shows both families. If the friends drop out, **Start now** carries on without them.
 
 Each phone still does its own body tracking. Only a few hundred bytes of game updates a second go between the two browsers, directly over WebRTC; no video or face photos are sent. Codes are friends-only: there is no list of games and no matching with strangers, and a room takes one friend.
 

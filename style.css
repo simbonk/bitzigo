@@ -272,3 +272,4 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #friendResults .fk .sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; flex: none; }
 #friendResults .fk .n { flex: 1; }
 #friendResults .fk .s { font-weight: bold; }
+.seg button:disabled { opacity: .35; cursor: default; }
