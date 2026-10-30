@@ -167,6 +167,23 @@ export function statsHtml() {
   }
 
   if (!games.length) return html + '<p class="empty">No games in this time yet.</p>';
+  const sum = [...summarize(games).values()];
+  const kidBars = (title, get, fmt, max) => {
+    const vals = sum.map(get), top = max || Math.max(1, ...vals.filter(v => v != null));
+    return `<div class="chart"><div class="chartHead"><b>${title}</b><span class="chartVal"></span></div><div class="bars kidBars">` +
+      sum.map((k, i) => {
+        const v = vals[i], tip = `${k.name}: ${v == null ? '–' : fmt(v)}`;
+        return `<div class="bar" data-tip="${esc(tip)}" title="${esc(tip)}"><em>${v == null ? '' : fmt(v)}</em><div class="fill" style="height:${v == null ? 0 : Math.max(3, (100 * v) / top)}%;background:${colors.get(k.name) || '#8a96c8'}"></div><span>${esc(k.name)}</span></div>`;
+      }).join('') + '</div></div>';
+  };
+  html += '<div class="charts">' + [
+    kidBars('Minutes moving', k => Math.round(k.secs / 60), v => v.toLocaleString()),
+    kidBars('Calories*', k => k.kcal, v => v.toLocaleString()),
+    kidBars('Best score', k => k.best, v => v.toLocaleString()),
+    kidBars('Games', k => k.games, v => v),
+    kidBars('Hit rate', k => avg(k.acc), v => `${v}%`, 100),
+    kidBars('Perfect timing', k => avg(k.timing), v => `${v}%`, 100),
+  ].join('') + '</div>';
   html += `<table class="stats"><tr><th>Player</th><th>Games</th><th>Minutes</th><th>Calories*</th><th>Best score</th><th>Hit rate</th><th>Perfect timing</th><th>Heart</th></tr>`;
   for (const s of summarize(games).values()) {
     html += `<tr><td><button class="kidLink" data-kid="${esc(s.name)}">${dot(s.name)}${esc(s.name)}</button> <span class="age">(${s.age === 12 ? '12+' : s.age})</span></td><td>${s.games}</td><td>${Math.round(s.secs / 60)}</td><td>${s.kcal}</td><td>${s.best.toLocaleString()}</td><td>${pct(avg(s.acc))}</td><td>${pct(avg(s.timing))}</td><td>${s.hr.length ? `♥ ${s.hr[s.hr.length - 1]}` : '–'}</td></tr>`;
@@ -182,7 +199,8 @@ export function statsHtml() {
 }
 
 // Draws the stats into el and handles the period buttons, kid chips and bar taps.
-export function showStats(el) {
+export function showStats(el, fresh) {
+  if (fresh) { view.period = 'all'; view.kid = null; }
   el.innerHTML = statsHtml();
   el.onclick = e => {
     const b = e.target.closest('[data-period],[data-kid],.bar');

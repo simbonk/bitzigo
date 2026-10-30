@@ -247,3 +247,8 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 .bars + * { margin-top: 0; }
 .chart { padding-bottom: 20px; }
 .noData { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; opacity: .6; font-size: .9em; }
+.kidBars .bar .fill { width: min(70%, 36px); border-radius: 4px 4px 0 0; }
+.kidBars .bar em { font-style: normal; font-size: .75em; opacity: .85; margin-bottom: 2px; white-space: nowrap; }
+.kidBars .bar span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.kidBars .bar + .bar { margin-left: 2px; }
+#stats .charts + table.stats { margin-top: 10px; }

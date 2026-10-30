@@ -199,7 +199,7 @@ function toggleFullscreen() {
 if (standalone) $('#fs').classList.add('hidden');
 $('#fs').onclick = toggleFullscreen;
 $('#helpBtn').onclick = () => { $('#setup').classList.add('hidden'); $('#help').classList.remove('hidden'); };
-$('#statsBtn').onclick = () => { showStats($('#statsBody')); $('#setup').classList.add('hidden'); $('#stats').classList.remove('hidden'); };
+$('#statsBtn').onclick = () => { showStats($('#statsBody'), true); $('#setup').classList.add('hidden'); $('#stats').classList.remove('hidden'); };
 $('#statsX').onclick = $('#statsClose').onclick = () => { $('#stats').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
 $('#statsClear').onclick = () => { if (confirm('Clear all saved stats on this device?')) { clearStats(); showStats($('#statsBody')); } };
 $('#helpClose').onclick = () => { $('#help').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
