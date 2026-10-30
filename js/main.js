@@ -888,7 +888,7 @@ function updateLobby(t) {
     // Next round of a set: no hands-up needed, just everyone back in view
     // (or whoever is there after a while).
     const all = lobby.every(L => L.found);
-    if ((all && t - stateT > 3) || (t - stateT > 10 && lobby.some(L => L.found))) startReady();
+    if ((all && t - stateT > 1.2) || (t - stateT > 6 && lobby.some(L => L.found))) startReady();
     return;
   }
   if (allReady && t - stateT > 1) startReady();
