@@ -117,7 +117,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 
 /* Setup fits one screen: two columns, sizes follow the viewport height. */
 .panel.wide { width: min(940px, calc(100vw - 24px)); font-size: clamp(12px, 2.6vh, 17px); padding: clamp(10px, 2.4vh, 20px) clamp(12px, 2.4vw, 24px); }
-.wide .head { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.wide .head { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .wide h1 { font-size: clamp(24px, 6vh, 40px); margin: 0; }
 .wide .tag { margin: 0; }
 .wide .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; margin-top: clamp(4px, 1.5vh, 12px); }
@@ -153,3 +153,8 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 #nextRound.hidden { display: none; }
 #nextRound .small { display: inline-block; margin: 0; }
 body.between #heart, body.between .result .hr { display: none; }
+
+/* Setup help link, under the input row. */
+.link { background: none; border: none; color: #ffd23f; font: inherit; font-size: 0.9em; padding: 0 0 4px; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.wide .col { min-width: 0; }
+.wide #theme { flex-wrap: wrap; row-gap: 4px; }

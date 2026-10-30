@@ -48,7 +48,7 @@ function seg(id, attr, key, parse = v => v) {
       settings[key] = parse(b.dataset[attr]);
       el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
       if (key === 'count') renderPlayerRows();
-      if (key === 'mode') $('#camRow').classList.toggle('hidden', settings.mode !== 'camera');
+      if (key === 'theme') roundTheme = settings.theme; // the background shows the world straight away
       save();
     };
   });
@@ -72,13 +72,25 @@ function renderPlayerRows() {
 }
 
 seg('#count', 'n', 'count', Number);
-seg('#mode', 'mode', 'mode');
-seg('#facing', 'facing', 'facing');
+// One row for camera choice: front camera, back camera or keyboard.
+{
+  const el = $('#input');
+  const cur = () => settings.mode === 'keys' ? 'keys' : settings.facing;
+  const mark = () => el.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.input === cur()));
+  el.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.input === 'keys') settings.mode = 'keys';
+      else { settings.mode = 'camera'; settings.facing = b.dataset.input; }
+      mark();
+      save();
+    };
+  });
+  mark();
+}
 seg('#length', 'sec', 'seconds', Number);
 seg('#theme', 'theme', 'theme');
 seg('#intro', 'intro', 'intro', v => v === '1');
 seg('#course', 'course', 'course');
-$('#camRow').classList.toggle('hidden', settings.mode !== 'camera');
 renderPlayerRows();
 
 // Full screen: real fullscreen where the browser allows it (Chrome, iPad
