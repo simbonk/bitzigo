@@ -11,7 +11,7 @@ Everything runs in the browser. There is no server, no account, and the camera p
 3. On the setup screen pick the number of players, their names and ages, the workout length and the world (Forest, Snow, Desert, Space).
 4. In the lobby the kids stand wherever they like. The TV says "Found 3 of 4" until everyone is visible. Player 1 is whoever is furthest left on the TV. Pointing an arm out to the side changes character; both hands up (held for a second) means ready, and snaps a photo of their face for their score bubble.
 5. "Arms down, stand tall!" calibrates each kid's normal stance, then a short spoken intro shows each obstacle once before the workout starts.
-6. After the workout, the results screen shows each kid's score and an award. **Heart check** walks through each kid lying down with the phone flat on their chest for 30 seconds, then shows the highest score and the hardest-working heart.
+6. After the workout, the results screen shows each kid's score and an award. **Heart check** walks through each kid lying down with the phone flat on their chest for 15 seconds, then shows the highest score and the hardest-working heart.
 
 Parent controls: the buttons in the bottom-right corner (or keys) start the lobby early with whoever is there, hide or show the camera view, mute, and end the workout. `` ` `` shows debug numbers, `C` recalibrates.
 

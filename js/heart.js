@@ -2,8 +2,8 @@
 // chest; the phone's motion sensors pick up each heartbeat. The signal
 // processing is Sternum's (vendor/sternum/analysis.js, loaded as global DSP).
 
-const SETTLE = 8;   // seconds to lie down and get the phone in place
-const DUR = 30;     // seconds of recording
+const SETTLE = 3;   // seconds to get the phone in place (lie down first)
+const DUR = 12;     // seconds of recording: 15 seconds in all per kid
 
 // ---------- Keep the screen awake (Wake Lock, or a silent looping video on older iOS) ----------
 let sleepVideo = null;
@@ -125,7 +125,7 @@ export async function runHeartCheck(players, { cue, sfx }) {
         <ol class="hc-steps">
           <li>Lie down flat on your back.</li>
           <li>A grown-up puts the phone <b>flat on the middle of your chest</b>, screen up.</li>
-          <li>Stay <b>still as a statue</b> for 30 seconds. No talking!</li>
+          <li>Stay <b>still as a statue</b> for 15 seconds. No talking!</li>
         </ol>
         <button class="big" data-v="go">Start ${esc(p.name)}'s heart check</button>
         <button class="small" data-v="skip">Skip ${esc(p.name)}</button>
