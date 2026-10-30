@@ -30,7 +30,10 @@ export function stopCamera(video) {
 export async function createTracker(video, players = 4) {
   const fileset = await FilesetResolver.forVisionTasks(WASM_DIR);
   const tileCount = players <= 1 ? 1 : players + 1;
-  const tileW = players <= 1 ? 1 : Math.min(1, 1.8 / players);
+  // Tiles are never wider than 60% of the picture, so a small kid at the back
+  // still fills enough of a tile to be found (with 2 players the tiles used
+  // to nearly cover the whole picture, and a far-away kid could go missing).
+  const tileW = players <= 1 ? 1 : Math.min(1, 1.8 / Math.max(players, 3));
   const tiles = [];
   let delegate = 'GPU';
   for (let i = 0; i < tileCount; i++) {

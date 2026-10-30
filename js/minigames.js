@@ -9,7 +9,8 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (h, x, y) => Math.hypot(h.x - x, h.y - y);
 
-export const MINI = ['dance', 'kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain'];
+// (The dance-off is still here but out of the rotation: its moves were too fiddly.)
+export const MINI = ['kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain', 'fly', 'chops'];
 
 // Keyboard stand-in for hands: [up, left, down, right] held.
 export function keyHands(u, l, d, r) {
@@ -56,6 +57,8 @@ export function startMini(p, B) {
     case 'kaiju': Object.assign(B, { city: newCity(), copters: [], copterT: 1.5, slamUp: -9, dust: [] }); break;
     case 'bugs': Object.assign(B, { bugs: [], spawnT: 0.4, splats: [] }); break;
     case 'goalie': Object.assign(B, { shots: [], shotT: 1.0 }); break;
+    case 'fly': Object.assign(B, { flaps: 0, up: false, pan: 0, flapAt: -9 }); break;
+    case 'chops': Object.assign(B, { chops: 0, up: [false, false], upAt: [-9, -9], flash: 0 }); break;
     case 'climb': Object.assign(B, { height: 0, lastHand: -1, wasUp: [false, false], pan: 0, reachAt: -9 }); break;
     case 'tray': Object.assign(B, { x: 0, items: [], stack: [], dropT: 1.0, wobble: 0 }); break;
     case 'rain': Object.assign(B, { roof: false, tilt: 0, water: 0, want: Math.random() < 0.5 ? -1 : 1, buckets: { '-1': 0, '1': 0 }, pour: null, tip: null, poured: false }); break;
@@ -103,8 +106,37 @@ export function handsMini(p, B, hands, now) {
       }
     }
     // Slam: both hands up above the head, then both down low, quickly.
-    if (hs.length === 2 && hs.every(h => h.y < -1.85)) B.slamUp = now;
-    else if (hs.length === 2 && hs.every(h => h.y > -0.7) && now - B.slamUp < 0.8) { B.slamUp = -9; slam(p, B); }
+    // Any big downward smash counts: one or both hands from up high to down
+    // low. (Jumping also stomps; see updateMini.)
+    if (hs.some(h => h.y < -1.3)) B.slamUp = now;
+    else if (hs.some(h => h.y > -0.6) && now - B.slamUp < 1.0) { B.slamUp = -9; slam(p, B); }
+  } else if (B.type === 'fly') {
+    // Fly high: every flap (both arms up, then both down) lifts you higher.
+    if (hs.length === 2 && hs.every(h => h.y < -1.4)) B.up = true;
+    else if (B.up && hs.length === 2 && hs.every(h => h.y > -0.9)) {
+      B.up = false;
+      B.flaps++;
+      p.counts.fly++;
+      B.flapAt = now;
+      const ten = B.flaps % 10 === 0;
+      p.addPoints((ten ? 150 : 25) * p.breakMult, ten ? pick(['HIGHER!', 'SKY HIGH!', 'WHOOSH!']) : false);
+      p.onEvent?.('flap');
+    }
+  } else if (B.type === 'chops') {
+    // Karate frenzy: every hand that comes down hard from up high is a chop.
+    hands.forEach((h, i) => {
+      if (!h) return;
+      if (h.y < -1.4) { B.up[i] = true; B.upAt[i] = now; }
+      else if (B.up[i] && h.y > -0.6 && now - B.upAt[i] < 0.8) {
+        B.up[i] = false;
+        B.chops++;
+        p.counts.chop++;
+        B.flash = 0.15;
+        const ten = B.chops % 10 === 0;
+        p.addPoints((ten ? 150 : 20) * p.breakMult, ten ? pick(['HI-YAH!', 'KRAK!', 'NINJA!']) : false);
+        p.onEvent?.('chop');
+      }
+    });
   } else if (B.type === 'climb') {
     // Climb: reach one hand above the head, then the other.
     hands.forEach((h, i) => {
@@ -170,7 +202,7 @@ function slam(p, B) {
   b.down = true;
   p.counts.stomp++;
   p.shake = 0.5;
-  p.addPoints(120 * p.breakMult, pick(['STOMP!', 'CRASH!', 'KABOOM!']));
+  p.addPoints(60 * p.breakMult, pick(['STOMP!', 'CRASH!', 'KABOOM!']));
   for (let i = 0; i < 8; i++) B.dust.push({ x: b.x + rand(-0.4, 0.4), y: 1.4, vx: rand(-0.8, 0.8), vy: rand(-2.5, -1), t: 0 });
   p.onEvent?.('stomp');
 }
@@ -194,6 +226,8 @@ export function updateMini(p, B, dt) {
       break;
     }
     case 'kaiju': {
+      if (p.act?.jump && !B.jumped) { B.jumped = true; slam(p, B); }
+      if (!p.act?.jump) B.jumped = false;
       B.copterT -= dt;
       if (B.copterT <= 0 && B.copters.filter(c => !c.done).length < 2) {
         const side = Math.random() < 0.5 ? -1 : 1;
@@ -207,7 +241,7 @@ export function updateMini(p, B, dt) {
       B.dust = B.dust.filter(d => d.t < 0.9);
       if (B.city.every(b => b.down) && !B.refill) {
         B.refill = p.clock + 1.2;
-        p.addPoints(300 * p.breakMult, 'CITY STOMPED!');
+        p.addPoints(200 * p.breakMult, 'CITY STOMPED!');
         p.onEvent?.('strike');
       }
       if (B.refill && p.clock >= B.refill) { B.city = newCity(); B.refill = 0; }
@@ -250,6 +284,12 @@ export function updateMini(p, B, dt) {
       if (B.tip && (B.tip.t += dt) > 0.9) { B.buckets[B.tip.side] = 0; B.tip = null; }
       break;
     }
+    case 'fly':
+      B.pan += (B.flaps * 0.8 - B.pan) * Math.min(1, dt * 4);
+      break;
+    case 'chops':
+      B.flash = Math.max(0, B.flash - dt);
+      break;
     case 'climb':
       B.pan += (B.height - B.pan) * Math.min(1, dt * 6);
       break;

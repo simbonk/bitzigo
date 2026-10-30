@@ -358,14 +358,16 @@ const BREAK_INFO = {
   snowman: { title: 'SNOWBALL TIME!', sub: 'Throw snowballs to knock down the snowman!', clip: 'snowball_time' },
   fire: { title: 'FIRE TIME!', sub: 'Point your arm to spray the hose and put the fires out!', clip: 'fire_time' },
   dance: { title: 'DANCE OFF!', sub: 'Copy the dance move on the card, in time!', clip: 'dance_time' },
-  kaiju: { title: 'MONSTER TIME!', sub: 'Both arms up and SLAM the buildings! Swat the helicopters!', clip: 'kaiju_time' },
+  kaiju: { title: 'MONSTER TIME!', sub: 'Smash down with your arms, or jump to stomp the buildings!', clip: 'kaiju_time' },
   bugs: { title: 'BUG SPLAT!', sub: 'Slap the bugs wherever they pop up!', clip: 'bugs_time' },
   goalie: { title: 'GOALIE TIME!', sub: 'Block the balls with your hands!', clip: 'goalie_time' },
   climb: { title: 'BEANSTALK CLIMB!', sub: 'Reach up with one hand, then the other!', clip: 'climb_time' },
+  fly: { title: 'FLY HIGH!', sub: 'Flap your arms as fast as you can to fly up!', clip: 'fly_time' },
+  chops: { title: 'KARATE FRENZY!', sub: 'Chop, chop, chop as fast as you can!', clip: 'chops_time' },
   rain: { title: 'RAINSTORM!', sub: 'Hands over your head like a roof, then lean to pour into the bucket!', clip: 'rain_time' },
   tray: { title: 'PANCAKE TOWER!', sub: 'Move your hands to catch pancakes. Dodge the boots!', clip: 'tray_time' },
 };
-let throwPlan = [], throwEnd = 0;
+let throwPlan = [], throwEnd = 0, pumpEnd = 0;
 // Breaks come out of a shuffled bag, so every game is different and nothing
 // repeats until they've all had a turn.
 let breakBag = [];
@@ -383,6 +385,7 @@ function startPlay() {
   roundT = 0;
   throwPlan = planThrows(settings.seconds);
   throwEnd = 0;
+  pumpEnd = 0;
   if (together) {
     // Line every lane up on the same clock before the course starts.
     const c = Math.max(...players.map(p => p.clock));
@@ -401,6 +404,23 @@ function startPlay() {
   showBanner('GO!', settings.seconds ? `${Math.round(settings.seconds / 60)} minute workout` : 'Endless mode', 1.4);
   cue('go');
   sfx.beep(true);
+}
+
+// Running arms: each hand swung up past the shoulder and back down is a pump.
+function pumpArms(p) {
+  if (settings.mode !== 'camera') {
+    const [u, l, d, r] = KEYMAP[p.index];
+    p.hands = keyHandsFor('', keys.has(u), keys.has(l), keys.has(d), keys.has(r));
+  }
+  (p.hands || []).forEach((h, i) => {
+    if (!h) return;
+    if (h.y < -1.2) p.pumpUp[i] = true;
+    else if (p.pumpUp[i] && h.y > -0.5) {
+      p.pumpUp[i] = false;
+      p.addPoints(15 * p.breakMult, false);
+      p.onEvent?.('flap');
+    }
+  });
 }
 
 function endRound(manual = false) {
@@ -491,6 +511,7 @@ function pickAwards(ps) {
     ['Beanstalk Climber', p => p.counts.climb],
     ['Pancake Stacker', p => p.counts.stack],
     ['Rain Catcher', p => p.counts.rain],
+    ['Sky Flyer', p => p.counts.fly],
     ['Perfect Timing', p => p.tiers[0]],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
@@ -911,9 +932,14 @@ function updateGame(t, dt) {
       throwEnd = 0;
       players.forEach(p => p.stopThrowing());
       course?.resume(players[0].clock);
-      showBanner('Back to running!', '', 1.6);
+      showBanner('Back to running!', 'Pump your arms!', 2.4);
       cue('back');
+      // A few seconds of arm pumping to get going again, for points.
+      pumpEnd = roundT + 4;
+      players.forEach(p => { p.pumpUp = [false, false]; });
     }
+    if (pumpEnd && roundT >= pumpEnd) pumpEnd = 0;
+    if (pumpEnd) players.forEach(pumpArms);
     if (!throwEnd) callMoves(t);
     setIntensity(dur ? roundT / dur : Math.min(1, roundT / 180));
     if (dur) {

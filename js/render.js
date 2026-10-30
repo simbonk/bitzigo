@@ -95,7 +95,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
 
   // Bubble time: the view follows the kid up into the sky.
   const B = p.throwing?.type === 'bubbles' ? p.throwing : null;
-  const C = p.throwing?.type === 'climb' ? p.throwing : null;
+  const C = p.throwing?.type === 'climb' || p.throwing?.type === 'fly' ? p.throwing : null;
   let pan = 0;
   if (C) {
     // Beanstalk: the world slides down as the kid climbs.
@@ -211,7 +211,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     if (z <= 1.02) items.push({ z, draw: () => drawObstacle(ctx, L, o, z) });
   }
   const T = p.throwing;
-  if (C) items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
+  if (C?.type === 'climb') items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
   if (T && MINI.includes(T.type)) items.push({ z: 0.01, draw: () => drawMini(ctx, L, p, T, time) });
   else if (T && T.type !== 'bubbles') {
     items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
@@ -712,7 +712,7 @@ function drawAvatar(ctx, L, p, time, ch) {
     if (!(p.pts && p.base)) P = cartoonPose({ reach: T.falling || p.clock - T.flapAt < 0.15, jump: T.alt > 0.02 });
   }
   if (T?.type === 'fire' && !(p.pts && p.base)) P = cartoonPose(T.aim < -0.2 ? { left: true } : { right: true });
-  if (T?.type === 'climb') lift += T.pan * S * 0.9;
+  if (T?.type === 'climb' || T?.type === 'fly') lift += T.pan * S * 0.9;
   if (MINI.includes(T?.type) && !(p.pts && p.base) && p.hands) {
     // Keyboard: put the cartoon's hands where the keys say.
     P = cartoonPose({}, 0);
@@ -1022,9 +1022,9 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain' }[type] || 'throw';
+    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop' }[type] || 'throw';
     const B = p.throwing;
-    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SLAM & SWAT!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
+    const word = type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
     if (kind === 'dance' && B.move) {
       // Picture card of the move to copy, with a shrinking timer bar.
       const m = B.move, k = Math.min(1, m.t / m.dur);
