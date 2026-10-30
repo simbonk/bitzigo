@@ -1,6 +1,6 @@
 import { Player, Course, COLORS, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
-import { unlockAudio, sfx, hitSound, missSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 
@@ -210,7 +210,7 @@ function startReady() {
 
 function startTutorial() {
   setState('tutorial');
-  startMusic();
+  startMusic(songTurn);
   players.forEach(p => { p.tutorial = true; });
   tut = { step: -1, next: now() + 0.3 };
 }
@@ -243,6 +243,7 @@ function callMoves(t) {
   // Mark everything due now as called, so the cues don't fall behind.
   for (const p of players) for (const o of p.obstacles) if (!o.called && (o.arrive - p.clock) / o.travel < 0.5) o.called = true;
   lastCall = t;
+  approachSound(best.o.kind, best.o.side);
   cue(callFor(best.o));
 }
 
@@ -269,7 +270,7 @@ let slotGear = [];      // hats each player slot has collected
 
 function startPlay() {
   setState('play');
-  startMusic();
+  startMusic(songTurn);
   roundT = 0;
   throwPlan = planThrows(settings.seconds);
   throwEnd = 0;
@@ -292,6 +293,7 @@ function startPlay() {
 function endRound() {
   setState('end');
   stopMusic();
+  songTurn++;
   players.forEach(p => p.throwing && p.stopThrowing());
   sfx.finish();
   cue('great');
@@ -433,7 +435,8 @@ function poseX(pts, aspect) {
 
 // People in view, smoothed over brief detection drop-outs.
 let course = null;      // shared course in together mode
-let together = false;   // everyone on one course and one clock (from the countdown on)
+let together = false;
+let songTurn = 0;       // a different song each round   // everyone on one course and one clock (from the countdown on)
 let tracks = [];
 let trackWidth = 0.1;   // typical torso length, as a fraction of the picture width
 function updateTracks(t) {

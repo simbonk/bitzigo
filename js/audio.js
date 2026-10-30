@@ -61,15 +61,20 @@ function noise(dur, { vol = 0.3, from = 3000, to = 300, delay = 0, q = 1 } = {})
 
 export const sfx = {
   // Crate smash: crunchy noise and a bright pop.
-  smash() { noise(0.25, { vol: 0.6, from: 2500, to: 400 }); tone(660, 0.08, { vol: 0.15 }); tone(990, 0.1, { vol: 0.12, delay: 0.05 }); },
+  smash() {
+    tone(90, 0.18, { type: 'sine', vol: 0.6, slide: 0.5 });                 // thump
+    noise(0.3, { vol: 0.7, from: 2500, to: 300 });                          // crunch
+    [0.04, 0.09, 0.15, 0.22].forEach(d => noise(0.05, { vol: 0.35, from: 5000, to: 2500, q: 3, delay: d })); // splinters
+    tone(660, 0.08, { vol: 0.12, delay: 0.02 }); tone(990, 0.1, { vol: 0.1, delay: 0.07 });
+  },
   // Jump: springy boing.
-  jump() { tone(260, 0.25, { type: 'triangle', vol: 0.35, slide: 3 }); },
+  jump() { tone(260, 0.25, { type: 'triangle', vol: 0.35, slide: 3 }); noise(0.2, { vol: 0.25, from: 500, to: 2500, q: 2 }); tone(523, 0.08, { vol: 0.12, delay: 0.22 }); tone(784, 0.1, { vol: 0.12, delay: 0.28 }); },
   // Bird dodged: whoosh past plus a cross squawk.
   dodge() { noise(0.3, { vol: 0.5, from: 600, to: 3500, q: 2 }); tone(1400, 0.08, { type: 'sawtooth', vol: 0.1, slide: 0.6, delay: 0.12 }); tone(1300, 0.08, { type: 'sawtooth', vol: 0.1, slide: 0.6, delay: 0.22 }); },
   // Rope swing: a rising-falling slide whistle.
   swing() { tone(400, 0.35, { type: 'sine', vol: 0.3, slide: 3 }); tone(1200, 0.35, { type: 'sine', vol: 0.25, slide: 0.4, delay: 0.35 }); },
-  splash() { noise(0.45, { vol: 0.6, from: 1800, to: 200, q: 0.7 }); },
-  squawk() { tone(900, 0.12, { type: 'sawtooth', vol: 0.15, slide: 1.4 }); tone(800, 0.15, { type: 'sawtooth', vol: 0.15, slide: 0.7, delay: 0.12 }); },
+  splash() { tone(150, 0.2, { type: 'sine', vol: 0.4, slide: 0.4 }); noise(0.6, { vol: 0.7, from: 1800, to: 200, q: 0.7 }); [0.2, 0.32, 0.45].forEach(d => tone(900 + d * 1000, 0.05, { type: 'sine', vol: 0.15, slide: 1.6, delay: d })); },
+  squawk() { tone(900, 0.12, { type: 'sawtooth', vol: 0.2, slide: 1.4 }); tone(800, 0.18, { type: 'sawtooth', vol: 0.2, slide: 0.6, delay: 0.12 }); noise(0.25, { vol: 0.3, from: 1200, to: 3000, q: 2, delay: 0.05 }); [0, 0.07, 0.14].forEach(d => noise(0.04, { vol: 0.25, from: 600, to: 400, q: 1, delay: 0.3 + d })); },
   throw() { noise(0.18, { vol: 0.35, from: 900, to: 2600, q: 3 }); },
   knock() { noise(0.2, { vol: 0.5, from: 4000, to: 900, q: 2 }); tone(520, 0.06, { vol: 0.12 }); tone(390, 0.08, { vol: 0.12, delay: 0.07 }); },
   strike() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.12, { vol: 0.16, delay: i * 0.06 })); },
@@ -92,6 +97,20 @@ export const sfx = {
   finish() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.18, { vol: 0.18, delay: i * 0.12 })); },
 };
 
+// Played as each obstacle gets close, under the announcer's call.
+export function approachSound(kind, side) {
+  const pan = side === 'left' ? -0.8 : side === 'right' ? 0.8 : 0;
+  if (kind === 'bird') panned(pan, () => {
+    // Flapping wings and an angry caw.
+    for (let i = 0; i < 6; i++) noise(0.05, { vol: 0.3, from: 700, to: 300, q: 1, delay: i * 0.08 });
+    tone(1100, 0.14, { type: 'sawtooth', vol: 0.12, slide: 0.7, delay: 0.15 });
+    tone(1000, 0.16, { type: 'sawtooth', vol: 0.12, slide: 0.6, delay: 0.32 });
+  });
+  else if (kind === 'crate') panned(pan, () => tone(1400, 0.35, { type: 'sine', vol: 0.12, slide: 0.45 })); // incoming whistle
+  else if (kind === 'log') { tone(70, 0.25, { type: 'sine', vol: 0.4 }); tone(70, 0.25, { type: 'sine', vol: 0.4, delay: 0.3 }); } // stomp stomp
+  else if (kind === 'rope') { tone(220, 0.25, { type: 'triangle', vol: 0.12, slide: 1.3 }); tone(286, 0.25, { type: 'triangle', vol: 0.12, slide: 0.8, delay: 0.25 }); } // creaky rope
+}
+
 export function hitSound(kind) {
   if (kind === 'crate') sfx.smash();
   else if (kind === 'log') sfx.jump();
@@ -107,11 +126,19 @@ export function missSound(kind) {
 
 // ---------- Music: a bouncy chiptune loop, scheduled ahead on the audio clock ----------
 
-const music = { on: false, bpm: 128, step: 0, next: 0, timer: null, bus: null, intense: 0 };
-// Four-bar progression in A minor: Am F C G (root notes, MIDI).
-const ROOTS = [57, 53, 48, 55];
-const LEAD = [0, 7, 12, 7, 15, 12, 7, 12, 0, 7, 12, 14, 15, 14, 12, 7];
+const music = { on: false, bpm: 128, step: 0, next: 0, timer: null, bus: null, intense: 0, song: null };
 const hz = m => 440 * 2 ** ((m - 69) / 12);
+// Chord tones for the lead to pick from: major (M) or minor (m).
+const TONES = { M: [0, 4, 7, 12, 16, 19], m: [0, 3, 7, 12, 15, 19] };
+// Four-bar loops. roots: bass note per bar (MIDI); q: chord quality per bar;
+// lead: 16 steps of chord-tone indexes (-1 rests); beat: drum pattern.
+export const SONGS = [
+  { name: 'Forest Run', bpm: 128, roots: [57, 53, 48, 55], q: 'mMMM', lead: [0, 2, 3, 2, 4, 3, 2, 3, 0, 2, 3, 4, 5, 4, 3, 2], wave: 'square', beat: 'four' },
+  { name: 'Snow Dash', bpm: 140, roots: [48, 55, 57, 53], q: 'MMmM', lead: [3, -1, 2, 3, 4, -1, 3, 2, 1, 2, 3, -1, 4, 5, 4, 3], wave: 'triangle', beat: 'four' },
+  { name: 'Desert Zoom', bpm: 132, roots: [50, 46, 48, 45], q: 'mMMM', lead: [0, 1, 2, 1, 3, 2, 1, 2, 0, -1, 2, 3, 4, 3, 2, 1], wave: 'sawtooth', beat: 'break' },
+  { name: 'Space Hop', bpm: 120, roots: [52, 48, 55, 50], q: 'mMMM', lead: [0, 2, 4, 2, 0, 2, 4, 5, 3, 2, 4, 2, 3, 4, 5, 4], wave: 'square', beat: 'break' },
+  { name: 'Hyper Rush', bpm: 150, roots: [54, 50, 57, 52], q: 'mMMM', lead: [3, 3, 2, 3, 4, 3, 2, 1, 3, 3, 2, 3, 5, 4, 3, 2], wave: 'square', beat: 'four' },
+];
 
 function note(freq, t, dur, type, vol) {
   const o = ac.createOscillator(), g = ac.createGain();
@@ -151,25 +178,29 @@ function drum(t, kind) {
 }
 
 function schedule() {
-  const spb = 60 / (music.bpm + music.intense * 24) / 4; // seconds per 16th note
+  const song = music.song;
+  const spb = 60 / (song.bpm + music.intense * 24) / 4; // seconds per 16th note
   while (music.next < ac.currentTime + 0.15) {
     const s = music.step % 64, beat = s % 16, bar = Math.floor(s / 16);
-    const root = ROOTS[bar], t = music.next;
-    if (beat % 4 === 0) drum(t, 'kick');
+    const root = song.roots[bar], t = music.next;
+    if (song.beat === 'four' ? beat % 4 === 0 : beat === 0 || beat === 6 || beat === 10) drum(t, 'kick');
     if (beat === 4 || beat === 12) drum(t, 'snare');
     if (beat % 2 === 1) drum(t, 'hat');
     if (music.intense > 0.5 && beat % 4 === 2) drum(t, 'hat');
     // Octave-bouncing bass on every 8th note.
     if (beat % 2 === 0) note(hz(root - 12 + (beat % 4 === 2 ? 12 : 0)), t, spb * 1.8, 'square', 0.16);
     // Lead arpeggio, busier as the workout heats up.
-    if (beat % 2 === 0 || music.intense > 0.3) note(hz(root + 12 + LEAD[beat]), t, spb * 0.9, 'square', 0.06);
+    const li = song.lead[beat];
+    if (li >= 0 && (beat % 2 === 0 || music.intense > 0.3)) note(hz(root + 12 + TONES[song.q[bar]][li]), t, spb * 0.9, song.wave, song.wave === 'sawtooth' ? 0.04 : 0.06);
     music.next += spb;
     music.step++;
   }
 }
 
-export function startMusic() {
+export function startMusic(songIndex = 0) {
   if (!ac || music.on) return;
+  music.song = SONGS[((songIndex % SONGS.length) + SONGS.length) % SONGS.length];
+  music.step = 0;
   if (!music.bus) {
     music.bus = ac.createGain();
     music.bus.connect(master);
