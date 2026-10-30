@@ -478,7 +478,7 @@ function startTutorial() {
   setState('tutorial');
   startMusic(songTurn);
   players.forEach(p => { p.tutorial = true; });
-  tut = { step: -1, next: now() + 0.3 };
+  tut = { step: -1, next: players[0].clock + 0.3 };
 }
 
 const LESSONS = [
@@ -967,7 +967,9 @@ function loop() {
   requestAnimationFrame(loop);
   resize();
   const t = now();
-  const dt = Math.min(0.05, t - last);
+  // Capped so a stall doesn't jump the game, but loose enough that a slow
+  // computer (10 frames a second) still plays at real speed.
+  const dt = Math.min(0.1, t - last);
   last = t;
   if (state === 'heart') return; // the heart check draws its own screens
 
@@ -981,6 +983,8 @@ function loop() {
   else if (['ready', 'tutorial', 'play'].includes(state)) updateGame(t, dt);
 
   // A drawing bug must never freeze the whole screen: skip the bad frame.
+  // One player alone can play in portrait; two or a friend game need landscape.
+  document.body.classList.toggle('solo', settings.count === 1 && room.status === 'off');
   try { draw(t); } catch (e) { if (!loop.warned) { loop.warned = true; console.error(e); } }
 }
 
@@ -1161,14 +1165,18 @@ function updateGame(t, dt) {
   }
 
   if (state === 'tutorial') {
-    const tn = t;
-    if (tn >= tut.next) {
+    // Lessons run on the game clock, the same one the walls and crates move
+    // on. On a slow computer that clock runs behind real time, and timing the
+    // lessons by real time made the voice drift ahead of what was on screen.
+    const tn = players[0].clock;
+    if (tut.done && tn >= tut.next) startPlay();
+    else if (tn >= tut.next) {
       tut.step++;
       if (tut.step >= LESSONS.length) {
         showBanner("You've got it!", 'Now the real thing…', 2);
         cue('got_it');
-        tut.next = Infinity;
-        setTimeout(() => state === 'tutorial' && startPlay(), 2200);
+        tut.next = tn + 2.2;
+        tut.done = true;
       } else {
         const L = LESSONS[tut.step];
         showBanner(L.title, '', 4.2);
