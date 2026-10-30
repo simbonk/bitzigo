@@ -5,11 +5,12 @@
 // Poses use the same hand space as the other break games (torso units around
 // the hips, x to screen-right, y down, the head near y = -2).
 import { QUESTIONS } from './wyr-questions.js';
+import { preloadLine, say } from './audio.js';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
 export const WYR_SECS = 30;          // longest a Would You Rather break can run
-const INTRO = 2.8;                   // the title banner, before the first question
+const INTRO = 3.8;                   // the title banner and its announcer line, before the first question
 const ASK = 10;                      // most time to answer one question
 const REVEAL = 3.2;                  // showing who picked what
 const HOLD = 0.9;                    // hold a pose this long to pick that answer
@@ -68,7 +69,10 @@ export function startWyr(players, secs = WYR_SECS) {
   const count = Math.max(1, Math.min(3, Math.floor((secs - INTRO) / (ASK + REVEAL))));
   const S = { qs: pickQuestions(count), i: 0, phase: 'intro', t: 0, picks: [], lastPick: 0, done: false, colors: [] };
   players.forEach(p => { S.colors[p.index] = p.color; });
-  S.qs.forEach(q => q.c.forEach((_, k) => wyrImage(q.id, k)));
+  S.qs.forEach(q => {
+    q.c.forEach((_, k) => wyrImage(q.id, k));
+    preloadLine(`wyr${q.id}`, `voice/wyr/${String(q.id).padStart(3, '0')}.mp3`);
+  });
   players.forEach(p => { if (p.throwing) p.throwing.wyr = S; });
   return S;
 }
@@ -77,6 +81,7 @@ function ask(S, players) {
   S.phase = 'ask';
   S.t = 0;
   S.picks = [];
+  say(`wyr${S.qs[S.i].id}`); // the announcer reads the question out
   players.forEach(p => Object.assign(p.throwing || {}, { cand: -1, since: 0, hold: 0 }));
 }
 

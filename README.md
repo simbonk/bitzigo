@@ -40,9 +40,10 @@ The 100 questions live in `tools/wyr-questions.txt` (question, then each answer 
 python3 tools/wyr.py                                   # rebuild js/wyr-questions.js
 GEMINI_API_KEY=... python3 tools/wyr.py --images       # draw only the missing pictures (about 4 cents per question)
 GEMINI_API_KEY=... python3 tools/wyr.py --images --only 105 --force   # redraw one question
+GEMINI_API_KEY=... python3 tools/wyr.py --voice        # record any missing spoken questions (needs ffmpeg)
 ```
 
-A card shows its emoji until its picture exists.
+The announcer reads each question out (`voice/wyr/<id>.mp3`, about 10 KB each). A card shows its emoji until its picture exists.
 
 ## Hosting
 

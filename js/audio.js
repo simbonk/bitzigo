@@ -284,15 +284,24 @@ const VOICE_LINES = [
 const clips = {};
 let current = null;
 
+function loadClip(name, path = `voice/${name}.mp3`) {
+  if (!ac || clips[name]) return;
+  fetch(path)
+    .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+    // Older Safari only has the callback form of decodeAudioData.
+    .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
+    .then(b => { clips[name] = b; })
+    .catch(() => { /* falls back to the synthesised cue */ });
+}
+
 function loadVoices() {
-  for (const name of VOICE_LINES) {
-    fetch(`voice/${name}.mp3`)
-      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
-      // Older Safari only has the callback form of decodeAudioData.
-      .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
-      .then(b => { clips[name] = b; })
-      .catch(() => { /* falls back to the synthesised cue */ });
-  }
+  for (const name of VOICE_LINES) loadClip(name);
+}
+
+// Extra lines fetched only when needed, like the Would You Rather questions.
+export function preloadLine(name, path) { loadClip(name, path); }
+export function say(name) {
+  if (ac && !muted && clips[name]) playClip(name);
 }
 
 function playClip(name) {

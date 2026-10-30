@@ -4,13 +4,14 @@
   python3 tools/wyr.py                 # rebuild js/wyr-questions.js from tools/wyr-questions.txt
   python3 tools/wyr.py --images        # also draw any missing pictures (needs GEMINI_API_KEY)
   python3 tools/wyr.py --images --only 1,105 --force   # redraw just these questions
+  python3 tools/wyr.py --voice         # record any missing spoken questions (needs GEMINI_API_KEY and ffmpeg)
 
 One Gemini image per question holds all of its choices in a 2x2 grid. It is
 split into one picture per choice, shrunk to a 48px pixel-art sprite with a
 small palette and a see-through background, and saved as img/wyr/<id>-<n>.png.
 The game never calls Gemini; it only loads these files.
 """
-import argparse, base64, io, json, os, re, sys, time, urllib.request
+import argparse, base64, io, json, os, re, subprocess, sys, time, urllib.request
 from collections import deque
 from PIL import Image
 
@@ -18,6 +19,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'tools', 'wyr-questions.txt')
 OUT_JS = os.path.join(ROOT, 'js', 'wyr-questions.js')
 IMG_DIR = os.path.join(ROOT, 'img', 'wyr')
+VOICE_DIR = os.path.join(ROOT, 'voice', 'wyr')
+TTS_MODEL = os.environ.get('WYR_TTS_MODEL', 'gemini-2.5-flash-preview-tts')
 MODEL = os.environ.get('WYR_MODEL', 'gemini-2.5-flash-image')
 SIZE = 48      # sprite size in pixels
 COLORS = 20    # palette size per sprite
@@ -62,25 +65,42 @@ def prompt(q):
     return ' '.join(parts)
 
 
-def generate(q, key):
-    body = {
-        'contents': [{'parts': [{'text': prompt(q)}]}],
-        'generationConfig': {'responseModalities': ['IMAGE'], 'imageConfig': {'aspectRatio': '1:1'}},
-    }
-    url = f'https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent'
+def post(model, body, key, what):
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
     req = urllib.request.Request(url, json.dumps(body).encode(), {'Content-Type': 'application/json', 'x-goog-api-key': key})
-    for attempt in range(4):
+    for attempt in range(6):
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 res = json.load(r)
             for part in res['candidates'][0]['content']['parts']:
                 if 'inlineData' in part:
-                    return Image.open(io.BytesIO(base64.b64decode(part['inlineData']['data']))).convert('RGB')
-            raise RuntimeError('no image in reply')
+                    return base64.b64decode(part['inlineData']['data'])
+            raise RuntimeError('nothing in the reply')
         except Exception as e:  # rate limits and the odd empty reply: back off and retry
-            print(f'  retry {q["id"]}: {e}', file=sys.stderr)
+            print(f'  retry {what}: {e}', file=sys.stderr)
             time.sleep(4 * 2 ** attempt)
-    raise RuntimeError(f'gave up on question {q["id"]}')
+    raise RuntimeError(f'gave up on {what}')
+
+
+def speak(q, key, path):
+    """The announcer (the game's Puck voice) reads the question, trimmed and squeezed small."""
+    body = {
+        'contents': [{'parts': [{'text': 'Say like an excited, friendly cartoon game show announcer for kids: ' + q['q']}]}],
+        'generationConfig': {'responseModalities': ['AUDIO'], 'speechConfig': {'voiceConfig': {'prebuiltVoiceConfig': {'voiceName': 'Puck'}}}},
+    }
+    pcm = post(TTS_MODEL, body, key, f'voice {q["id"]}')
+    trim = 'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse'
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', '-',
+                    '-af', trim + ',loudnorm=I=-15:TP=-1.5,afade=t=in:d=0.01', '-ar', '24000', '-ac', '1', '-b:a', '32k', path],
+                   input=pcm, check=True)
+
+
+def generate(q, key):
+    body = {
+        'contents': [{'parts': [{'text': prompt(q)}]}],
+        'generationConfig': {'responseModalities': ['IMAGE'], 'imageConfig': {'aspectRatio': '1:1'}},
+    }
+    return Image.open(io.BytesIO(post(MODEL, body, key, f'question {q["id"]}'))).convert('RGB')
 
 
 def whiteness(img, axis, at):
@@ -164,6 +184,7 @@ def save(img, path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--images', action='store_true')
+    ap.add_argument('--voice', action='store_true')
     ap.add_argument('--only', default='')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--raw', default='', help='folder to keep the full-size grids in, for checking')
@@ -172,12 +193,25 @@ def main():
     qs = load()
     write_js(qs)
     print(f'{len(qs)} questions, {sum(len(q["c"]) for q in qs)} choices -> {os.path.relpath(OUT_JS, ROOT)}')
-    if not a.images:
+    if not a.images and not a.voice:
         return
     key = os.environ.get('GEMINI_API_KEY')
-    if not key and not a.resplit:
+    if not key and (a.voice or not a.resplit):
         sys.exit('Set GEMINI_API_KEY first.')
     only = {int(x) for x in a.only.split(',') if x}
+    if a.voice:
+        os.makedirs(VOICE_DIR, exist_ok=True)
+        said = 0
+        for q in qs:
+            path = os.path.join(VOICE_DIR, f'{q["id"]:03d}.mp3')
+            if (only and q['id'] not in only) or (os.path.exists(path) and not a.force):
+                continue
+            speak(q, key, path)
+            said += 1
+            print(f'  said {q["id"]:03d}: {q["q"]}')
+        print(f'recorded {said} questions')
+    if not a.images:
+        return
     os.makedirs(IMG_DIR, exist_ok=True)
     made = 0
     for q in qs:
