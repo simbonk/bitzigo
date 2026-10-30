@@ -16,7 +16,7 @@ export function unlockAudio() {
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
     loadVoices();
   }
-  if (ac.state === 'suspended') ac.resume();
+  if (ac.state !== 'running' && ac.state !== 'closed') ac.resume().catch(() => { });
 }
 
 export function setMuted(m) {

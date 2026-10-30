@@ -860,8 +860,21 @@ function loop() {
   if (state === 'lobby') updateLobby(t);
   else if (['ready', 'tutorial', 'play'].includes(state)) updateGame(t, dt);
 
-  draw(t);
+  // A drawing bug must never freeze the whole screen: skip the bad frame.
+  try { draw(t); } catch (e) { if (!loop.warned) { loop.warned = true; console.error(e); } }
 }
+
+// After a phone call or switching apps, iOS pauses sound and the camera.
+// Wake them both up as soon as the page is back (or on the next tap).
+function wakeUp() {
+  if (document.hidden) return;
+  unlockAudio();
+  if (settings.mode === 'camera' && video.srcObject && video.paused) video.play().catch(() => { });
+}
+document.addEventListener('visibilitychange', wakeUp);
+addEventListener('pageshow', wakeUp);
+addEventListener('focus', wakeUp);
+addEventListener('pointerdown', wakeUp);
 
 // If the picture stops moving, nudge the video; if that doesn't help,
 // restart the camera stream (the tracker stays).
