@@ -22,6 +22,7 @@ export const room = {
   friends: new Map(), // device id → that device's latest update (with .at, when it arrived)
   heard: 0,        // when we last heard from anyone (seconds)
   devices: 1,      // devices in the room, counting this one
+  want: 2,         // how many devices the code maker said will play
 };
 export const MAX_DEVICES = 4;
 let peer = null;
@@ -95,7 +96,7 @@ export async function host() {
       setStatus('waiting');
       peer.on('connection', c => {
         // Up to 4 devices per room: a fifth gets turned away.
-        if (links.size >= MAX_DEVICES - 1) { c.on('open', () => { c.send({ type: 'full' }); setTimeout(() => c.close(), 500); }); return; }
+        if (links.size >= room.want - 1) { c.on('open', () => { c.send({ type: 'full' }); setTimeout(() => c.close(), 500); }); return; }
         use(c);
       });
       return code;
@@ -153,7 +154,7 @@ function use(c) {
   c.on('data', msg => {
     if (!msg || typeof msg !== 'object' || !links.has(c.peer)) return;
     room.heard = now();
-    if (msg.type === 'full') { setStatus('error', 'That room already has 4 devices in it.'); return; }
+    if (msg.type === 'full') { setStatus('error', 'That game is already full.'); return; }
     if (msg.type === 'tick') {
       // The code maker passes each guest's update on to the other guests.
       const from = msg.from || c.peer;
@@ -162,6 +163,7 @@ function use(c) {
     }
     if (msg.type === 'roster' && room.role === 'guest') {
       room.devices = msg.ids.length;
+      room.want = msg.want || room.want;
       for (const id of room.friends.keys()) if (!msg.ids.includes(id)) room.friends.delete(id);
       tell({ type: 'status' });
     }
@@ -187,8 +189,15 @@ function use(c) {
 function sendRoster() {
   const ids = [peer.id, ...links.keys()];
   room.devices = ids.length;
-  send({ type: 'roster', ids });
+  send({ type: 'roster', ids, want: room.want });
   tell({ type: 'status' });
+}
+
+// The code maker picks how many devices will play: the game waits for them all.
+export function setWant(n) {
+  room.want = Math.max(2, Math.min(MAX_DEVICES, n));
+  if (room.role === 'host' && peer) sendRoster();
+  else tell({ type: 'status' });
 }
 
 export function send(msg) {
@@ -201,7 +210,7 @@ export function leave() {
   peer?.destroy();
   peer = null;
   room.friends.clear();
-  Object.assign(room, { role: null, code: null, devices: 1 });
+  Object.assign(room, { role: null, code: null, devices: 1, want: 2 });
   setStatus('off');
 }
 
