@@ -179,3 +179,6 @@ table.stats .age { opacity: .6; }
 select.pick { background: #0d1430; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: 0.4em 0.6em; font: inherit; font-size: 1em; font-weight: bold; }
 
 button.dot { padding: 0; cursor: pointer; border: 3px solid #fff; }
+
+/* No double-tap zoom when kids tap buttons quickly (iPhone and iPad). */
+html, body, button, select, input, .panel { touch-action: manipulation; }
