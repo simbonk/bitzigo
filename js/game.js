@@ -2,6 +2,8 @@
 import { MINI, startMini, updateMini, handsMini } from './minigames.js';
 
 export const COLORS = ['#ff5a5f', '#3fa7ff', '#3ddc84', '#b57bff'];
+// Colours a kid can pick by tapping the dot beside their name.
+export const PALETTE = ['#ff5a5f', '#ff9f1c', '#ffd23f', '#3ddc84', '#2ec4b6', '#3fa7ff', '#5b6cff', '#b57bff', '#ff6fb5', '#8d6e63'];
 export const MAX_SKILL = 10;
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -87,11 +89,11 @@ export function features(pts) {
 const ACTS = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'throw'];
 
 export class Player {
-  constructor(index, { name, age }) {
+  constructor(index, { name, age, color }) {
     this.index = index;
     this.name = name || `Player ${index + 1}`;
     this.age = age;
-    this.color = COLORS[index];
+    this.color = color || COLORS[index];
     this.gear = {}; // kept between rounds
     this.reset();
   }

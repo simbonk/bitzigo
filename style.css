@@ -127,7 +127,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .wide .seg button { padding: 0.4em 0.7em; font-size: 1em; border-radius: 10px; }
 .wide .player { margin: clamp(3px, 0.9vh, 6px) 0; }
 .wide .player input, .wide .player select { padding: 0.4em 0.6em; font-size: 1em; }
-.wide .player .dot { width: 1.3em; height: 1.3em; }
+.wide .player .dot { width: 1.6em; height: 1.6em; }
 .wide .actions { display: flex; gap: 10px; align-items: center; margin-top: clamp(6px, 1.6vh, 14px); }
 .wide .actions .big { flex: 1; margin: 0; padding: 0.45em; font-size: clamp(18px, 4.5vh, 26px); }
 .wide .actions .small { margin: 0; white-space: nowrap; }
@@ -159,6 +159,23 @@ body.between #heart, body.between .result .hr { display: none; }
 .wide .col { min-width: 0; }
 .wide #theme { flex-wrap: wrap; row-gap: 4px; }
 .wide .head { position: relative; }
-.setupBtn { position: absolute; top: 0; right: 0; background: #24305a; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: 0.35em 0.8em; font: inherit; font-weight: bold; cursor: pointer; }
+.setupBtn { background: #24305a; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: 0.35em 0.8em; font: inherit; font-weight: bold; cursor: pointer; }
 /* Keyboard mode is for testing only: shown with ?debug or ?keys in the address. */
 body:not(.testing) .testOnly { display: none; }
+
+.topBtns { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
+.topBtns .setupBtn { position: static; }
+#stats { width: min(860px, calc(100vw - 24px)); font-size: clamp(12px, 2.4vh, 15px); }
+#stats h2 { margin: 0; color: #ffd23f; }
+#stats h3 { margin: 14px 0 4px; color: #ffd23f; font-size: 1.05em; }
+#stats .note { margin: 2px 0 10px; opacity: .75; }
+#stats .empty { opacity: .8; }
+table.stats { width: 100%; border-collapse: collapse; }
+table.stats th { text-align: left; font-size: .85em; opacity: .7; padding: 4px 6px; border-bottom: 1px solid #3a4a80; }
+table.stats td { padding: 4px 6px; }
+table.stats tr.first td { border-top: 1px solid #2a3766; }
+table.stats .age { opacity: .6; }
+
+select.pick { background: #0d1430; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: 0.4em 0.6em; font: inherit; font-size: 1em; font-weight: bold; }
+
+button.dot { padding: 0; cursor: pointer; border: 3px solid #fff; }

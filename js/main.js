@@ -1,9 +1,10 @@
-import { Player, Course, COLORS, BREAKS, KEYMAP, features, keyActions } from './game.js';
+import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
+import { saveGame, addHeartRates, clearStats, statsHtml } from './stats.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#stage');
@@ -13,7 +14,7 @@ const lctx = low.getContext('2d');
 const video = $('#cam');
 
 const settings = {
-  count: 4, mode: 'camera', facing: 'user', seconds: 120, theme: 'forest', intro: true, course: 'together',
+  count: 4, mode: 'camera', facing: 'user', seconds: 120, theme: 'random', intro: true, course: 'together',
   players: [
     { name: 'Player 1', age: 10 }, { name: 'Player 2', age: 8 },
     { name: 'Player 3', age: 6 }, { name: 'Player 4', age: 4 },
@@ -52,11 +53,12 @@ function seg(id, attr, key, parse = v => v) {
       settings[key] = parse(b.dataset[attr]);
       el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
       if (key === 'count') renderPlayerRows();
-      if (key === 'theme') roundTheme = settings.theme; // the background shows the world straight away
       save();
     };
   });
 }
+
+const colorOf = i => settings.players[i]?.color || COLORS[i];
 
 function renderPlayerRows() {
   const box = $('#players');
@@ -65,8 +67,17 @@ function renderPlayerRows() {
     const p = settings.players[i];
     const row = document.createElement('div');
     row.className = 'player';
-    const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>${a === 12 ? 'adult' : `age ${a}`}</option>`).join('');
-    row.innerHTML = `<span class="dot" style="background:${COLORS[i]}"></span><input maxlength="12" value=""><select>${ages}</select>`;
+    const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>${a === 12 ? 'age 12+' : `age ${a}`}</option>`).join('');
+    row.innerHTML = `<button class="dot" title="Tap to change colour" style="background:${colorOf(i)}"></button><input maxlength="12" value=""><select>${ages}</select>`;
+    // Tap the dot for the next colour nobody else has.
+    row.querySelector('.dot').onclick = e => {
+      const taken = settings.players.slice(0, settings.count).map((q, j) => j !== i && colorOf(j));
+      let k = PALETTE.indexOf(colorOf(i));
+      do { k = (k + 1) % PALETTE.length; } while (taken.includes(PALETTE[k]));
+      p.color = PALETTE[k];
+      e.target.style.background = p.color;
+      save();
+    };
     const input = row.querySelector('input');
     input.value = p.name;
     input.oninput = () => { p.name = input.value; save(); };
@@ -92,7 +103,13 @@ seg('#count', 'n', 'count', Number);
   mark();
 }
 seg('#length', 'sec', 'seconds', Number);
-seg('#theme', 'theme', 'theme');
+// World picker: a drop-down, with Surprise me (a random world) as the default.
+{
+  const el = $('#theme');
+  el.innerHTML = `<option value="random">🎲 Surprise me</option>` + Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('');
+  el.value = THEMES[settings.theme] ? settings.theme : 'random';
+  el.onchange = () => { settings.theme = el.value; roundTheme = pickTheme(); save(); };
+}
 seg('#intro', 'intro', 'intro', v => v === '1');
 seg('#course', 'course', 'course');
 renderPlayerRows();
@@ -119,6 +136,9 @@ function toggleFullscreen() {
 if (standalone) $('#fs').classList.add('hidden');
 $('#fs').onclick = toggleFullscreen;
 $('#helpBtn').onclick = () => { $('#setup').classList.add('hidden'); $('#help').classList.remove('hidden'); };
+$('#statsBtn').onclick = () => { $('#statsBody').innerHTML = statsHtml(); $('#setup').classList.add('hidden'); $('#stats').classList.remove('hidden'); };
+$('#statsClose').onclick = () => { $('#stats').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
+$('#statsClear').onclick = () => { if (confirm('Clear all saved stats on this device?')) { clearStats(); $('#statsBody').innerHTML = statsHtml(); } };
 $('#helpClose').onclick = () => { $('#help').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
 $('#btnFs').onclick = toggleFullscreen;
 if (standalone || !canFs) $('#btnFs').classList.add('hidden');
@@ -221,13 +241,18 @@ function enterLobby(auto = false) {
 // A short timed game rolls straight into another round with a new theme,
 // keeping everyone's characters, until SET_ROUNDS rounds have been played.
 const SET_ROUNDS = 5, NEXT_SECS = 15;
-let setRound = 1, roundTheme = settings.theme, setThemes = [], nextTimer = null;
+let setRound = 1, roundTheme = pickTheme(), setThemes = [], nextTimer = null;
 let setScores = [];     // running total for each player slot across the set
 const total = p => setScores[p.index] ?? p.score;
 const themeNow = () => THEMES[roundTheme] || THEMES.forest;
+function pickTheme() {
+  if (THEMES[settings.theme]) return settings.theme;
+  const keys = Object.keys(THEMES);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
 function newSet() {
   setRound = 1;
-  roundTheme = settings.theme;
+  roundTheme = pickTheme();
   setThemes = [roundTheme];
   setScores = [];
 }
@@ -384,6 +409,7 @@ function endRound(manual = false) {
   players.forEach(p => p.throwing && p.stopThrowing());
   sfx.finish();
   cue('great');
+  if (roundT > 10) saveGame(players, { theme: themeNow().name, seconds: roundT });
   players.forEach(p => { slotGear[p.index] = { ...p.gear }; setScores[p.index] = (setScores[p.index] || 0) + p.score; });
   if (!manual && settings.seconds && setRound < SET_ROUNDS) scheduleNext();
   showResults();
@@ -490,6 +516,7 @@ $('#heart').onclick = async () => {
   setState('heart');
   document.body.classList.add('heart-mode');
   await runHeartCheck(players, { cue, sfx });
+  addHeartRates(players);
   document.body.classList.remove('heart-mode');
   setState('end');
   showResults();
@@ -990,7 +1017,7 @@ function drawAttract(t) {
   ctx.fillRect(0, 0, W, H);
 }
 const attractPlayers = [0, 1, 2, 3].map(i => ({
-  index: i, color: COLORS[i], skill: 3, clock: 0, obstacles: [], fx: [], act: {}, lift: 0, bonk: 0,
+  index: i, color: colorOf(i), skill: 3, clock: 0, obstacles: [], fx: [], act: {}, lift: 0, bonk: 0,
 }));
 
 function drawLobby(t) {

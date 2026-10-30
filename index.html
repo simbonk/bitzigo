@@ -20,7 +20,7 @@
 
 <section id="setup" class="panel wide">
   <header class="head">
-    <button id="helpBtn" class="setupBtn">📷 Setup</button>
+    <div class="topBtns"><button id="statsBtn" class="setupBtn">📊 Stats</button><button id="helpBtn" class="setupBtn">📷 Setup</button></div>
     <h1>Bitzigo</h1>
     <p class="tag">Jump, punch, dodge and swing. Up to 4 players, standing in place.</p>
   </header>
@@ -50,9 +50,7 @@
       </div>
       <div class="row">
         <span class="label">World</span>
-        <div class="seg" id="theme">
-          <button data-theme="forest" class="on">Forest</button><button data-theme="snow">Snow</button><button data-theme="desert">Desert</button><button data-theme="space">Space</button><button data-theme="beach">Beach</button><button data-theme="candy">Candy</button><button data-theme="spooky">Spooky</button>
-        </div>
+        <select id="theme" class="pick"></select>
       </div>
       <div class="row">
         <span class="label">Course</span>
@@ -75,6 +73,14 @@
   </div>
   <p id="fsTip" class="tip hidden">This browser can't go full screen from a web page. Tap <b>Share</b> then <b>Add to Home Screen</b>, and open Bitzigo from its icon: it runs full screen with no browser bars.</p>
   <p id="status" class="status"></p>
+</section>
+
+<section id="stats" class="panel hidden">
+  <h2>Stats</h2>
+  <p class="note">Saved only in this browser on this device. Nothing is uploaded anywhere.</p>
+  <div id="statsBody"></div>
+  <button id="statsClose" class="big">Done</button>
+  <button id="statsClear" class="small">Clear all stats</button>
 </section>
 
 <section id="help" class="panel hidden">
