@@ -8,7 +8,7 @@ Everything runs in the browser. There is no account, and the camera picture neve
 
 1. Open the site on an iPhone (Safari) or a laptop and mirror the screen to the TV (iPhone: Control Centre, Screen Mirroring).
 2. Prop the device up at waist height, 3 to 4 metres back, so every kid is in the picture from head to knees.
-3. On the **Play here** tab of the setup screen pick the number of players and their names and ages. The workout length, world (Forest, Snow, Desert, Space), camera, course and tutorial have defaults and live on the **Extra settings** tab.
+3. On the **Play here** tab of the setup screen pick the number of players and their names and ages. The workout length, world (Forest, Snow, Desert, Space and more, picked with the arrows), camera, course and tutorial have defaults and live on the **Extra settings** tab.
 4. In the lobby the kids stand wherever they like. The TV says "Found 3 of 4" until everyone is visible. Player 1 is whoever is furthest left on the TV. Pointing an arm out to the side changes character; both hands up (held for a second) means ready, and snaps a photo of their face for their score bubble.
 5. "Arms down, stand tall!" calibrates each kid's normal stance, then a short spoken intro shows each obstacle once before the workout starts.
 6. After the workout, the results screen shows each kid's score and an award. **Heart check** walks through each kid lying down with the phone flat on their chest for 15 seconds, then shows the highest score and the hardest-working heart.
