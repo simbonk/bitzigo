@@ -46,7 +46,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - `js/game.js`: move detection relative to each kid's calibrated standing pose, obstacles, scoring and the adaptive difficulty.
 - `js/render.js`: the world is drawn on a small canvas and scaled up without smoothing for the chunky pixel look; text and the HUD are drawn on top at full resolution.
 - `js/heart.js`: the heart check. Signal processing comes from [Sternum](https://github.com/simbonk/sternum) (`vendor/sternum/analysis.js`).
-- `js/audio.js`: synthesised sound effects, a chiptune music loop that speeds up as the workout goes on, and an announcer that calls each move (short MP3 clips in `voice/`, made offline with espeak-ng; lines in `voice/lines.txt`). On separate courses it would talk over itself, so there each move gets a synthesised sound cue instead.
+- `js/audio.js`: synthesised sound effects, a chiptune music loop that speeds up as the workout goes on, and an announcer that calls each move (short MP3 clips in `voice/`, recorded once with Gemini text-to-speech, voice "Puck"; lines in `voice/lines.txt`). On separate courses it would talk over itself, so there each move gets a synthesised sound cue instead.
 
 The MediaPipe runtime (Apache-2.0) and pose model are vendored in `vendor/` and `models/` so the game doesn't depend on a CDN.
 
