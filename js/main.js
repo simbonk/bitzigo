@@ -1093,6 +1093,13 @@ function shareTick(t) {
       name: p.name, color: p.color, char: (p.character || CHARACTERS[slotChar[p.index]]).id,
       score: p.score, total: total(p), streak: p.streak, skill: Math.round(p.skill * 100) / 100, lift: Math.round(p.lift * 100) / 100,
       act: Object.fromEntries(Object.entries(p.act).filter(([, v]) => v === true)), gear: p.gear,
+      // What they're facing, so the friends see it in their lane: obstacles
+      // coming up, the break game (cans, pancakes, bubbles…) and score pops.
+      ...(busy && {
+        clock: p.clock, run: p.run, paceSkill: p.paceSkill, swing: p.swing, bonk: p.bonk, shake: p.shake, spin: p.spin,
+        hands: p.hands, throwing: p.throwing, fx: p.fx,
+        obstacles: p.obstacles.filter(o => o.arrive - p.clock > -1),
+      }),
     })),
   });
 }
@@ -1276,9 +1283,10 @@ function draw(t) {
   drawBanner(t);
 }
 
-// The friends' kids get their own lanes after ours: the road scrolls and
-// their character does whatever move their kid is doing right now. Their
-// obstacles aren't sent, so the lane has none.
+// The friends' kids get their own lanes after ours, showing what their kid
+// is doing and facing right now: their moves, obstacles, break game and
+// score pops. Their clock runs on from the last update, so things keep
+// moving smoothly between updates.
 let friendKids = [];
 function friendLanes(t) {
   const f = room.friend;
@@ -1288,10 +1296,14 @@ function friendLanes(t) {
     const q = friendKids[i] || { obstacles: [], fx: [], bonk: 0, bump: 0, throwing: null, misses: 0, hits: 0 };
     if (q.score != null && k.score > q.score) q.bump = 0.5; // the score bubble jiggles, as for our kids
     q.bump = Math.max(0, (q.bump || 0) - 1 / 60);
+    const ahead = Math.min(0.5, Math.max(0, t - room.heard));
     return Object.assign(q, {
       index: players.length + i, name: `🤝 ${k.name}`, color: k.color || '#8fd3ff', character: CHARACTERS[charIndex(k.char)],
       score: k.score || 0, streak: k.streak || 0, skill: k.skill ?? 2, act: k.act || {}, lift: k.lift || 0,
-      gear: k.gear || {}, clock: t, level: Math.floor(k.skill ?? 2) + 1,
+      gear: k.gear || {}, level: Math.floor(k.skill ?? 2) + 1, charged: (k.streak || 0) >= 8,
+      clock: k.clock != null ? k.clock + ahead : t, run: k.run != null ? k.run + (k.throwing ? 0 : ahead) : undefined,
+      paceSkill: k.paceSkill ?? null, swing: k.swing || 0, bonk: k.bonk || 0, shake: k.shake || 0, spin: k.spin || 0,
+      hands: k.hands || null, throwing: k.throwing || null, fx: k.fx || [], obstacles: k.obstacles || [],
     });
   });
   return friendKids;
