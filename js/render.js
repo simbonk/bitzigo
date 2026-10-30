@@ -1505,24 +1505,25 @@ function drawMini(ctx, L, p, T, time) {
 const WYR_TOP = 0.31;   // cards start below the question bar, as a share of the screen height
 
 // A stick figure showing the pose that picks a card: h tall, top at y.
+// Each arm is [elbow, hand], in head-heights from the neck.
 const POSE_ARMS = {
-  left: [[-0.55, -0.55], [0.3, 0.35]], right: [[-0.3, 0.35], [0.55, -0.55]],
-  up: [[-0.4, -0.6], [0.4, -0.6]], clap: [[-0.05, 0.05], [0.05, 0.05]],
+  left: [[[-0.45, -0.45], [-0.85, -1.0]], [[0.3, 0.45], [0.35, 0.95]]],
+  right: [[[-0.3, 0.45], [-0.35, 0.95]], [[0.45, -0.45], [0.85, -1.0]]],
+  up: [[[-0.35, -0.55], [-0.5, -1.1]], [[0.35, -0.55], [0.5, -1.1]]],
+  clap: [[[-0.6, 0.3], [-0.05, 0.15]], [[0.6, 0.3], [0.05, 0.15]]],
 };
 function drawPoseIcon(ctx, cx, y, h, pose) {
-  const u = h / 2.6, neck = y + u * 0.8, hip = y + u * 1.8;
-  const [a, b] = POSE_ARMS[pose];
-  const elbow = (hx, hy) => [cx + hx * u * 0.6 + (pose === 'clap' ? Math.sign(hx || -1) * u * 0.35 : 0), neck + u * 0.15 + (hy * u * 0.5)];
+  const u = h / 3.4, neck = y + u * 1.9, hip = neck + u * 1.0;
+  const at = ([dx, dy]) => [cx + dx * u, neck + dy * u];
   const limbs = [
-    [[cx, neck + u * 0.1], elbow(a[0] || -0.01, a[1]), [cx + a[0] * u, neck + u * 0.15 + a[1] * u]],
-    [[cx, neck + u * 0.1], elbow(b[0] || 0.01, b[1]), [cx + b[0] * u, neck + u * 0.15 + b[1] * u]],
-    [[cx, neck], [cx, hip]],
-    [[cx, hip], [cx - u * 0.35, hip + u * 0.8]],
-    [[cx, hip], [cx + u * 0.35, hip + u * 0.8]],
+    ...POSE_ARMS[pose].map(([e, w]) => [[cx, neck], at(e), at(w)]),
+    [[cx, neck - u * 0.2], [cx, hip]],
+    [[cx, hip], [cx - u * 0.35, hip + u * 1.1]],
+    [[cx, hip], [cx + u * 0.35, hip + u * 1.1]],
   ];
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  for (const [w, col] of [[u * 0.42, '#1b2340'], [u * 0.22, '#ffffff']]) {
+  for (const [w, col] of [[u * 0.45, '#1b2340'], [u * 0.25, '#ffffff']]) {
     ctx.strokeStyle = col;
     ctx.lineWidth = w;
     for (const pts of limbs) {
@@ -1532,7 +1533,7 @@ function drawPoseIcon(ctx, cx, y, h, pose) {
     }
     ctx.fillStyle = col;
     ctx.beginPath();
-    ctx.arc(cx, y + u * 0.4, u * 0.35 + (col === '#1b2340' ? u * 0.1 : 0), 0, Math.PI * 2);
+    ctx.arc(cx, neck - u * 0.55, u * 0.38 + (col === '#1b2340' ? u * 0.1 : 0), 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -1619,7 +1620,7 @@ function drawWyrCards(ctx, L, p, B) {
     }
     ctx.restore();
     // The pose that picks this card, under it.
-    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + cw * 0.08, Math.min(cw * 0.55, L.h * 0.08), poses[k]);
+    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + cw * 0.04, Math.min(cw * 0.85, L.h * 0.12), poses[k]);
   }
 }
 
