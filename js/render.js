@@ -3,6 +3,7 @@
 // drawn on top at full resolution so they stay crisp and readable.
 import { LM, tuning } from './game.js';
 import { MINI, DANCE, CITY_X } from './minigames.js';
+import { posesFor, wyrImage, askLeft } from './wyr.js';
 
 // How high (in lane heights) the sky view pans when a kid flies all the way up.
 const SKY_PAN = 0.38;
@@ -1017,7 +1018,9 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     .map(o => ({ o, z: (o.arrive - p.clock) / o.travel }))
     .filter(e => !e.o.result && KIND_INFO[e.o.kind] && e.z > -0.05 && e.z < 0.8)
     .sort((a, b) => a.z - b.z)[0];
-  if (p.throwing) {
+  if (p.throwing?.type === 'wyr') {
+    drawWyrCards(ctx, L, p, p.throwing);
+  } else if (p.throwing) {
     const size = clamp(L.w * 0.1, 22, 64);
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
@@ -1327,6 +1330,7 @@ function drawVine(ctx, L, C, pan) {
 
 function drawMini(ctx, L, p, T, time) {
   const S = L.S;
+  if (T.type === 'wyr') return; // all on the HUD: see drawWyrCards
   if (T.type === 'bugs') {
     for (const b of T.bugs) {
       const { x, y } = bodyXY(L, b.x, b.y);
@@ -1493,5 +1497,149 @@ function drawMini(ctx, L, p, T, time) {
       }
       ctx.globalAlpha = 1;
     }
+  }
+}
+
+// ---------- Would You Rather ----------
+
+const WYR_TOP = 0.31;   // cards start below the question bar, as a share of the screen height
+
+// A stick figure showing the pose that picks a card: h tall, top at y.
+// Each arm is [elbow, hand], in head-heights from the neck.
+const POSE_ARMS = {
+  left: [[[-0.45, -0.45], [-0.85, -1.0]], [[0.3, 0.45], [0.35, 0.95]]],
+  right: [[[-0.3, 0.45], [-0.35, 0.95]], [[0.45, -0.45], [0.85, -1.0]]],
+  up: [[[-0.35, -0.55], [-0.5, -1.1]], [[0.35, -0.55], [0.5, -1.1]]],
+  clap: [[[-0.6, 0.3], [-0.05, 0.15]], [[0.6, 0.3], [0.05, 0.15]]],
+};
+function drawPoseIcon(ctx, cx, y, h, pose) {
+  const u = h / 3.4, neck = y + u * 1.9, hip = neck + u * 1.0;
+  const at = ([dx, dy]) => [cx + dx * u, neck + dy * u];
+  const limbs = [
+    ...POSE_ARMS[pose].map(([e, w]) => [[cx, neck], at(e), at(w)]),
+    [[cx, neck - u * 0.2], [cx, hip]],
+    [[cx, hip], [cx - u * 0.35, hip + u * 1.1]],
+    [[cx, hip], [cx + u * 0.35, hip + u * 1.1]],
+  ];
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const [w, col] of [[u * 0.45, '#1b2340'], [u * 0.25, '#ffffff']]) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    for (const pts of limbs) {
+      ctx.beginPath();
+      pts.forEach(([x, yy], i) => (i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy)));
+      ctx.stroke();
+    }
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(cx, neck - u * 0.55, u * 0.38 + (col === '#1b2340' ? u * 0.1 : 0), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function wrapLines(ctx, str, maxW, maxLines) {
+  const words = str.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (ctx.measureText(next).width > maxW && line) { lines.push(line); line = w; } else line = next;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] += '…';
+  }
+  return lines;
+}
+
+// The answer cards in a kid's lane: a picture, its words, and the pose that
+// picks it. Holding the pose fills the card's bar in the kid's colour; after
+// the answers are in, everyone's colour dots show who picked what.
+function drawWyrCards(ctx, L, p, B) {
+  const S = B.wyr;
+  if (!S || (S.phase !== 'ask' && S.phase !== 'reveal')) return;
+  const q = S.qs[S.i], n = q.c.length, poses = posesFor(n);
+  const pad = clamp(L.w * 0.03, 6, 20), gap = pad * 0.7;
+  const cw = Math.min((L.w - pad * 2 - gap * (n - 1)) / n, L.h * 0.16);
+  const x0 = L.cx - (n * cw + (n - 1) * gap) / 2;
+  const top = L.h * WYR_TOP;
+  const fs = clamp(cw * 0.12, 10, 22);
+  const mine = S.picks[p.index];
+  const votes = q.c.map((_, k) => S.picks.map((c, i) => (c === k ? i : -1)).filter(i => i >= 0));
+  const most = Math.max(...votes.map(v => v.length));
+  ctx.font = `bold ${R(fs)}px ${FONT}`;
+  const labels = q.c.map(c => wrapLines(ctx, c[0], cw * 0.92, 3));
+  const ch = cw * 0.92 + fs * 3.6;
+  for (let k = 0; k < n; k++) {
+    const x = x0 + k * (cw + gap);
+    const reveal = S.phase === 'reveal';
+    const lose = reveal && votes[k].length < most;
+    ctx.save();
+    if (lose) ctx.globalAlpha = 0.55;
+    ctx.fillStyle = 'rgba(255,248,230,0.94)';
+    ctx.fillRect(x, top, cw, ch);
+    const ring = mine === k ? p.color : '#1b2340';
+    ctx.lineWidth = mine === k ? Math.max(4, cw * 0.06) : 2;
+    ctx.strokeStyle = ring;
+    ctx.strokeRect(x, top, cw, ch);
+    const im = wyrImage(q.id, k), is = cw * 0.84;
+    if (im) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(im, x + (cw - is) / 2, top + cw * 0.05, is, is);
+    } else {
+      ctx.font = `${R(cw * 0.5)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(q.c[k][1], x + cw / 2, top + cw * 0.5);
+    }
+    ctx.font = `bold ${R(fs)}px ${FONT}`;
+    ctx.fillStyle = '#1b2340';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    labels[k].forEach((ln, i) => ctx.fillText(ln, x + cw / 2, top + cw * 0.92 + fs * (0.65 + 1.1 * i + (3 - labels[k].length) * 0.55)));
+    // Hold bar along the bottom of the card.
+    if (B.cand === k && B.hold > 0) {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(x, top + ch - fs * 0.45, cw * B.hold, fs * 0.45);
+    }
+    if (mine === k) text(ctx, '✔', x + cw - fs * 0.6, top + fs * 0.7, fs * 1.3, p.color);
+    // Who picked it, once everyone's in.
+    if (reveal) {
+      const r = clamp(cw * 0.09, 5, 14);
+      votes[k].forEach((i, j) => {
+        ctx.beginPath();
+        ctx.arc(x + r * 1.4 + j * r * 2.3, top + r * 1.4, r, 0, Math.PI * 2);
+        ctx.fillStyle = S.colors?.[i] || '#ffffff';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#1b2340';
+        ctx.stroke();
+      });
+    }
+    ctx.restore();
+    // The pose that picks this card, under it.
+    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + cw * 0.04, Math.min(cw * 0.85, L.h * 0.12), poses[k]);
+  }
+}
+
+// The question across the top of the screen, with a countdown bar.
+export function drawWyrQuestion(ctx, S, W, y, H) {
+  if (!S || (S.phase !== 'ask' && S.phase !== 'reveal')) return;
+  const q = S.qs[S.i];
+  const size = H * 0.042;
+  ctx.font = `bold ${R(size)}px ${FONT}`;
+  const lines = wrapLines(ctx, q.q, W * 0.9, 2);
+  const h = size * (1.2 * lines.length + 0.9);
+  const bottom = H * WYR_TOP - H * 0.01;
+  const y0 = Math.max(y, bottom - h);
+  ctx.fillStyle = 'rgba(10,14,30,0.7)';
+  ctx.fillRect(0, y0, W, h);
+  lines.forEach((ln, i) => text(ctx, ln, W / 2, y0 + size * (0.75 + 1.2 * i), size, '#ffe14d'));
+  const left = askLeft(S);
+  if (left > 0) {
+    ctx.fillStyle = '#3ddc84';
+    ctx.fillRect(W / 2 - (W * 0.4) * left, y0 + h - size * 0.25, W * 0.8 * left, size * 0.18);
   }
 }

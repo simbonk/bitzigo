@@ -3,6 +3,7 @@
 // Hands are in torso units around the hips, the same space the avatar is
 // drawn in: x grows to screen-right, y grows down, the shoulders sit near
 // y = -1, the top of the head near -2 and the hips at 0.
+import { holdWyr } from './wyr.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -10,7 +11,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (h, x, y) => Math.hypot(h.x - x, h.y - y);
 
 // (The dance-off is still here but out of the rotation: its moves were too fiddly.)
-export const MINI = ['kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain', 'fly', 'chops'];
+export const MINI = ['kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain', 'fly', 'chops', 'wyr'];
 
 // Keyboard stand-in for hands: [up, left, down, right] held.
 export function keyHands(u, l, d, r) {
@@ -61,6 +62,7 @@ export function startMini(p, B) {
     case 'chops': Object.assign(B, { chops: 0, up: [false, false], upAt: [-9, -9], flash: 0 }); break;
     case 'climb': Object.assign(B, { height: 0, lastHand: -1, wasUp: [false, false], pan: 0, reachAt: -9 }); break;
     case 'tray': Object.assign(B, { x: 0, items: [], stack: [], dropT: 1.0, wobble: 0 }); break;
+    case 'wyr': Object.assign(B, { cand: -1, since: 0, hold: 0 }); break; // the question itself is shared: see wyr.js
     case 'rain': Object.assign(B, { roof: false, tilt: 0, water: 0, want: Math.random() < 0.5 ? -1 : 1, buckets: { '-1': 0, '1': 0 }, pour: null, tip: null, poured: false }); break;
   }
 }
@@ -73,6 +75,7 @@ function newCity() {
 export function handsMini(p, B, hands, now) {
   const hs = hands.filter(Boolean);
   const R = p.keyboard ? 1.0 : 0.6;
+  if (B.type === 'wyr') { holdWyr(p, B, hands, now); return; }
   if (B.type === 'bugs') {
     for (const bug of B.bugs) {
       if (bug.dead || bug.t < 0.15) continue;

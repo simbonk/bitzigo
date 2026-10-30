@@ -267,7 +267,7 @@ const CUE_FOR = {
   bubble_time: () => { CUES.fanfare(); setTimeout(CUES.bubbles, 450); },
   fire_time: () => { CUES.fanfare(); setTimeout(CUES.siren, 450); },
   dance_time: () => CUES.fanfare(), kaiju_time: () => { CUES.fanfare(); setTimeout(() => sfx.stomp(), 450); },
-  bugs_time: () => CUES.fanfare(), goalie_time: () => CUES.fanfare(), climb_time: () => CUES.fanfare(), tray_time: () => CUES.fanfare(),
+  bugs_time: () => CUES.fanfare(), goalie_time: () => CUES.fanfare(), climb_time: () => CUES.fanfare(), tray_time: () => CUES.fanfare(), wyr_time: () => CUES.fanfare(),
   final_rush: () => CUES.siren(),
   back: () => sfx.ready(), got_it: () => sfx.level(),
 };
@@ -277,22 +277,31 @@ const CUE_FOR = {
 const VOICE_LINES = [
   'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
   'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
-  'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time',
+  'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time', 'wyr_time',
   'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
   'got_it', 'lobby', 'heart', 'champions',
 ];
 const clips = {};
 let current = null;
 
+function loadClip(name, path = `voice/${name}.mp3`) {
+  if (!ac || clips[name]) return;
+  fetch(path)
+    .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+    // Older Safari only has the callback form of decodeAudioData.
+    .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
+    .then(b => { clips[name] = b; })
+    .catch(() => { /* falls back to the synthesised cue */ });
+}
+
 function loadVoices() {
-  for (const name of VOICE_LINES) {
-    fetch(`voice/${name}.mp3`)
-      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
-      // Older Safari only has the callback form of decodeAudioData.
-      .then(buf => new Promise((ok, bad) => ac.decodeAudioData(buf, ok, bad)))
-      .then(b => { clips[name] = b; })
-      .catch(() => { /* falls back to the synthesised cue */ });
-  }
+  for (const name of VOICE_LINES) loadClip(name);
+}
+
+// Extra lines fetched only when needed, like the Would You Rather questions.
+export function preloadLine(name, path) { loadClip(name, path); }
+export function say(name) {
+  if (ac && !muted && clips[name]) playClip(name);
 }
 
 function playClip(name) {
