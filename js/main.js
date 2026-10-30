@@ -533,7 +533,7 @@ function showResults() {
     const face = p.face ? `<img class="face" src="${p.face}" alt="">` : `<span class="face noface" style="background:${p.color}">${p.index + 1}</span>`;
     div.innerHTML = `<span class="bubble" style="border-color:${p.color}">${face}<span class="badge">${shortScore(total(p))}</span></span>
       <div class="who"><div class="name"></div><div class="award"></div>
-      <div class="sub">Level ${Math.floor(p.peakSkill) + 1} · ${p.hits} moves · best streak ${p.bestStreak}</div></div>
+      <div class="sub">Level ${Math.floor(p.peakSkill) + 1} · ${p.hits} moves · best streak ${p.bestStreak} · 🔥 about ${p.kcal} cal</div></div>
       <div class="nums"><div class="score">${total(p).toLocaleString()}</div>
       ${multi ? `<div class="sub">+${p.score.toLocaleString()} this round</div>` : ''}
       <div class="hr">♥ ${p.heartRate ? `${p.heartRate} bpm` : '--'}</div></div>`;
@@ -1069,6 +1069,7 @@ function updateGame(t, dt) {
     // even for a kid the camera has lost for a moment.
     p.absent = !!(together && p.paused);
     p.update(dt, moving && (together || !p.paused), ramp);
+    if (state === 'play' && !p.paused) p.activeSecs += dt;
   }
   if (together) players.forEach(p => { p.clock = players[0].clock; });
 }

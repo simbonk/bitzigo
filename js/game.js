@@ -106,6 +106,7 @@ export class Player {
     this.streak = 0;
     this.tiers = [0, 0, 0]; // perfect, great, good
     this.recent = [];
+    this.activeSecs = 0; // time in view and moving, for the calorie guess
     this.bestStreak = 0;
     this.hits = 0;
     this.misses = 0;
@@ -594,6 +595,13 @@ export class Player {
     ok ? s.hit++ : s.miss++;
     if (!o.tutorial) this.judged++;
     if (!o.tutorial) (this.recent ||= []).push(ok ? 1 : 0), this.recent.length > 8 && this.recent.shift();
+  }
+
+  // A rough calorie guess from minutes of movement: an active video game is
+  // about 5 METs, with body weight guessed from age.
+  get kcal() {
+    const kg = this.age >= 12 ? 70 : 2 * this.age + 8;
+    return Math.round((5 * 3.5 * kg / 200) * (this.activeSecs / 60));
   }
 
   // How the last few moves went (1 = all hit), for easing off the speed.

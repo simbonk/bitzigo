@@ -24,6 +24,7 @@ export function saveGame(players, { theme, seconds }) {
         // Share of hits that were PERFECT, judged against an age-based tolerance.
         timing: p.hits ? Math.round((100 * (p.tiers?.[0] || 0)) / p.hits) : null,
         heartRate: null,
+        kcal: p.kcal,
       };
     }),
   });
@@ -54,23 +55,23 @@ export function statsHtml() {
   const by = new Map();
   for (const g of games) for (const r of g.players) {
     const k = r.name;
-    if (!by.has(k)) by.set(k, { name: r.name, age: r.age, games: 0, secs: 0, best: 0, acc: [], timing: [], hr: [] });
+    if (!by.has(k)) by.set(k, { name: r.name, age: r.age, games: 0, secs: 0, kcal: 0, best: 0, acc: [], timing: [], hr: [] });
     const s = by.get(k);
-    s.age = r.age; s.games++; s.secs += g.seconds; s.best = Math.max(s.best, r.score);
+    s.age = r.age; s.games++; s.secs += g.seconds; s.kcal += r.kcal || 0; s.best = Math.max(s.best, r.score);
     if (r.accuracy != null) s.acc.push(r.accuracy);
     if (r.timing != null) s.timing.push(r.timing);
     if (r.heartRate) s.hr.push(r.heartRate);
   }
-  let html = `<table class="stats"><tr><th>Player</th><th>Games</th><th>Minutes</th><th>Best score</th><th>Hit rate</th><th>Perfect timing</th><th>Heart</th></tr>`;
+  let html = `<table class="stats"><tr><th>Player</th><th>Games</th><th>Minutes</th><th>Calories*</th><th>Best score</th><th>Hit rate</th><th>Perfect timing</th><th>Heart</th></tr>`;
   for (const s of by.values()) {
-    html += `<tr><td>${esc(s.name)} <span class="age">(${s.age === 12 ? '12+' : s.age})</span></td><td>${s.games}</td><td>${Math.round(s.secs / 60)}</td><td>${s.best.toLocaleString()}</td><td>${pct(avg(s.acc))}</td><td>${pct(avg(s.timing))}</td><td>${s.hr.length ? `♥ ${s.hr[s.hr.length - 1]}` : '–'}</td></tr>`;
+    html += `<tr><td>${esc(s.name)} <span class="age">(${s.age === 12 ? '12+' : s.age})</span></td><td>${s.games}</td><td>${Math.round(s.secs / 60)}</td><td>${s.kcal}</td><td>${s.best.toLocaleString()}</td><td>${pct(avg(s.acc))}</td><td>${pct(avg(s.timing))}</td><td>${s.hr.length ? `♥ ${s.hr[s.hr.length - 1]}` : '–'}</td></tr>`;
   }
-  html += '</table><h3>Recent games</h3><table class="stats"><tr><th>When</th><th>World</th><th>Player</th><th>Score</th><th>Hit rate</th><th>Perfect</th><th>Heart</th></tr>';
+  html += '</table><h3>Recent games</h3><table class="stats"><tr><th>When</th><th>World</th><th>Player</th><th>Score</th><th>Cal*</th><th>Hit rate</th><th>Perfect</th><th>Heart</th></tr>';
   for (const g of games.slice(-25).reverse()) {
     const when = new Date(g.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     g.players.forEach((r, i) => {
-      html += `<tr${i === 0 ? ' class="first"' : ''}><td>${i === 0 ? when : ''}</td><td>${i === 0 ? esc(g.theme) : ''}</td><td>${esc(r.name)}</td><td>${r.score.toLocaleString()}</td><td>${pct(r.accuracy)}</td><td>${pct(r.timing)}</td><td>${r.heartRate ? `♥ ${r.heartRate}` : '–'}</td></tr>`;
+      html += `<tr${i === 0 ? ' class="first"' : ''}><td>${i === 0 ? when : ''}</td><td>${i === 0 ? esc(g.theme) : ''}</td><td>${esc(r.name)}</td><td>${r.score.toLocaleString()}</td><td>${r.kcal ?? '–'}</td><td>${pct(r.accuracy)}</td><td>${pct(r.timing)}</td><td>${r.heartRate ? `♥ ${r.heartRate}` : '–'}</td></tr>`;
     });
   }
-  return html + '</table>';
+  return html + '</table><p class="note">* Calories are a rough guess from minutes of movement and age, not a measurement.</p>';
 }
