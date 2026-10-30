@@ -2,6 +2,7 @@
 // up with smoothing off, which gives the chunky pixel look. Text and HUD are
 // drawn on top at full resolution so they stay crisp and readable.
 import { LM, tuning } from './game.js';
+import { MINI, DANCE, CITY_X } from './minigames.js';
 
 // How high (in lane heights) the sky view pans when a kid flies all the way up.
 const SKY_PAN = 0.38;
@@ -91,7 +92,19 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
 
   // Bubble time: the view follows the kid up into the sky.
   const B = p.throwing?.type === 'bubbles' ? p.throwing : null;
+  const C = p.throwing?.type === 'climb' ? p.throwing : null;
   let pan = 0;
+  if (C) {
+    // Beanstalk: the world slides down as the kid climbs.
+    pan = C.pan * L.S * 0.9;
+    rect(ctx, L.x, 0, L.w, L.h, theme.sky[0]);
+    ctx.translate(0, R(pan));
+    for (let c = 0; c < 6; c++) {
+      const u = L.S * 0.4, cy = -((c * 0.37 * L.h + 0.2 * L.h) % (L.h * 4));
+      const cx = L.x + ((c * 0.41 + time * 0.02) % 1.2) * L.w - L.w * 0.1;
+      rect(ctx, cx, cy, u * 5, u * 1.2, theme.cloud);
+    }
+  }
   if (B) {
     // Follow the kid up, and keep the bubble they're aiming for in view.
     let want = B.alt * L.h * SKY_PAN;
@@ -180,7 +193,9 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     if (z <= 1.02) items.push({ z, draw: () => drawObstacle(ctx, L, o, z) });
   }
   const T = p.throwing;
-  if (T && T.type !== 'bubbles') {
+  if (C) items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
+  if (T && MINI.includes(T.type)) items.push({ z: 0.01, draw: () => drawMini(ctx, L, p, T, time) });
+  else if (T && T.type !== 'bubbles') {
     items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
       : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
@@ -572,6 +587,9 @@ export function cartoonPose(act = {}, bob = 0) {
   }
   if (act.left) { P.le = [-0.9, -1 + dy]; P.lw = [-1.4, -1.05 + dy]; }
   if (act.right) { P.re = [0.9, -1 + dy]; P.rw = [1.4, -1.05 + dy]; }
+  if (act.discoL) { P.le = [-0.7, -1.6]; P.lw = [-0.95, -2.2]; P.re = [0.55, -0.6]; P.rw = [0.75, -0.15]; }
+  if (act.discoR) { P.re = [0.7, -1.6]; P.rw = [0.95, -2.2]; P.le = [-0.55, -0.6]; P.lw = [-0.75, -0.15]; }
+  if (act.clap) { P.le = [-0.55, -1.0]; P.re = [0.55, -1.0]; P.lw = [-0.08, -1.3]; P.rw = [0.08, -1.3]; }
   const lean = act.leanL ? -1 : act.leanR ? 1 : 0;
   if (lean) {
     // Bend at the hips: the higher up, the further it moves.
@@ -638,6 +656,14 @@ function drawAvatar(ctx, L, p, time, ch) {
     if (!(p.pts && p.base)) P = cartoonPose({ reach: T.falling || p.clock - T.flapAt < 0.15, jump: T.alt > 0.02 });
   }
   if (T?.type === 'fire' && !(p.pts && p.base)) P = cartoonPose(T.aim < -0.2 ? { left: true } : { right: true });
+  if (T?.type === 'climb') lift += T.pan * S * 0.9;
+  if (MINI.includes(T?.type) && !(p.pts && p.base) && p.hands) {
+    // Keyboard: put the cartoon's hands where the keys say.
+    P = cartoonPose({}, 0);
+    const [a, b] = p.hands;
+    if (a) { P.lw = [a.x, a.y]; P.le = [(P.ls[0] + a.x) / 2 - 0.15, (P.ls[1] + a.y) / 2]; }
+    if (b) { P.rw = [b.x, b.y]; P.re = [(P.rs[0] + b.x) / 2 + 0.15, (P.rs[1] + b.y) / 2]; }
+  }
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
   const sw = S * (1.3 - p.lift * 0.4);
@@ -940,10 +966,18 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = type === 'bubbles' ? 'flap' : type === 'karate' ? 'chop' : type === 'fire' ? 'spray' : 'throw';
+    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray' }[type] || 'throw';
     const B = p.throwing;
-    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!' }[kind];
-    cueIcon(ctx, { kind }, L.cx, y - size * 0.3 + bob, size);
+    const word = kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SLAM & SWAT!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked` }[kind];
+    if (kind === 'dance' && B.move) {
+      // Picture card of the move to copy, with a shrinking timer bar.
+      const m = B.move, k = Math.min(1, m.t / m.dur);
+      ctx.fillStyle = m.done ? 'rgba(61,220,132,0.85)' : 'rgba(10,14,30,0.6)';
+      ctx.fillRect(L.cx - size * 0.9, y - size * 1.25, size * 1.8, size * 1.5);
+      ctx.fillStyle = '#ffe14d';
+      ctx.fillRect(L.cx - size * 0.9, y + size * 0.2, size * 1.8 * (1 - k), size * 0.08);
+      drawCharacter(ctx, L.cx, y - size * 0.35, size * 0.3, cartoonPose(DANCE[m.key].pose), { id: 'none', body: '#ffffff', limb: '#ffffff', head: '#ffffff', belly: '#ffffff' });
+    } else cueIcon(ctx, { kind }, L.cx, y - size * 0.3 + bob, size);
     text(ctx, word, L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
   } else if (next) {
     const k = 1 - next.z / 0.8;
@@ -1215,4 +1249,154 @@ export function drawCamera(ctx, video, aspect, x, y, w, h, people) {
     }
   }
   return { dx, dy, dw, dh };
+}
+
+// ---------------- Hand-zone break games ----------------
+
+// Body-space point (torso units around the hips) to the lane's pixels.
+function bodyXY(L, x, y) {
+  return { x: L.cx + x * L.S, y: L.ground - 1.65 * L.S + y * L.S };
+}
+
+function drawVine(ctx, L, C, pan) {
+  const S = L.S, x = L.cx - S * 0.25;
+  const top = -pan - L.h, bottom = L.ground;
+  rect(ctx, x, top, S * 0.5, bottom - top, '#2f9e44');
+  rect(ctx, x + S * 0.1, top, S * 0.12, bottom - top, '#4cc94c');
+  for (let y = bottom - S * 0.8; y > top; y -= S * 1.1) {
+    const side = Math.round(y / (S * 1.1)) % 2 ? 1 : -1;
+    rect(ctx, x + (side > 0 ? S * 0.5 : -S * 0.7), y, S * 0.7, S * 0.35, '#3fbf4f');
+  }
+}
+
+function drawMini(ctx, L, p, T, time) {
+  const S = L.S;
+  if (T.type === 'bugs') {
+    for (const b of T.bugs) {
+      const { x, y } = bodyXY(L, b.x, b.y);
+      const k = Math.min(1, b.t / 0.15), r = S * 0.45 * k, wing = Math.floor(time * 20) % 2;
+      const blink = b.life - b.t < 0.4 && Math.floor(time * 12) % 2;
+      if (blink) continue;
+      rect(ctx, x - r * 1.4, y - r * (wing ? 1.2 : 0.6), r * 0.9, r * 0.6, 'rgba(220,240,255,0.85)');
+      rect(ctx, x + r * 0.5, y - r * (wing ? 1.2 : 0.6), r * 0.9, r * 0.6, 'rgba(220,240,255,0.85)');
+      block(ctx, x - r * 0.7, y - r * 0.6, r * 1.4, r * 1.2, '#8a3fd1', 0.2);
+      rect(ctx, x - r * 0.45, y - r * 0.35, r * 0.35, r * 0.35, '#ffffff');
+      rect(ctx, x + r * 0.1, y - r * 0.35, r * 0.35, r * 0.35, '#ffffff');
+      rect(ctx, x - r * 0.32, y - r * 0.22, r * 0.15, r * 0.15, '#1b1b22');
+      rect(ctx, x + r * 0.23, y - r * 0.22, r * 0.15, r * 0.15, '#1b1b22');
+      rect(ctx, x - r * 0.05, y + r * 0.5, r * 0.1, r * 0.5, '#1b1b22'); // stinger
+    }
+    for (const s of T.splats) {
+      const { x, y } = bodyXY(L, s.x, s.y), k = s.t / 0.7;
+      for (let i = 0; i < 8; i++) {
+        const a = i * 0.785, d = S * (0.3 + 0.8 * k);
+        rect(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d, S * 0.2 * (1 - k) + 1, S * 0.2 * (1 - k) + 1, i % 2 ? '#7be04a' : '#c6ff7a');
+      }
+    }
+  } else if (T.type === 'goalie') {
+    for (const s of T.shots) {
+      const z = bodyXY(L, s.x, s.y);
+      let k = Math.min(1, s.t / s.dur), x, y, r;
+      if (s.done === 'saved') {
+        // Punched away, back up and out.
+        const q = s.doneT / 0.6;
+        x = z.x + (s.x < 0 ? -1 : 1) * q * S * 3; y = z.y - q * S * 3; r = S * 0.5 * (1 - q * 0.5);
+      } else {
+        const sx = L.cx, sy = L.horizon;
+        x = sx + (z.x - sx) * k; y = sy + (z.y - sy) * k - Math.sin(k * Math.PI) * S * 1.2;
+        r = S * (0.12 + 0.4 * k);
+        if (!s.done && k > 0.5) {
+          // Warning box where it will land.
+          ctx.globalAlpha = 0.4 + 0.4 * (Math.floor(time * 10) % 2);
+          ctx.strokeStyle = '#ffe14d';
+          ctx.lineWidth = Math.max(1, S * 0.1);
+          ctx.strokeRect(R(z.x - S * 0.7), R(z.y - S * 0.7), R(S * 1.4), R(S * 1.4));
+          ctx.globalAlpha = 1;
+        }
+        if (s.done === 'goal') ctx.globalAlpha = 1 - s.doneT / 0.6;
+      }
+      rect(ctx, x - r, y - r * 0.7, r * 2, r * 1.4, '#ffffff');
+      rect(ctx, x - r * 0.7, y - r, r * 1.4, r * 2, '#ffffff');
+      rect(ctx, x - r * 0.3, y - r * 0.3, r * 0.6, r * 0.6, '#1b1b22');
+      rect(ctx, x - r * 0.95, y - r * 0.15, r * 0.3, r * 0.3, '#1b1b22');
+      rect(ctx, x + r * 0.65, y - r * 0.15, r * 0.3, r * 0.3, '#1b1b22');
+      ctx.globalAlpha = 1;
+    }
+  } else if (T.type === 'kaiju') {
+    // A tiny city around the kid's feet: they're the giant now.
+    for (const b of T.city) {
+      const { x } = bodyXY(L, b.x, 0), g = L.ground, w = S * 0.75;
+      if (b.down) {
+        if (b.downT < 2) for (let i = 0; i < 4; i++) block(ctx, x - w / 2 + i * w * 0.25, g - S * 0.2 - (i % 2) * S * 0.15, w * 0.3, S * 0.25, b.color, 0.3);
+        continue;
+      }
+      const h = b.h * S;
+      block(ctx, x - w / 2, g - h, w, h, b.color, 0.08);
+      for (let wy = g - h + S * 0.15; wy < g - S * 0.3; wy += S * 0.32) {
+        for (const wx of [0.15, 0.55]) rect(ctx, x - w / 2 + w * wx, wy, w * 0.25, S * 0.16, Math.floor(wy + time) % 3 ? '#ffe9a0' : '#5a6a80');
+      }
+    }
+    for (const d of T.dust) {
+      const { x, y } = bodyXY(L, d.x, d.y);
+      ctx.globalAlpha = 1 - d.t / 0.9;
+      rect(ctx, x, y, S * 0.25, S * 0.25, '#c8c0b0');
+    }
+    ctx.globalAlpha = 1;
+    for (const c of T.copters) {
+      let { x, y } = bodyXY(L, c.x, c.y + Math.sin(c.t * 4) * 0.12);
+      ctx.save();
+      if (c.done) { y += c.doneT * c.doneT * S * 6; x += c.side * c.doneT * S * 2; ctx.globalAlpha = 1 - c.doneT / 0.8; }
+      const u = S * 0.3, rot = Math.floor(time * 30) % 2;
+      block(ctx, x - u, y - u * 0.6, u * 2, u * 1.2, '#ff5d73', 0.25);
+      rect(ctx, x - c.side * u * 0.2 - u * 0.4, y - u * 0.4, u * 0.6, u * 0.5, '#bfe3ff');
+      rect(ctx, x + c.side * u, y - u * 0.2, u * 1.4 * c.side, u * 0.3, '#c9304a');
+      rect(ctx, x - (rot ? u * 1.6 : u * 0.6), y - u * 0.9, rot ? u * 3.2 : u * 1.2, u * 0.15, '#3a3a44');
+      ctx.restore();
+    }
+  } else if (T.type === 'tray') {
+    // Falling pancakes and boots, and the tray with its tower.
+    const trayY = L.ground - 1.65 * S - 1.0 * S;
+    const col = x => L.cx + x * S * 1.6;
+    for (const it of T.items) {
+      if (it.done) continue;
+      const k = it.t / it.dur, x = col(it.x), y = -S + (trayY - S * 0.3 * T.stack.length - (-S)) * k;
+      if (it.kind === 'boot') {
+        rect(ctx, x - S * 0.25, y - S * 0.6, S * 0.4, S * 0.6, '#6b3e18');
+        rect(ctx, x - S * 0.25, y - S * 0.1, S * 0.7, S * 0.3, '#6b3e18');
+        rect(ctx, x - S * 0.25, y + S * 0.15, S * 0.7, S * 0.1, '#2b2b33');
+      } else {
+        rect(ctx, x - S * 0.55, y - S * 0.12, S * 1.1, S * 0.24, '#e0a850');
+        rect(ctx, x - S * 0.45, y - S * 0.2, S * 0.9, S * 0.1, '#f0c070');
+      }
+    }
+    const tx = col(T.x) + (T.wobble > 0 ? Math.sin(time * 40) * S * 0.2 : 0);
+    rect(ctx, tx - S * 0.8, trayY, S * 1.6, S * 0.16, '#d8dce6');
+    rect(ctx, tx - S * 0.8, trayY + S * 0.16, S * 1.6, S * 0.06, '#9aa7b8');
+    T.stack.forEach((c, i) => {
+      const sway = Math.sin(time * 3 + i * 0.4) * S * 0.03 * i;
+      rect(ctx, tx - S * 0.55 + sway, trayY - S * 0.3 * (i + 1), S * 1.1, S * 0.26, c);
+      rect(ctx, tx - S * 0.45 + sway, trayY - S * 0.3 * (i + 1), S * 0.9, S * 0.06, '#f6d08a');
+    });
+    if (T.stack.length) {
+      const top = trayY - S * 0.3 * T.stack.length + Math.sin(time * 3 + T.stack.length * 0.4) * S * 0.03 * T.stack.length;
+      rect(ctx, tx - S * 0.15, top - S * 0.12, S * 0.3, S * 0.14, '#ffe14d'); // butter
+    }
+  } else if (T.type === 'dance') {
+    // Disco floor lights pulsing under the dancer.
+    const beat = Math.floor(time * 2.13);
+    const cols = ['#ff5d73', '#ffe14d', '#3ddc84', '#3fa7ff', '#b57bff'];
+    for (let i = -2; i <= 2; i++) {
+      ctx.globalAlpha = 0.55;
+      rect(ctx, L.cx + i * S * 0.9 - S * 0.4, L.ground - S * 0.3, S * 0.8, S * 0.3, cols[(i + 2 + beat) % 5]);
+    }
+    ctx.globalAlpha = 1;
+    if (T.flash > 0) {
+      ctx.globalAlpha = T.flash;
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.05 + time * 3;
+        rect(ctx, L.cx + Math.cos(a) * S * 2, L.ground - 3 * S + Math.sin(a) * S * 1.6, S * 0.3, S * 0.3, cols[i % 5]);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
 }

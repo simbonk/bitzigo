@@ -1,4 +1,5 @@
 // Game rules: body-move detection, obstacles, and per-player adaptive difficulty.
+import { MINI, startMini, updateMini, handsMini } from './minigames.js';
 
 export const COLORS = ['#ff5a5f', '#3fa7ff', '#3ddc84', '#b57bff'];
 export const MAX_SKILL = 10;
@@ -24,7 +25,7 @@ export const KINDS = ['log', 'crate', 'bird', 'rope'];
 // Stop-and-do breaks. Cans and the snowman are thrown at, boards are chopped
 // (same overhand arm swing), bubbles are popped by flapping up to them, and
 // fires are put out by pointing an arm to aim a water hose.
-export const BREAKS = ['karate', 'bubbles', 'fire', 'cans', 'snowman'];
+export const BREAKS = ['karate', 'bubbles', 'fire', 'cans', 'snowman', ...MINI];
 
 // Hats and accessories that float down the road now and then. Running into
 // one puts it on; the newest one in each slot replaces the old one.
@@ -106,7 +107,7 @@ export class Player {
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;
@@ -177,6 +178,10 @@ export class Player {
     }
     if (this.charged && !this.throwing) this.watchSpin(pts, now);
     const brk = this.throwing?.type;
+    // Hands around the body, for the hand-zone break games.
+    this.hands = f.wrists.map(w => (w.v >= 0.3 ? { x: (w.x - f.hip.x) / t, y: (w.y - B.hipY) / t } : null));
+    this.hipShift = clamp((f.hip.x - B.hipX) / t, -1, 1);
+    if (MINI.includes(brk)) handsMini(this, this.throwing, this.hands, now);
     if (brk === 'fire') this.aimHose(f);
     if (brk === 'bubbles') { if (flap) this.flap(); }
     // A karate chop is any hand coming down hard from shoulder height or above.
@@ -184,7 +189,7 @@ export class Player {
     this.setActions(latched);
 
     // Slowly follow the kid if they drift closer/further while standing normally.
-    if (!latched.jump && !latched.leanL && !latched.leanR) {
+    if (!latched.jump && !latched.leanL && !latched.leanR && brk !== 'tray') {
       const a = 0.02;
       B.hipX = lerp(B.hipX, f.hip.x, 0.008); // slow, so a little wiggle shows on screen
       B.noseX = lerp(B.noseX, f.nose.x, 0.02);
@@ -345,6 +350,7 @@ export class Player {
     if (type === 'bubbles') { B.alt = 0; B.target = 0; B.vel = 0; B.falling = false; B.flapAt = -9; B.bubble = this.newBubble(); B.pops = []; }
     else if (type === 'karate') B.boards = boards();
     else if (type === 'fire') { B.fires = this.newFires(); B.aim = 0; B.aimTarget = 0; B.on = false; B.hiss = 0; }
+    else if (MINI.includes(type)) startMini(this, B);
     else B.cans = type === 'snowman' ? snowman() : tower();
     this.throwing = B;
   }
@@ -363,6 +369,7 @@ export class Player {
     const T = this.throwing;
     if (!T || T.cooldown > 0) return;
     if (T.type === 'bubbles') { this.flap(); return; }
+    if (MINI.includes(T.type)) return;
     T.cooldown = 0.35;
     if (T.type === 'karate') { this.chop(); return; }
     const alive = T.cans.filter(c => !c.down);
@@ -433,6 +440,7 @@ export class Player {
   updateThrow(dt) {
     const T = this.throwing;
     T.cooldown = Math.max(0, T.cooldown - dt);
+    if (MINI.includes(T.type)) { updateMini(this, T, dt); return; }
     if (T.type === 'bubbles') {
       T.pops = T.pops.filter(q => (q.t += dt) < 0.6);
       if (T.falling) {

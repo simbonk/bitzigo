@@ -26,3 +26,9 @@ heart|Heart check time! Lie down on your back, and stay still.
 champions|Here are your champions!
 bubble_time|Bubble time! Flap your arms to fly up, and pop the bubbles!
 fire_time|Fire time! Point your arm to spray the water, and put out the fire!
+dance_time|Dance off! Copy the moves!
+kaiju_time|Monster time! Stomp the city!
+bugs_time|Bug splat! Slap the bugs!
+goalie_time|Goalie time! Block the balls!
+climb_time|Beanstalk climb! Reach up, one hand at a time!
+tray_time|Pancake tower! Catch the pancakes, and dodge the boots!

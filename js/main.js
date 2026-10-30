@@ -1,4 +1,5 @@
 import { Player, Course, COLORS, BREAKS, KEYMAP, features, keyActions } from './game.js';
+import { MINI, keyHands, handsMini } from './minigames.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
@@ -261,11 +262,23 @@ const BREAK_INFO = {
   bubbles: { title: 'BUBBLE TIME!', sub: 'Flap your arms to fly up and pop the bubbles!', clip: 'bubble_time' },
   snowman: { title: 'SNOWBALL TIME!', sub: 'Throw snowballs to knock down the snowman!', clip: 'snowball_time' },
   fire: { title: 'FIRE TIME!', sub: 'Point your arm to spray the hose and put the fires out!', clip: 'fire_time' },
+  dance: { title: 'DANCE OFF!', sub: 'Copy the dance move on the card, in time!', clip: 'dance_time' },
+  kaiju: { title: 'MONSTER TIME!', sub: 'Both arms up and SLAM the buildings! Swat the helicopters!', clip: 'kaiju_time' },
+  bugs: { title: 'BUG SPLAT!', sub: 'Slap the bugs wherever they pop up!', clip: 'bugs_time' },
+  goalie: { title: 'GOALIE TIME!', sub: 'Block the balls with your hands!', clip: 'goalie_time' },
+  climb: { title: 'BEANSTALK CLIMB!', sub: 'Reach up with one hand, then the other!', clip: 'climb_time' },
+  tray: { title: 'PANCAKE TOWER!', sub: 'Move your hands to catch pancakes. Dodge the boots!', clip: 'tray_time' },
 };
 let throwPlan = [], throwEnd = 0;
-// Starts with karate and bubbles, then carries on between rounds so the next
-// game starts with a different break.
-let breakTurn = 0;
+// Breaks come out of a shuffled bag, so every game is different and nothing
+// repeats until they've all had a turn.
+let breakBag = [];
+function nextBreak() {
+  if (!breakBag.length) {
+    breakBag = BREAKS.filter(b => b !== (settings.theme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
+  }
+  return breakBag.shift();
+}
 let slotGear = [];      // hats each player slot has collected
 
 function startPlay() {
@@ -366,6 +379,12 @@ function pickAwards(ps) {
     ['Bubble Popper', p => p.counts.pop],
     ['Hat Collector', p => p.counts.gear],
     ['Fire Hero', p => p.counts.fire],
+    ['Dance Star', p => p.counts.dance],
+    ['City Stomper', p => p.counts.stomp],
+    ['Bug Squasher', p => p.counts.bugs],
+    ['Super Goalie', p => p.counts.saves],
+    ['Beanstalk Climber', p => p.counts.climb],
+    ['Pancake Stacker', p => p.counts.stack],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
   const out = new Map();
@@ -699,6 +718,11 @@ function updateGame(t, dt) {
       const a = keyActions(keys, p.index);
       if (p.throwing && a.jump && !p.act.jump) p.onThrow(); // up key throws in throw time
       if (a.spin && p.charged && !p.throwing) p.superSpin(); // down alone spins when super charged
+      if (MINI.includes(p.throwing?.type)) {
+        const [u, l, d, r] = KEYMAP[p.index];
+        p.hands = keyHands(keys.has(u), keys.has(l), keys.has(d), keys.has(r));
+        handsMini(p, p.throwing, p.hands, t);
+      }
       if (p.throwing?.type === 'fire') {
         const [, l, , r] = KEYMAP[p.index];
         p.hoseInput(keys.has(l) && !keys.has(r) ? -1 : keys.has(r) && !keys.has(l) ? 1 : 0);
@@ -759,9 +783,7 @@ function updateGame(t, dt) {
     if (throwPlan.length && roundT >= throwPlan[0] && !throwEnd && (!dur || dur - roundT > THROW_SECS + 15)) {
       throwPlan.shift();
       throwEnd = roundT + THROW_SECS;
-      let type = BREAKS[breakTurn++ % BREAKS.length];
-      if (settings.theme === 'snow' && type === 'cans') type = 'snowman';
-      else if (settings.theme !== 'snow' && type === 'snowman' && Math.random() < 0.5) type = 'cans';
+      const type = nextBreak();
       players.forEach(p => p.startBreak(type));
       const info = BREAK_INFO[type];
       showBanner(info.title, info.sub, 2.8);

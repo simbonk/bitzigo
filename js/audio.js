@@ -62,10 +62,10 @@ function noise(dur, { vol = 0.3, from = 3000, to = 300, delay = 0, q = 1 } = {})
 export const sfx = {
   // Crate smash: crunchy noise and a bright pop.
   smash() {
-    tone(90, 0.18, { type: 'sine', vol: 0.6, slide: 0.5 });                 // thump
-    noise(0.3, { vol: 0.7, from: 2500, to: 300 });                          // crunch
-    [0.04, 0.09, 0.15, 0.22].forEach(d => noise(0.05, { vol: 0.35, from: 5000, to: 2500, q: 3, delay: d })); // splinters
-    tone(660, 0.08, { vol: 0.12, delay: 0.02 }); tone(990, 0.1, { vol: 0.1, delay: 0.07 });
+    tone(70, 0.22, { type: 'sine', vol: 0.65, slide: 0.5 });                 // thump
+    noise(0.32, { vol: 0.7, from: 1200, to: 150 });                          // crunch
+    [0.04, 0.09, 0.15, 0.22].forEach(d => noise(0.06, { vol: 0.3, from: 1800, to: 700, q: 2, delay: d })); // splinters
+    tone(330, 0.08, { vol: 0.1, delay: 0.02 }); tone(440, 0.1, { vol: 0.08, delay: 0.07 });
   },
   // Jump: springy boing.
   jump() { tone(260, 0.25, { type: 'triangle', vol: 0.35, slide: 3 }); noise(0.2, { vol: 0.25, from: 500, to: 2500, q: 2 }); tone(523, 0.08, { vol: 0.12, delay: 0.22 }); tone(784, 0.1, { vol: 0.12, delay: 0.28 }); },
@@ -86,7 +86,16 @@ export const sfx = {
   select() { tone(700, 0.06, { vol: 0.15 }); tone(1000, 0.06, { vol: 0.15, delay: 0.05 }); },
   ready() { tone(523, 0.1, { vol: 0.18 }); tone(784, 0.16, { vol: 0.18, delay: 0.08 }); },
   pop() { tone(500, 0.08, { type: 'sine', vol: 0.35, slide: 3 }); noise(0.08, { vol: 0.3, from: 5000, to: 2000, q: 2, delay: 0.03 }); },
-  chop() { noise(0.12, { vol: 0.7, from: 3000, to: 600, q: 1.5 }); tone(180, 0.1, { vol: 0.25, slide: 0.5 }); },
+  chop() { noise(0.14, { vol: 0.7, from: 1400, to: 300, q: 1.2 }); tone(110, 0.14, { vol: 0.3, slide: 0.5 }); },
+  splat() { noise(0.18, { vol: 0.6, from: 900, to: 200, q: 0.8 }); tone(160, 0.12, { type: 'sine', vol: 0.3, slide: 0.4 }); },
+  save() { tone(220, 0.06, { vol: 0.3 }); noise(0.1, { vol: 0.5, from: 1500, to: 600, q: 1 }); tone(660, 0.12, { type: 'triangle', vol: 0.2, slide: 1.5, delay: 0.05 }); },
+  swat() { noise(0.15, { vol: 0.4, from: 600, to: 2500, q: 2 }); tone(500, 0.3, { type: 'sawtooth', vol: 0.1, slide: 0.3, delay: 0.05 }); },
+  stomp() { tone(55, 0.35, { type: 'sine', vol: 0.8, slide: 0.5 }); noise(0.5, { vol: 0.6, from: 800, to: 100, q: 0.7 }); },
+  climb() { tone(400 + Math.random() * 200, 0.07, { type: 'triangle', vol: 0.2, slide: 1.3 }); },
+  catch() { tone(300, 0.08, { type: 'sine', vol: 0.35, slide: 0.7 }); tone(600, 0.08, { type: 'triangle', vol: 0.15, delay: 0.05 }); },
+  bonk() { tone(150, 0.15, { type: 'square', vol: 0.25, slide: 0.5 }); },
+  dance() { [523, 659, 784].forEach((f, i) => tone(f, 0.08, { type: 'square', vol: 0.12, delay: i * 0.04 })); },
+  beat() { tone(880, 0.04, { type: 'sine', vol: 0.12 }); },
   flap() { noise(0.14, { vol: 0.25, from: 400, to: 1400, q: 2 }); },
   super() { [0, 0.07, 0.14, 0.21].forEach((d, i) => tone(1200 + i * 300, 0.06, { type: 'sawtooth', vol: 0.1, slide: 0.5, delay: d })); noise(0.4, { vol: 0.25, from: 6000, to: 1500, q: 4 }); },
   gear() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.18, delay: i * 0.05 })); },
@@ -257,6 +266,8 @@ const CUE_FOR = {
   karate_time: () => { CUES.fanfare(); setTimeout(CUES.gong, 450); },
   bubble_time: () => { CUES.fanfare(); setTimeout(CUES.bubbles, 450); },
   fire_time: () => { CUES.fanfare(); setTimeout(CUES.siren, 450); },
+  dance_time: () => CUES.fanfare(), kaiju_time: () => { CUES.fanfare(); setTimeout(() => sfx.stomp(), 450); },
+  bugs_time: () => CUES.fanfare(), goalie_time: () => CUES.fanfare(), climb_time: () => CUES.fanfare(), tray_time: () => CUES.fanfare(),
   final_rush: () => CUES.siren(),
   back: () => sfx.ready(), got_it: () => sfx.level(),
 };
@@ -266,6 +277,7 @@ const CUE_FOR = {
 const VOICE_LINES = [
   'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
   'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
+  'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time',
   'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
   'got_it', 'lobby', 'heart', 'champions',
 ];
