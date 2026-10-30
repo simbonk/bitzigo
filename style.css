@@ -294,3 +294,27 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #roomWant button { padding: 0.25em 0.6em; }
 /* A guest in a friend game plays the code maker's world, length and tutorial. */
 body.roomGuest #length, body.roomGuest #theme, body.roomGuest #intro { opacity: .4; pointer-events: none; }
+
+/* Home screen tabs: Play here / Play with friends. */
+.tabs { display: flex; gap: 6px; margin: clamp(6px, 1.6vh, 12px) 0 0; border-bottom: 2px solid #3d4f86; }
+.tabs button { flex: 1; font: inherit; font-weight: bold; font-size: 1.1em; color: #fff; background: transparent; border: 2px solid transparent; border-bottom: none; border-radius: 12px 12px 0 0; padding: 0.45em 0.8em; margin-bottom: -2px; cursor: pointer; opacity: .65; }
+.tabs button.on { background: #1a2550; border-color: #3d4f86; border-bottom: 2px solid #1a2550; color: #ffd23f; opacity: 1; }
+body:not(.tabFriends) .friendRow { display: none; }
+.friendRow { margin: clamp(6px, 1.6vh, 12px) 0 clamp(2px, 1vh, 8px); }
+.roomIdle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.roomIdle.hidden { display: none; }
+.roomCard { background: #152040; border: 2px solid #3d4f86; border-radius: 14px; padding: 0.6em 0.8em; display: flex; flex-direction: column; gap: 0.4em; align-items: flex-start; }
+.roomCard .cardHead { font-weight: bold; color: #ffd23f; font-size: 1.1em; }
+.roomCard p { margin: 0; opacity: .85; font-size: .92em; }
+.roomCard .joinRow { display: flex; gap: 6px; }
+.roomCard #roomMake { margin-top: auto; }
+.friendRow .roomBox { background: #152040; border: 2px solid #3ddc84; border-radius: 14px; padding: 0.5em 0.8em; }
+.wantLabel { font-weight: bold; opacity: .8; align-self: center; margin-right: 2px; }
+.big.waitRoom { background: #26335c; color: #fff; }
+@media (max-width: 520px) { .roomIdle { grid-template-columns: 1fr; } }
+@media (max-height: 500px) {
+  .roomCard { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 0.35em 0.6em; }
+  .roomCard p { display: none; }
+  .roomCard #roomMake { margin-top: 0; }
+  .tabs button { padding: 0.25em 0.6em; font-size: 1em; }
+}

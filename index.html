@@ -22,8 +22,35 @@
   <header class="head">
     <div class="topBtns"><button id="statsBtn" class="setupBtn">📊 Stats</button><button id="helpBtn" class="setupBtn">📷 Setup</button></div>
     <h1>Bitzigo</h1>
-    <p class="tag">Jump, punch, dodge and swing. 2 players per camera, or 4 with a friend's house.</p>
+    <p class="tag">Jump, punch, dodge and swing. Up to 2 players per camera.</p>
   </header>
+
+  <div class="tabs" id="modeTabs" role="tablist">
+    <button data-mode="here" class="on" role="tab">🏠 Play here</button><button data-mode="friends" role="tab">🤝 Play with friends</button>
+  </div>
+
+  <div class="friendRow">
+    <div id="roomIdle" class="roomIdle">
+      <div class="roomCard">
+        <div class="cardHead">Start a game</div>
+        <p>Get a code to send to friends. You pick the world and length.</p>
+        <button id="roomMake" class="setupBtn">🤝 Make a code</button>
+      </div>
+      <div class="roomCard">
+        <div class="cardHead">Join a game</div>
+        <p>Type the code a friend sent you.</p>
+        <div class="joinRow"><input id="roomCode" placeholder="FROG-42" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Friend's code"><button id="roomJoin" class="setupBtn">Join</button></div>
+      </div>
+    </div>
+    <div id="roomOn" class="roomBox hidden">
+      <span id="roomBadge" class="roomBadge"></span>
+      <span id="roomWant" class="seg hidden" title="How many phones or tablets will play"><span class="wantLabel">Devices</span><button data-w="2">2</button><button data-w="3">3</button><button data-w="4">4</button></span>
+      <span id="roomText" class="roomText"></span>
+      <button id="roomCopy" class="setupBtn hidden">📋 Copy invite</button>
+      <button id="roomShare" class="setupBtn hidden">Text it</button>
+      <button id="roomLeave" class="setupBtn">Leave</button>
+    </div>
+  </div>
 
   <div class="cols">
     <div class="col">
@@ -64,24 +91,6 @@
           <button data-intro="1" class="on">On</button><button data-intro="0">Off</button>
         </div>
       </div>
-    </div>
-  </div>
-
-  <div class="row friendRow">
-    <span class="label">Friend</span>
-    <div id="roomIdle" class="roomBox">
-      <button id="roomMake" class="setupBtn">🤝 Make a code</button>
-      <span class="or">or</span>
-      <input id="roomCode" placeholder="FROG-42" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Friend's code">
-      <button id="roomJoin" class="setupBtn">Join</button>
-    </div>
-    <div id="roomOn" class="roomBox hidden">
-      <span id="roomBadge" class="roomBadge"></span>
-      <span id="roomWant" class="seg hidden" title="How many phones or tablets will play"><span class="wantLabel">Devices</span><button data-w="2">2</button><button data-w="3">3</button><button data-w="4">4</button></span>
-      <span id="roomText" class="roomText"></span>
-      <button id="roomCopy" class="setupBtn hidden">📋 Copy invite</button>
-      <button id="roomShare" class="setupBtn hidden">Text it</button>
-      <button id="roomLeave" class="setupBtn">Leave</button>
     </div>
   </div>
 

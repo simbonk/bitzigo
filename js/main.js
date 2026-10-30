@@ -206,6 +206,7 @@ function renderRoom() {
   else if (!on && ownCount != null) { settings.count = ownCount; ownCount = null; }
   document.querySelectorAll('#count button').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === settings.count));
   if (document.querySelectorAll('#players .player').length !== settings.count) renderPlayerRows();
+  if (on) setTab('friends');
   $('#roomIdle').classList.toggle('hidden', on);
   $('#roomOn').classList.toggle('hidden', !on);
   $('#roomBadge').textContent = on ? room.code || '' : '';
@@ -245,6 +246,40 @@ onRoom(msg => {
   if (msg.type === 'tick') { lastFriends = friendTicks(); if (state === 'end') renderFriendResults(); }
   if (msg.type === 'go') friendSaysGo(msg);
 });
+// Two tabs on the home screen: Play here (just this camera) and Play with
+// friends (a room code, then the same setup). Leaving the friends tab leaves
+// the room.
+function setTab(t) {
+  settings.tab = t === 'friends' ? 'friends' : 'here';
+  document.body.classList.toggle('tabFriends', settings.tab === 'friends');
+  document.querySelectorAll('#modeTabs button').forEach(b => {
+    const on = b.dataset.mode === settings.tab;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on);
+  });
+  renderGoLabel();
+}
+function renderGoLabel() {
+  const friends = settings.tab === 'friends';
+  const ready = room.status !== 'off' && room.status !== 'error';
+  $('#go').textContent = friends && !ready ? 'Make or join a game first' : "Let's go!";
+  $('#go').classList.toggle('waitRoom', friends && !ready);
+}
+onRoom(msg => { if (msg.type === 'status') renderGoLabel(); });
+document.querySelectorAll('#modeTabs button').forEach(b => {
+  b.onclick = () => {
+    if (b.dataset.mode === settings.tab) return;
+    if (b.dataset.mode === 'here' && room.status !== 'off') {
+      if (friendHere() && !confirm('Leave the friend game?')) return;
+      leaveRoom();
+    }
+    $('#status').textContent = '';
+    setTab(b.dataset.mode);
+    save();
+  };
+});
+setTab(settings.tab);
+
 $('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch(e => console.error(e)); };
 // The last code joined is filled in, so rejoining after a reload is one tap.
 try { $('#roomCode').value = localStorage.getItem('bitzigo-room') || ''; } catch { }
@@ -260,7 +295,7 @@ const roomInvite = () => [
   `1. Open ${location.origin}${location.pathname} in Safari (Chrome on Android)`,
   '2. Tap Share, then Add to Home Screen',
   '3. Open Bitzigo from the new icon',
-  `4. Type ${room.code} next to Friend and tap Join`,
+  `4. Tap Play with friends, type ${room.code} and tap Join`,
 ].join('\n');
 $('#roomCopy').onclick = async () => {
   const words = roomInvite();
@@ -351,6 +386,10 @@ async function openCamera() {
 }
 
 $('#go').onclick = async () => {
+  if (settings.tab === 'friends' && (room.status === 'off' || room.status === 'error')) {
+    $('#status').textContent = 'Make a code for your friends, or type the code they sent you. Or switch to Play here.';
+    return;
+  }
   unlockAudio();
   $('#status').textContent = '';
   awake.start();
