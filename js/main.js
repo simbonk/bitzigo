@@ -187,6 +187,7 @@ function setState(s) {
 
 function enterLobby() {
   course = null;
+  together = false;
   setAnnouncer(true);
   lobby = players.map(() => ({ found: false, ready: false, upSince: 0, armLatch: false }));
   players.forEach(p => { p.reset(); p.clearCalibration(); p.trackX = null; p.homeX = null; p.heartRate = null; p.onEvent = playerEvent; });
@@ -201,6 +202,7 @@ function startReady() {
   // Everyone found (or the parent pressed Start): calibrate and count down.
   players.forEach(p => { p.clearCalibration(); p.character = CHARACTERS[slotChar[p.index]]; });
   setHomes();
+  together = settings.course !== 'own' && players.length > 1;
   setState('ready');
   showBanner('Arms down, stand tall!', 'Get ready…', 2.4);
   cue('ready');
@@ -271,7 +273,11 @@ function startPlay() {
   roundT = 0;
   throwPlan = planThrows(settings.seconds);
   throwEnd = 0;
-  const together = settings.course !== 'own' && players.length > 1;
+  if (together) {
+    // Line every lane up on the same clock before the course starts.
+    const c = Math.max(...players.map(p => p.clock));
+    players.forEach(p => { p.clock = c; p.obstacles = []; });
+  }
   players.forEach(p => { p.startRound(); p.shared = together; p.paceSkill = null; });
   course = together ? new Course() : null;
   // The announcer only calls moves when everyone shares one course; with
@@ -427,6 +433,7 @@ function poseX(pts, aspect) {
 
 // People in view, smoothed over brief detection drop-outs.
 let course = null;      // shared course in together mode
+let together = false;   // everyone on one course and one clock (from the countdown on)
 let tracks = [];
 let trackWidth = 0.1;   // typical torso length, as a fraction of the picture width
 function updateTracks(t) {
@@ -785,10 +792,12 @@ function updateGame(t, dt) {
   const moving = state === 'play' || state === 'tutorial';
   if (course && state === 'play') course.update(players, ramp);
   for (const p of players) {
-    // On a shared course every clock keeps running so the lanes stay in sync.
-    p.absent = !!(course && p.paused);
-    p.update(dt, moving && (course ? true : !p.paused), ramp);
+    // On a shared course every clock keeps running so the lanes stay in sync,
+    // even for a kid the camera has lost for a moment.
+    p.absent = !!(together && p.paused);
+    p.update(dt, moving && (together || !p.paused), ramp);
   }
+  if (together) players.forEach(p => { p.clock = players[0].clock; });
 }
 
 // ---------------- Drawing ----------------
