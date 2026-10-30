@@ -1,6 +1,6 @@
 import { Player, COLORS, features, keyActions } from './game.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES } from './render.js';
-import { unlockAudio, sfx, hitSound, say, setMuted } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, say, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 
@@ -58,7 +58,7 @@ function renderPlayerRows() {
     const p = settings.players[i];
     const row = document.createElement('div');
     row.className = 'player';
-    const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>age ${a}${a === 12 ? '+' : ''}</option>`).join('');
+    const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>${a === 12 ? 'adult' : `age ${a}`}</option>`).join('');
     row.innerHTML = `<span class="dot" style="background:${COLORS[i]}"></span><input maxlength="12" value=""><select>${ages}</select>`;
     const input = row.querySelector('input');
     input.value = p.name;
@@ -98,6 +98,8 @@ function toggleFullscreen() {
 }
 if (standalone) $('#fs').classList.add('hidden');
 $('#fs').onclick = toggleFullscreen;
+$('#helpBtn').onclick = () => { $('#setup').classList.add('hidden'); $('#help').classList.remove('hidden'); };
+$('#helpClose').onclick = () => { $('#help').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
 $('#btnFs').onclick = toggleFullscreen;
 if (standalone || !canFs) $('#btnFs').classList.add('hidden');
 
@@ -111,8 +113,8 @@ $('#go').onclick = async () => {
     p.keyboard = settings.mode === 'keys';
     p.onEvent = (type, o) => {
       if (type === 'hit') hitSound(o.kind);
-      else if (type === 'miss') sfx.miss();
-      else if (type === 'level') sfx.level();
+      else if (type === 'miss') missSound(o.kind);
+      else if (sfx[type]) sfx[type]();
     };
   });
   if (settings.mode === 'camera' && !tracker) {
@@ -164,20 +166,58 @@ function startReady() {
 
 function startTutorial() {
   setState('tutorial');
+  startMusic();
   players.forEach(p => { p.tutorial = true; });
   tut = { step: -1, next: now() + 0.3 };
 }
 
 const LESSONS = [
   { kind: 'log', title: 'Brick wall? JUMP!', speak: 'Here comes a brick wall. Jump over it!' },
-  { kind: 'bar', title: 'Low bar? DUCK!', speak: 'Here comes a low bar. Duck under it!' },
-  { kind: 'crate', title: 'Crate? PUNCH it!', speak: 'Here comes a crate. Punch it to smash it!' },
-  { kind: 'star', title: 'Star? BOTH HANDS UP!', speak: 'Here comes a star. Put both hands up to grab it!' },
+  { kind: 'crate', side: 'mid', title: 'Crate? PUNCH it!', speak: 'Here comes a crate. Punch it to smash it!' },
+  { kind: 'bird', side: 'left', title: 'Crazy bird? LEAN away!', speak: 'Uh oh, a crazy bird! Lean your head the other way!' },
+  { kind: 'rope', title: 'Puddle? GRAB the rope!', speak: 'A muddy puddle! Put both hands up to grab the rope and swing!' },
 ];
+
+// Short calls in a squeaky cartoon voice as each obstacle gets close.
+function callFor(o) {
+  if (o.kind === 'log') return 'Jump!';
+  if (o.kind === 'rope') return 'Grab the rope!';
+  if (o.kind === 'bird') return o.side === 'left' ? 'Lean right!' : 'Lean left!';
+  return o.side === 'mid' ? 'Punch!' : `Punch ${o.side}!`;
+}
+let lastCall = 0;
+function callMoves(t) {
+  let best = null;
+  for (const p of players) {
+    for (const o of p.obstacles) {
+      if (o.called || o.result) continue;
+      const z = (o.arrive - p.clock) / o.travel;
+      if (z < 0.5 && (!best || z < best.z)) best = { o, z };
+    }
+  }
+  if (!best || t - lastCall < 1.1) return;
+  // Mark everything due now as called, so the voice doesn't fall behind.
+  for (const p of players) for (const o of p.obstacles) if (!o.called && (o.arrive - p.clock) / o.travel < 0.5) o.called = true;
+  lastCall = t;
+  say(callFor(best.o), { cartoon: true });
+}
+
+// Throw-time breaks: once in a short workout, a couple of times in longer ones.
+function planThrows(dur) {
+  if (!dur) return [40, 90, 140, 190, 240, 290].concat([...Array(40)].map((_, i) => 340 + i * 50));
+  if (dur < 60) return [];
+  const n = dur >= 180 ? 2 : 1;
+  return [...Array(n)].map((_, i) => Math.round((dur * (i + 1)) / (n + 1)));
+}
+const THROW_SECS = 12;
+let throwPlan = [], throwEnd = 0;
 
 function startPlay() {
   setState('play');
+  startMusic();
   roundT = 0;
+  throwPlan = planThrows(settings.seconds);
+  throwEnd = 0;
   players.forEach(p => p.startRound());
   showBanner('GO!', settings.seconds ? `${Math.round(settings.seconds / 60)} minute workout` : 'Endless mode', 1.4);
   say('Go!');
@@ -186,6 +226,8 @@ function startPlay() {
 
 function endRound() {
   setState('end');
+  stopMusic();
+  players.forEach(p => p.throwing && p.stopThrowing());
   sfx.finish();
   say('Great moving, squad!');
   showResults();
@@ -258,8 +300,9 @@ function pickAwards(ps) {
     ['Streak Star', p => p.bestStreak],
     ['Crate Smasher', p => p.counts.punch],
     ['Super Jumper', p => p.counts.jump],
-    ['Duck Master', p => p.counts.duck],
-    ['Star Catcher', p => p.counts.reach],
+    ['Bird Dodger', p => p.counts.dodge],
+    ['Jungle Swinger', p => p.counts.swing],
+    ['Can Crusher', p => p.counts.knock],
     ['Level Climber', p => p.peakSkill - p.startSkill],
   ];
   const out = new Map();
@@ -504,8 +547,10 @@ function updateGame(t, dt) {
   if (cam) assignPlay(t);
   for (const p of players) {
     if (!cam) {
-      p.setActions(keyActions(keys, p.index));
-      if (!p.base) p.base = { hipX: 0, hipY: 0, noseY: 0, torso: 1 };
+      const a = keyActions(keys, p.index);
+      if (p.throwing && a.jump && !p.act.jump) p.onThrow(); // up key throws in throw time
+      p.setActions(a);
+      if (!p.base) p.base = { hipX: 0, hipY: 0, noseX: 0, noseY: 0, torso: 1 };
     }
     const seen = !cam || (p.lastSeen != null && t - p.lastSeen < 0.7);
     p.paused = !seen ? 'Come back to your spot!' : !p.base ? 'Stand still…' : null;
@@ -546,7 +591,7 @@ function updateGame(t, dt) {
         const L = LESSONS[tut.step];
         showBanner(L.title, '', 4.2);
         say(L.speak);
-        players.forEach(p => p.teach(L.kind, 4));
+        players.forEach(p => p.teach(L.kind, L.side || null, 4));
         tut.next = tn + 5.6;
       }
     }
@@ -556,11 +601,29 @@ function updateGame(t, dt) {
   if (state === 'play') {
     roundT += dt;
     const dur = settings.seconds;
+    if (throwPlan.length && roundT >= throwPlan[0] && !throwEnd && (!dur || dur - roundT > THROW_SECS + 15)) {
+      throwPlan.shift();
+      throwEnd = roundT + THROW_SECS;
+      players.forEach(p => p.startThrowing());
+      showBanner('THROW TIME!', 'Throw the ball to knock down the cans!', 2.6);
+      say('Throw time! Throw the ball and knock down the cans!');
+    } else if (throwPlan.length && dur && roundT >= throwPlan[0] && !throwEnd) {
+      throwPlan.shift();
+    }
+    if (throwEnd && roundT >= throwEnd) {
+      throwEnd = 0;
+      players.forEach(p => p.stopThrowing());
+      showBanner('Back to running!', '', 1.6);
+      say('Back to running!');
+    }
+    if (!throwEnd) callMoves(t);
+    setIntensity(dur ? roundT / dur : Math.min(1, roundT / 180));
     if (dur) {
       const left = dur - roundT;
       ramp = 1.5 * Math.min(1, roundT / dur);
       const rush = left <= 15;
       if (rush && !players[0].rush) {
+        setIntensity(1);
         showBanner('FINAL RUSH!', 'Double points!', 2);
         say('Final rush! Double points!');
       }
@@ -730,5 +793,5 @@ requestAnimationFrame(loop);
 
 // Test hook: open with ?debug to inspect tracking from the console.
 if (new URLSearchParams(location.search).has('debug')) {
-  window.qs = { get frame() { return frame; }, get players() { return players; }, get state() { return state; } };
+  window.qs = { get frame() { return frame; }, get players() { return players; }, get state() { return state; }, advance(sec) { roundT += sec; } };
 }

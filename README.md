@@ -1,6 +1,6 @@
 # Quad Squad
 
-A living-room motion game for up to four kids at once. A phone or laptop camera watches the kids standing in place; each one becomes a blocky character running down their own lane, and they **jump** over brick walls, **duck** under bars, **punch** crates and put **both hands up** to grab stars. Built as a proof of concept to see how the mechanics feel.
+A living-room motion game for up to four kids at once. A phone or laptop camera watches the kids standing in place; each one becomes a blocky character running down their own lane, and they **jump** over brick walls, **punch** crates, **lean their head** away from crazy birds and put **both hands up** to grab a rope and swing over puddles. A couple of times per workout everyone stops for **throw time**: throw overhand to knock down a pyramid of cans. Built as a proof of concept to see how the mechanics feel.
 
 Everything runs in the browser. There is no server, no account, and the camera picture never leaves the device.
 
@@ -29,7 +29,7 @@ Nobody is ever knocked out; a miss just breaks the streak.
 
 ## Testing without kids
 
-Choose **Keyboard test** on the setup screen. P1 uses W/A/S/D, P2 T/F/G/H, P3 I/J/K/L and P4 the arrow keys: up jumps, down ducks, left/right punches, left+right together is hands up.
+Choose **Keyboard** on the setup screen. P1 uses W/A/S/D, P2 T/F/G/H, P3 I/J/K/L and P4 the arrow keys: up jumps (or throws in throw time), left/right punches, left+right together is hands up, and down plus left/right leans.
 
 ## Hosting
 
@@ -45,7 +45,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - `js/game.js`: move detection relative to each kid's calibrated standing pose, obstacles, scoring and the adaptive difficulty.
 - `js/render.js`: the world is drawn on a small canvas and scaled up without smoothing for the chunky pixel look; text and the HUD are drawn on top at full resolution.
 - `js/heart.js`: the heart check. Signal processing comes from [Sternum](https://github.com/simbonk/sternum) (`vendor/sternum/analysis.js`).
-- `js/audio.js`: synthesised sound effects and spoken cues using the device's built-in voice.
+- `js/audio.js`: synthesised sound effects, a chiptune music loop that speeds up as the workout goes on, and spoken cues (a squeaky cartoon voice for each move) using the device's built-in speech, so there are no audio files or API keys.
 
 The MediaPipe runtime (Apache-2.0) and pose model are vendored in `vendor/` and `models/` so the game doesn't depend on a CDN.
 

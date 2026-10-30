@@ -114,3 +114,30 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
   #hudButtons button { padding: 3px 8px; font-size: 12px; border-radius: 8px; }
   h1 { font-size: 30px; }
 }
+
+/* Setup fits one screen: two columns, sizes follow the viewport height. */
+.panel.wide { width: min(940px, calc(100vw - 24px)); font-size: clamp(12px, 2.6vh, 17px); padding: clamp(10px, 2.4vh, 20px) clamp(12px, 2.4vw, 24px); }
+.wide .head { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.wide h1 { font-size: clamp(24px, 6vh, 40px); margin: 0; }
+.wide .tag { margin: 0; }
+.wide .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; margin-top: clamp(4px, 1.5vh, 12px); }
+.wide .row { margin: clamp(3px, 1vh, 8px) 0; gap: 8px; flex-wrap: nowrap; }
+.wide .label { width: 5.2em; flex: none; }
+.wide .seg { flex-wrap: nowrap; gap: 4px; }
+.wide .seg button { padding: 0.4em 0.7em; font-size: 1em; border-radius: 10px; }
+.wide .player { margin: clamp(3px, 0.9vh, 6px) 0; }
+.wide .player input, .wide .player select { padding: 0.4em 0.6em; font-size: 1em; }
+.wide .player .dot { width: 1.3em; height: 1.3em; }
+.wide .actions { display: flex; gap: 10px; align-items: center; margin-top: clamp(6px, 1.6vh, 14px); }
+.wide .actions .big { flex: 1; margin: 0; padding: 0.45em; font-size: clamp(18px, 4.5vh, 26px); }
+.wide .actions .small { margin: 0; white-space: nowrap; }
+.wide .status { min-height: 0; margin: 4px 0 0; }
+#help { width: min(640px, calc(100vw - 24px)); font-size: clamp(13px, 2.6vh, 16px); }
+#help h2 { margin: 0 0 6px; color: #ffd23f; }
+#help li { margin: 4px 0; }
+@media (max-width: 640px) {
+  .wide .cols { grid-template-columns: 1fr; }
+}
+@media (max-height: 500px) {
+  .wide .tag { display: none; }
+}

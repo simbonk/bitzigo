@@ -124,7 +124,7 @@ export async function runHeartCheck(players, { say, sfx }) {
         <div class="hc-sub">${i + 1} of ${players.length}</div></div></div>
         <ol class="hc-steps">
           <li>Lie down flat on your back.</li>
-          <li>A grown-up puts the phone <b>flat on the middle of your chest</b>, screen up, out of its case.</li>
+          <li>A grown-up puts the phone <b>flat on the middle of your chest</b>, screen up.</li>
           <li>Stay <b>still as a statue</b> for 30 seconds. No talking!</li>
         </ol>
         <button class="big" data-v="go">Start ${esc(p.name)}'s heart check</button>
@@ -205,7 +205,7 @@ export async function runHeartCheck(players, { say, sfx }) {
       } else {
         say("Hmm, I couldn't feel the heartbeat. Let's try again.");
         el.innerHTML = `<p class="hc-big">Couldn't feel the heartbeat</p>
-          <p>Make sure the phone is out of its case, flat on the breastbone, and that nobody moves or talks.</p>
+          <p>Make sure the phone is flat on the middle of the chest, and that nobody moves or talks.</p>
           <button class="big" data-v="again">Try again</button><button class="small" data-v="skip">Skip ${esc(p.name)}</button>`;
         const c = await button(el, 'button');
         done = c === 'skip';

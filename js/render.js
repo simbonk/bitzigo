@@ -24,9 +24,9 @@ export const THEMES = {
 
 const KIND_INFO = {
   log: { word: 'JUMP!', color: '#ffb02e' },
-  bar: { word: 'DUCK!', color: '#ff5d73' },
   crate: { word: 'PUNCH!', color: '#ffe14d' },
-  star: { word: 'HANDS UP!', color: '#7df9ff' },
+  bird: { word: 'LEAN!', color: '#ff5d73' },
+  rope: { word: 'HANDS UP!', color: '#7df9ff' },
 };
 
 // Lane geometry for slot i of n inside a w x h canvas.
@@ -79,6 +79,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   ctx.beginPath();
   ctx.rect(L.x, 0, L.w, L.h);
   ctx.clip();
+  if (p.shake > 0) ctx.translate(R(Math.sin(time * 90) * L.S * 0.18 * p.shake / 0.3), R(Math.cos(time * 70) * L.S * 0.12 * p.shake / 0.3));
 
   // Sky in flat bands.
   const top = shade(theme.sky[0], 0), bottom = shade(theme.sky[1], 0);
@@ -107,7 +108,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
 
   // Ground rows that scroll toward the player.
   const speed = 1 / tuning(p.skill).travel;
-  const dist = p.clock * speed;
+  const dist = (p.run ?? p.clock) * speed;
   const dz = 0.08;
   const offset = dist % (dz * 2);
   const baseRow = Math.floor(dist / dz);
@@ -147,8 +148,10 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     const z = (o.arrive - p.clock) / o.travel;
     if (z <= 1.02) items.push({ z, draw: () => drawObstacle(ctx, L, o, z) });
   }
+  if (p.throwing) items.push({ z: TOWER_Z, draw: () => drawTower(ctx, L, p.throwing) });
   items.push({ z: 0.015, draw: () => drawAvatar(ctx, L, p, time, character) });
   items.sort((a, b) => b.z - a.z).forEach(it => it.draw());
+  if (p.throwing) drawBalls(ctx, L, p.throwing);
 
   drawBursts(ctx, L, p);
 
@@ -209,14 +212,38 @@ function drawObstacle(ctx, L, o, z) {
     const bw = w / 5;
     for (let k = 1; k < 5; k++) rect(ctx, x0 + bw * k, y - hh * 0.7, Math.max(1, u * 0.06), hh * 0.65, '#a8431a');
     rect(ctx, x0, y - hh * 0.4, w, Math.max(1, u * 0.06), '#a8431a');
-  } else if (o.kind === 'bar') {
-    // A striped beam at head height to duck under.
-    const w = roadHalf(L, y) * 2.3, bottom = y - u * 2.55, th = u * 0.6;
-    const post = Math.max(1, u * 0.22);
-    rect(ctx, L.cx - w / 2, bottom, post, y - bottom, '#4a4f63');
-    rect(ctx, L.cx + w / 2 - post, bottom, post, y - bottom, '#4a4f63');
-    block(ctx, L.cx - w / 2, bottom - th, w, th, '#ff5d73', 0.3);
-    for (let k = 0; k < 4; k++) rect(ctx, L.cx - w / 2 + w * (0.1 + k * 0.23), bottom - th * 0.7, w * 0.1, th * 0.6, '#ffffff');
+  } else if (o.kind === 'bird') {
+    // A crazy bird flying at head height on one side: lean the other way.
+    const dir = o.side === 'left' ? -1 : 1;
+    const flap = Math.floor((o.arrive - z * o.travel) * 8 + z * 40) % 2;
+    const bx = L.cx + dir * u * 0.55 + Math.sin(z * 30) * u * 0.15, by = y - u * 3.35;
+    const b = u * 0.95;
+    block(ctx, bx - b / 2, by - b / 2, b, b * 0.85, '#ff5d73', 0.2);        // body
+    rect(ctx, bx - b * 0.15, by + b * 0.05, b * 0.3, b * 0.25, '#ffd0d8');    // belly
+    rect(ctx, bx - b * 0.75, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, '#c9304a'); // wings
+    rect(ctx, bx + b * 0.45, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, '#c9304a');
+    rect(ctx, bx - b * 0.3, by - b * 0.25, b * 0.2, b * 0.22, '#ffffff');    // eyes
+    rect(ctx, bx + b * 0.1, by - b * 0.25, b * 0.2, b * 0.22, '#ffffff');
+    rect(ctx, bx - b * 0.24, by - b * 0.19, b * 0.1, b * 0.12, '#1b1b22');
+    rect(ctx, bx + b * 0.16, by - b * 0.19, b * 0.1, b * 0.12, '#1b1b22');
+    rect(ctx, bx - b * 0.35, by - b * 0.36, b * 0.28, b * 0.07, '#1b1b22');  // angry brows
+    rect(ctx, bx + b * 0.07, by - b * 0.36, b * 0.28, b * 0.07, '#1b1b22');
+    rect(ctx, bx - b * 0.1, by - b * 0.02, b * 0.2, b * 0.18, '#ffb02e');    // beak
+    rect(ctx, bx - b * 0.1, by - b * 0.6, b * 0.08, b * 0.18, '#c9304a');    // tuft
+    rect(ctx, bx + b * 0.04, by - b * 0.66, b * 0.08, b * 0.24, '#c9304a');
+  } else if (o.kind === 'rope') {
+    // A muddy puddle with a rope hanging over it: grab it with both hands.
+    const w = roadHalf(L, y) * 1.9, d = Math.max(2, u * 0.45);
+    rect(ctx, L.cx - w / 2, y - d * 0.6, w, d, '#3f86d6');
+    rect(ctx, L.cx - w * 0.42, y - d * 0.85, w * 0.84, d * 0.3, '#5aa7f0');
+    rect(ctx, L.cx - w * 0.3, y - d * 0.45, w * 0.12, Math.max(1, d * 0.15), '#bfe3ff');
+    rect(ctx, L.cx + w * 0.1, y - d * 0.3, w * 0.18, Math.max(1, d * 0.15), '#bfe3ff');
+    const top = y - u * 5.6, hang = y - u * 3.7;
+    block(ctx, L.cx - w * 0.6, top - u * 0.35, w * 1.2, u * 0.4, '#7a4a24', 0.25);   // branch
+    if (o.result !== 'hit') {
+      rect(ctx, L.cx - Math.max(1, u * 0.08), top, Math.max(2, u * 0.16), hang - top, '#d9b16a');
+      rect(ctx, L.cx - u * 0.16, hang - u * 0.1, u * 0.32, u * 0.3, '#b88a3e');       // knot
+    }
   } else if (o.kind === 'crate') {
     const off = o.side === 'left' ? -1.2 : o.side === 'right' ? 1.2 : 0;
     const size = u * 1.1;
@@ -227,24 +254,48 @@ function drawObstacle(ctx, L, o, z) {
     rect(ctx, cx + size / 2 - b, cy - size * 0.28, b, size * 0.78, '#8a5220');
     rect(ctx, cx - size / 2, cy + size * 0.1, size, b, '#8a5220');
     if (o.side !== 'mid') pixelArrow(ctx, cx, cy + size * 0.12, size * 0.5, o.side === 'left' ? -1 : 1, '#ffe14d');
-  } else if (o.kind === 'star') {
-    pixelStar(ctx, L.cx, y - u * 4.0, u * 1.3, '#7df9ff', '#ffffff');
   }
   ctx.restore();
 }
 
-const STAR_PX = [
-  '..#..',
-  '.###.',
-  '#####',
-  '.###.',
-  '.#.#.',
-];
-function pixelStar(ctx, cx, cy, size, color, edge) {
-  const c = size / 5;
-  STAR_PX.forEach((row, j) => [...row].forEach((ch, i) => {
-    if (ch === '#') rect(ctx, cx - size / 2 + i * c, cy - size / 2 + j * c, c + 0.5, c + 0.5, j < 2 ? edge : color);
-  }));
+// Throw time: a pyramid of cans on a little table down the road.
+const TOWER_Z = 0.3;
+function canBox(L, c) {
+  const { y, s } = project(L, TOWER_Z);
+  const u = L.S * s, cw = u * 0.72, ch = u * 0.9;
+  return { x: L.cx + c.x * cw * 1.08, y: y - u * 1.1 + c.y * ch, cw, ch, u, ground: y };
+}
+function drawTower(ctx, L, T) {
+  const { y, s } = project(L, TOWER_Z);
+  const u = L.S * s;
+  block(ctx, L.cx - u * 1.4, y - u * 1.1, u * 2.8, u * 0.3, '#8a5220', 0.3);
+  rect(ctx, L.cx - u * 1.2, y - u * 0.8, u * 0.2, u * 0.8, '#6b3e18');
+  rect(ctx, L.cx + u, y - u * 0.8, u * 0.2, u * 0.8, '#6b3e18');
+  for (const c of T.cans) {
+    const b = canBox(L, c);
+    ctx.save();
+    ctx.translate(b.x, b.y - b.ch / 2);
+    ctx.rotate(c.rot);
+    rect(ctx, -b.cw / 2, -b.ch / 2, b.cw, b.ch, c.color);
+    rect(ctx, -b.cw / 2, -b.ch / 2, b.cw, Math.max(1, b.ch * 0.14), '#d8dce6');
+    rect(ctx, -b.cw / 2, b.ch * 0.36, b.cw, Math.max(1, b.ch * 0.14), '#d8dce6');
+    rect(ctx, -b.cw / 2, -b.ch * 0.1, b.cw, Math.max(1, b.ch * 0.18), '#ffffff');
+    ctx.restore();
+  }
+}
+function drawBalls(ctx, L, T) {
+  for (const b of T.balls) {
+    const k = Math.min(1, b.t / b.dur);
+    const c = canBox(L, b.target);
+    const sx = L.cx + b.side * L.S * 0.7, sy = L.ground - L.S * 3.4;
+    // A miss sails just over the top of the pyramid.
+    const tx = c.x, ty = b.hit ? c.y - c.ch / 2 : c.y - c.ch * 3;
+    const x = sx + (tx - sx) * k, y = sy + (ty - sy) * k - Math.sin(k * Math.PI) * L.S * 1.6;
+    const r = L.S * (0.32 - 0.2 * k);
+    if (b.t > b.dur) continue;
+    rect(ctx, x - r, y - r, r * 2, r * 2, '#ffffff');
+    rect(ctx, x - r, y - r * 0.2, r * 2, r * 0.4, '#ff5d73');
+  }
 }
 
 function pixelArrow(ctx, cx, cy, size, dir, color) {
@@ -260,12 +311,29 @@ function drawBursts(ctx, L, p) {
     if (e.type !== 'burst') continue;
     const k = e.t / e.life;
     const off = e.side === 'left' ? -1.2 : e.side === 'right' ? 1.2 : 0;
-    const cx = L.cx + off * L.S, cy = L.ground - L.S * (e.kind === 'star' ? 4.0 : 2.55);
+    const cx = L.cx + off * L.S, cy = L.ground - L.S * 2.55;
     for (const q of e.parts) {
       const d = q.sp * k * L.S * 2.4;
       const sz = Math.max(1, q.r * L.S * 1.6 * (1 - k * 0.5));
       rect(ctx, cx + Math.cos(q.a) * d, cy + Math.sin(q.a) * d + k * k * L.S * 2, sz, sz,
-        e.kind === 'star' ? (q.r > 0.1 ? '#7df9ff' : '#ffffff') : (q.r > 0.1 ? '#d08a3a' : '#ffe14d'));
+        q.r > 0.1 ? '#d08a3a' : '#ffe14d');
+    }
+  }
+  for (const e of p.fx) {
+    const k = e.t / e.life;
+    if (e.type === 'confetti') {
+      // Confetti pops up from the avatar and rains down.
+      for (const q of e.parts) {
+        const x = L.cx + (q.x + q.vx * e.t * 2.2) * L.S * 2, y = L.ground - L.S * 3 + (q.vy * e.t + 1.4 * e.t * e.t) * L.S * 3;
+        const sz = Math.max(1, q.r * L.S * 1.4);
+        rect(ctx, x, y, sz, sz * (Math.floor(e.t * 12 + q.x * 10) % 2 ? 1 : 0.5), q.c);
+      }
+    } else if (e.type === 'splash') {
+      for (const q of e.parts) {
+        const d = q.sp * k * L.S * 1.8;
+        const sz = Math.max(1, q.r * L.S * 1.8);
+        rect(ctx, L.cx + Math.cos(q.a) * d, L.ground - L.S * 0.3 - Math.abs(Math.sin(q.a)) * d * 1.5 + k * k * L.S * 2, sz, sz, q.r > 0.1 ? '#3f86d6' : '#bfe3ff');
+      }
     }
   }
 }
@@ -295,6 +363,11 @@ export function cartoonPose(act = {}, bob = 0) {
   }
   if (act.left) { P.le = [-0.9, -1 + dy]; P.lw = [-1.4, -1.05 + dy]; }
   if (act.right) { P.re = [0.9, -1 + dy]; P.rw = [1.4, -1.05 + dy]; }
+  const lean = act.leanL ? -1 : act.leanR ? 1 : 0;
+  if (lean) {
+    // Bend at the hips: the higher up, the further it moves.
+    for (const k of ['nose', 'ls', 'rs', 'le', 're', 'lw', 'rw']) P[k][0] += lean * 0.4 * -P[k][1];
+  }
   return P;
 }
 
@@ -325,13 +398,28 @@ function drawAvatar(ctx, L, p, time, ch) {
   if (p.pts && p.base) P = cameraPose(p);
   else P = cartoonPose(p.act, Math.sin(time * 8 + p.index) * 0.04);
   const S = L.S;
-  const lift = p.lift * S * 0.9;
+  let lift = p.lift * S * 0.9;
+  let dx = 0;
+  if (p.swing > 0) {
+    // Tarzan swing over the puddle: an arc up and back down, hanging from a rope.
+    const k = 1 - p.swing / 0.9;
+    lift += Math.sin(k * Math.PI) * S * 1.8;
+    dx = Math.sin(k * Math.PI * 2) * S * 0.6;
+    if (!(p.pts && p.base)) P = cartoonPose({ reach: true, jump: true });
+    const handY = L.ground - 1.65 * S - lift - 2.2 * S;
+    ctx.strokeStyle = '#d9b16a';
+    ctx.lineWidth = Math.max(2, S * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(L.cx, 0);
+    ctx.lineTo(L.cx + dx, handY);
+    ctx.stroke();
+  }
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
   const sw = S * (1.3 - p.lift * 0.4);
   rect(ctx, L.cx - sw / 2, L.ground - S * 0.12, sw, S * 0.24, 'rgba(0,0,0,0.25)');
   const flash = p.bonk > 0 && Math.floor(time * 12) % 2 === 0;
-  drawCharacter(ctx, L.cx + shake, L.ground - 1.65 * S - lift, S, P, ch, flash);
+  drawCharacter(ctx, L.cx + shake + dx, L.ground - 1.65 * S - lift, S, P, ch, flash);
 }
 
 // Draws a blocky character with hip centre at (ox, oy).
@@ -460,7 +548,13 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     .map(o => ({ o, z: (o.arrive - p.clock) / o.travel }))
     .filter(e => !e.o.result && e.z > -0.05 && e.z < 0.8)
     .sort((a, b) => a.z - b.z)[0];
-  if (next) {
+  if (p.throwing) {
+    const size = clamp(L.w * 0.1, 22, 64);
+    const y = L.horizon * 0.66;
+    const bob = Math.sin(performance.now() / 150) * size * 0.08;
+    cueIcon(ctx, { kind: 'throw' }, L.cx, y - size * 0.3 + bob, size);
+    text(ctx, 'THROW!', L.cx, y + size * 0.85, size * 0.62, '#ffb02e');
+  } else if (next) {
     const k = 1 - next.z / 0.8;
     const info = KIND_INFO[next.o.kind];
     const size = clamp(L.w * 0.1, 22, 64) * (0.85 + 0.35 * k);
@@ -472,18 +566,88 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     ctx.restore();
   }
 
-  // Pop-up words and points.
+  // Over-the-top score effects.
   for (const e of p.fx) {
-    if (e.type === 'points') {
-      const k = e.t / e.life;
+    const k = e.t / e.life;
+    if (e.type === 'kapow') {
+      // Comic-book starburst with a big silly word.
+      const pop = k < 0.12 ? k / 0.12 * 1.25 : k < 0.22 ? 1.25 - (k - 0.12) * 2.5 : 1;
+      const r = Math.min(L.w * 0.3, L.h * 0.17) * pop;
+      const cx = L.cx + Math.sin(e.hue) * L.w * 0.08, cy = L.horizon + L.depth * 0.22;
       ctx.save();
-      ctx.globalAlpha = 1 - k;
-      text(ctx, e.text, L.cx + L.S * 2 * (L.w / L.w), L.ground - L.depth * 0.55 - k * L.h * 0.06, clamp(L.w * 0.08, 16, 40), '#ffe14d');
+      ctx.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
+      ctx.translate(cx, cy);
+      ctx.rotate(e.rot + Math.sin(e.t * 30) * 0.04);
+      ctx.beginPath();
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2, rr = i % 2 ? r * 0.62 : r;
+        ctx.lineTo(Math.cos(a) * rr * 1.25, Math.sin(a) * rr * 0.85);
+      }
+      ctx.closePath();
+      ctx.fillStyle = `hsl(${e.hue},100%,55%)`;
+      ctx.fill();
+      ctx.lineWidth = Math.max(3, r * 0.07);
+      ctx.strokeStyle = '#1b1b22';
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2 + 0.13, rr = i % 2 ? r * 0.45 : r * 0.72;
+        ctx.lineTo(Math.cos(a) * rr * 1.25, Math.sin(a) * rr * 0.85);
+      }
+      ctx.closePath();
+      ctx.fillStyle = `hsl(${(e.hue + 50) % 360},100%,65%)`;
+      ctx.fill();
+      text(ctx, e.text, 0, 0, Math.min(r * 0.42, (r * 2.3) / Math.max(4, e.text.length) * 1.6), '#ffffff');
+      ctx.restore();
+      continue;
+    }
+    if (e.type === 'points') {
+      ctx.save();
+      ctx.globalAlpha = 1 - k * k;
+      const hue = (e.t * 900) % 360;
+      text(ctx, e.text, L.cx + L.w * 0.22, L.horizon + L.depth * 0.42 - k * L.h * 0.1, clamp(L.w * 0.11, 20, 60) * (1.3 - 0.3 * k), `hsl(${hue},100%,60%)`);
+      ctx.restore();
+      continue;
+    }
+    if (e.type === 'fire') {
+      // Streak milestone: wobbling flame-coloured text and pixel flames.
+      ctx.save();
+      ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+      const cols = ['#ff3b30', '#ff9f1c', '#ffe14d'];
+      const size = clamp(L.w * 0.13, 24, 80) * (1 + 0.08 * Math.sin(e.t * 20));
+      text(ctx, e.text, L.cx + Math.sin(e.t * 25) * 4, L.h * 0.5, size, cols[Math.floor(e.t * 12) % 3]);
+      const fw = L.w / 14;
+      for (let i = 0; i < 14; i++) {
+        const fh = (0.5 + 0.5 * Math.abs(Math.sin(e.t * 9 + i * 1.7))) * L.h * 0.12;
+        ctx.fillStyle = cols[i % 3];
+        ctx.fillRect(R(L.x + i * fw), R(L.h - fh), R(fw * 0.8), R(fh));
+      }
+      ctx.restore();
+      continue;
+    }
+    if (e.type === 'levelup') {
+      ctx.save();
+      if (k < 0.25) {
+        ctx.fillStyle = `rgba(255,255,255,${0.55 * (1 - k / 0.25)})`;
+        ctx.fillRect(L.x, 0, L.w, L.h);
+      }
+      ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+      const cy = L.h * 0.36;
+      ctx.translate(L.cx, cy);
+      ctx.rotate(e.t * 1.5);
+      ctx.fillStyle = 'rgba(255,225,77,0.35)';
+      for (let i = 0; i < 12; i++) {
+        ctx.rotate(Math.PI / 6);
+        ctx.fillRect(0, -L.w * 0.03, L.w * 0.6, L.w * 0.06);
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+      text(ctx, e.text, L.cx, cy, clamp(L.w * 0.12, 22, 70) * (k < 0.15 ? 0.5 + k / 0.3 : 1), '#ffe14d');
       ctx.restore();
       continue;
     }
     if (e.type !== 'text') continue;
-    const k = e.t / e.life;
     ctx.save();
     ctx.globalAlpha = 1 - k * k;
     text(ctx, e.text, L.cx, L.horizon + L.depth * 0.2 - k * L.h * 0.08, clamp(L.w * 0.12, 22, 64) * (1 + 0.25 * (1 - k)), e.color);
@@ -496,7 +660,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
 
   if (opts.debug) {
     const a = p.act;
-    const on = ['jump', 'duck', 'left', 'right', 'reach'].filter(k => a[k]).join(' ') || '-';
+    const on = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'throw'].filter(k => a[k]).join(' ') || '-';
     ctx.font = `${R(fs * 0.5)}px monospace`;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#fff';
@@ -564,15 +728,20 @@ function cueIcon(ctx, o, x, y, size) {
     ctx.restore();
   };
   const UP = ['..#..', '.###.', '#####', '.###.', '.###.'];
-  const DOWN = [...UP].reverse();
   const LEFT = ['..#..', '.##..', '#####', '.##..', '..#..'];
   const RIGHT = LEFT.map(r => [...r].reverse().join(''));
   const BOTH = ['.#.#.', '##.##', '#####', '##.##', '.#.#.'];
-  const info = KIND_INFO[o.kind];
-  let rows = o.kind === 'log' ? UP : o.kind === 'bar' ? DOWN : o.kind === 'star' ? STAR_PX
-    : o.side === 'left' ? LEFT : o.side === 'right' ? RIGHT : BOTH;
+  const HANDS = ['#...#', '#...#', '#.#.#', '.###.', '..#..'];
+  const BALL = ['.###.', '#####', '#####', '#####', '.###.'];
+  const color = o.kind === 'throw' ? '#ffb02e' : KIND_INFO[o.kind].color;
+  let rows;
+  if (o.kind === 'log') rows = UP;
+  else if (o.kind === 'rope') rows = HANDS;
+  else if (o.kind === 'throw') rows = BALL;
+  else if (o.kind === 'bird') rows = o.side === 'left' ? RIGHT : LEFT; // lean away from the bird
+  else rows = o.side === 'left' ? LEFT : o.side === 'right' ? RIGHT : BOTH;
   outline(rows);
-  draw(rows, info.color);
+  draw(rows, color);
 }
 
 // ---------------- Camera view ----------------
