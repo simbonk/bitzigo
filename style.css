@@ -252,3 +252,23 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 .kidBars .bar span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .kidBars .bar + .bar { margin-left: 2px; }
 #stats .charts + table.stats { margin-top: 10px; }
+
+/* Play with a friend: room code row on the setup screen, friends on the results. */
+.friendRow { flex-wrap: wrap !important; }
+.roomBox { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.roomBox.hidden { display: none; }
+.roomBox .or { opacity: .6; }
+#roomCode { width: 7.5em; font: inherit; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; padding: 0.35em 0.6em; border-radius: 10px; border: 2px solid #3a4a80; background: #0d1430; color: #fff; }
+.roomBadge { font-weight: bold; font-size: 1.25em; letter-spacing: 2px; color: #101830; background: #ffd23f; border-radius: 10px; padding: 0.1em 0.5em; }
+.roomBadge:empty { display: none; }
+.roomText { flex: 1; min-width: 8em; opacity: .9; }
+.roomText.bad { color: #ffb3b3; opacity: 1; }
+.roomText.good { color: #3ddc84; opacity: 1; }
+#friendResults:empty { display: none; }
+#friendResults { margin: -4px 0 14px; padding: 10px 14px; border-radius: 14px; background: #152040; border: 2px dashed #3d4f86; }
+#friendResults h3 { margin: 0 0 6px; color: #ffd23f; font-size: 18px; }
+#friendResults .vs { font-size: 20px; font-weight: bold; margin-bottom: 6px; }
+#friendResults .fk { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 18px; }
+#friendResults .fk .sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; flex: none; }
+#friendResults .fk .n { flex: 1; }
+#friendResults .fk .s { font-weight: bold; }
