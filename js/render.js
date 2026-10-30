@@ -204,7 +204,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   const treeGap = 0.3, treeOff = dist % treeGap;
   for (let k = -1; k < 5; k++) {
     const z = k * treeGap - treeOff + 0.12;
-    if (z > 1 || z < -0.15) continue;
+    if (z > 1 || z < -0.15 || p.throwing?.type === 'swim') continue;
     items.push({ z, draw: () => drawTree(ctx, L, z, (k + Math.floor(dist / treeGap)) & 1 ? -1 : 1, theme.prop) });
   }
   for (const o of p.obstacles) {
@@ -213,7 +213,14 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   }
   const T = p.throwing;
   if (C?.type === 'climb') items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
-  if (T && MINI.includes(T.type)) items.push({ z: 0.01, draw: () => drawMini(ctx, L, p, T, time) });
+  // The pond sits under everything; other break props draw over the kid.
+  if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
+  if (T?.type === 'swim') items.push({ z: -0.2, draw: () => {
+    const wy = L.ground - L.S * 1.1 + Math.sin(time * 4) * L.S * 0.05;
+    rect(ctx, L.x, wy, L.w, L.h - wy, 'rgba(47,134,214,0.92)');
+    rect(ctx, L.x, wy, L.w, Math.max(1, L.S * 0.08), '#bfe3ff');
+    if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, L.cx + (i - 2.5) * L.S * 0.35, wy - L.S * (0.2 + 0.5 * T.splash) - (i % 2) * L.S * 0.2, L.S * 0.15, L.S * 0.15, '#e6f4ff');
+  } });
   else if (T && T.type !== 'bubbles') {
     items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
@@ -1025,9 +1032,9 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop' }[type] || 'throw';
+    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop', swim: 'rope' }[type] || 'throw';
     const B = p.throwing;
-    const word = type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
+    const word = type === 'swim' ? `SWIM! ${B.goal - B.dist} to go` : type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
     if (kind === 'dance' && B.move) {
       // Picture card of the move to copy, with a shrinking timer bar.
       const m = B.move, k = Math.min(1, m.t / m.dur);
@@ -1412,6 +1419,24 @@ function drawMini(ctx, L, p, T, time) {
       rect(ctx, x + c.side * u, y - u * 0.2, u * 1.4 * c.side, u * 0.3, '#c9304a');
       rect(ctx, x - (rot ? u * 1.6 : u * 0.6), y - u * 0.9, rot ? u * 3.2 : u * 1.2, u * 0.15, '#3a3a44');
       ctx.restore();
+    }
+  } else if (T.type === 'swim') {
+    // A pond across the lane; the far shore comes closer with every stroke.
+    const k = clamp(T.shown, 0, 1);
+    const shoreY = L.horizon + (L.ground - S * 2.2 - L.horizon) * k;
+    rect(ctx, L.x, L.horizon, L.w, L.h - L.horizon, '#2f86d6');
+    rect(ctx, L.x, shoreY - S * 0.5, L.w, S * 0.5, '#e8cf8a');
+    rect(ctx, L.x, shoreY - S * 0.5, L.w, Math.max(1, S * 0.08), '#5fb83b');
+    // Finish flag on the far shore.
+    rect(ctx, L.cx - S * 0.03, shoreY - S * 1.5, S * 0.08, S * 1.0, '#ffffff');
+    rect(ctx, L.cx + S * 0.05, shoreY - S * 1.5, S * 0.5, S * 0.3, '#ff5d73');
+    for (let r = 0; r < 7; r++) {
+      const yy = shoreY + ((r + 0.5) / 7) * (L.h - shoreY), wx = L.x + (((r * 0.37 + time * 0.08) % 1)) * L.w;
+      rect(ctx, wx, yy, S * 0.7, Math.max(1, S * 0.07), '#7cc4ff');
+    }
+    for (let k2 = 0; k2 < 3; k2++) {
+      const lx = L.x + ((k2 * 0.31 + 0.12 + p.index * 0.17) % 1) * L.w, ly = shoreY + (L.ground - shoreY) * (0.25 + k2 * 0.22);
+      rect(ctx, lx, ly, S * 0.6, S * 0.18, '#3f9e4a');
     }
   } else if (T.type === 'rain') {
     // Rainstorm: dark streaks, a roof over the hands, and two buckets.

@@ -110,7 +110,7 @@ export class Player {
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0, fly: 0, wyr: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0, fly: 0, swim: 0, wyr: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;

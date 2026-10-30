@@ -11,7 +11,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (h, x, y) => Math.hypot(h.x - x, h.y - y);
 
 // (The dance-off is still here but out of the rotation: its moves were too fiddly.)
-export const MINI = ['kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain', 'fly', 'chops', 'wyr'];
+export const MINI = ['kaiju', 'bugs', 'goalie', 'climb', 'tray', 'rain', 'fly', 'chops', 'wyr', 'swim'];
 
 // Keyboard stand-in for hands: [up, left, down, right] held.
 export function keyHands(u, l, d, r) {
@@ -60,6 +60,7 @@ export function startMini(p, B) {
     case 'goalie': Object.assign(B, { shots: [], shotT: 1.0 }); break;
     case 'fly': Object.assign(B, { flaps: 0, up: false, pan: 0, flapAt: -9 }); break;
     case 'chops': Object.assign(B, { chops: 0, up: [false, false], upAt: [-9, -9], flash: 0 }); break;
+    case 'swim': Object.assign(B, { dist: 0, goal: Math.round(clamp(10 + p.skill * 0.6, 10, 16)), lastHand: -1, wasUp: [false, false], shown: 0, crossed: 0, splash: 0 }); break;
     case 'climb': Object.assign(B, { height: 0, lastHand: -1, wasUp: [false, false], pan: 0, reachAt: -9 }); break;
     case 'tray': Object.assign(B, { x: 0, items: [], stack: [], dropT: 1.0, wobble: 0 }); break;
     case 'wyr': Object.assign(B, { cand: -1, since: 0, hold: 0 }); break; // the question itself is shared: see wyr.js
@@ -139,6 +140,29 @@ export function handsMini(p, B, hands, now) {
         p.addPoints((ten ? 150 : 20) * p.breakMult, ten ? pick(['HI-YAH!', 'KRAK!', 'NINJA!']) : false);
         p.onEvent?.('chop');
       }
+    });
+  } else if (B.type === 'swim') {
+    // Swim: big arm strokes, one arm over the head then the other.
+    hands.forEach((h, i) => {
+      if (!h) return;
+      const up = h.y < -1.7;
+      if (up && !B.wasUp[i] && i !== B.lastHand) {
+        B.lastHand = i;
+        B.dist++;
+        B.splash = 0.3;
+        p.counts.swim++;
+        p.addPoints(20 * p.breakMult, false);
+        p.onEvent?.('splat');
+        if (B.dist >= B.goal) {
+          B.crossed++;
+          B.dist = 0;
+          B.shown = -0.3;
+          p.addPoints(250 * p.breakMult, pick(['MADE IT!', 'SPLASH DOWN!', 'SUPER SWIMMER!']));
+          p.onEvent?.('save');
+        }
+      }
+      if (up) B.wasUp[i] = true;
+      else if (h.y > -1.2) B.wasUp[i] = false;
     });
   } else if (B.type === 'climb') {
     // Climb: reach one hand above the head, then the other.
@@ -292,6 +316,10 @@ export function updateMini(p, B, dt) {
       break;
     case 'chops':
       B.flash = Math.max(0, B.flash - dt);
+      break;
+    case 'swim':
+      B.shown += (B.dist / B.goal - B.shown) * Math.min(1, dt * 5);
+      B.splash = Math.max(0, B.splash - dt);
       break;
     case 'climb':
       B.pan += (B.height - B.pan) * Math.min(1, dt * 6);
