@@ -200,7 +200,9 @@ export class Player {
       B.noseX = lerp(B.noseX, f.nose.x, 0.02);
       B.hipY = lerp(B.hipY, f.hip.y, a);
       B.noseY = lerp(B.noseY, f.nose.y, a);
-      B.torso = lerp(B.torso, f.torso, a);
+      // Hips hidden means the size is only a guess from shoulder width, which
+      // shrinks when a kid turns side on; don't let that resize the character.
+      if (f.hip.v >= 0.3 || B.noHip) B.torso = lerp(B.torso, f.torso, a);
     }
   }
 
@@ -215,7 +217,7 @@ export class Player {
     }
     this.calibProgress = (now - c.start) / 1.2;
     if (this.calibProgress >= 1) {
-      this.base = { hipX: f.hip.x, hipY: f.hip.y, noseX: f.nose.x, noseY: f.nose.y, torso: f.torso };
+      this.base = { hipX: f.hip.x, hipY: f.hip.y, noseX: f.nose.x, noseY: f.nose.y, torso: f.torso, noHip: f.hip.v < 0.3 };
       this.calib = null;
     }
   }

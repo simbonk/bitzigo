@@ -689,11 +689,54 @@ function cameraPose(p) {
   return P;
 }
 
+// Camera poses stretch and shrink as a kid turns, bends or steps closer, which
+// made the character look big one moment and small the next. Keep each body
+// part close to the cartoon's own length and only take its direction from the
+// camera, with a little of the real length mixed in so it still feels alive.
+const segLen = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+export function steadyPose(P, keepArms) {
+  const firm = (m, ref) => clamp(ref * 0.75 + m * 0.25, ref * 0.85, ref * 1.12);
+  const toward = (from, a, b, ref, fallback) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy);
+    if (m < 0.05) return [from[0] + fallback[0], from[1] + fallback[1]];
+    const k = firm(m, ref) / m;
+    return [from[0] + dx * k, from[1] + dy * k];
+  };
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const span = (c, a, b, w) => {
+    let dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy);
+    if (m < 0.05) { dx = 1; dy = 0; m = 1; }
+    const hw = firm(m, w) / 2 / m;
+    return [[c[0] - dx * hw, c[1] - dy * hw], [c[0] + dx * hw, c[1] + dy * hw]];
+  };
+  const S0 = STAND, out = {};
+  const hc = mid(P.lh, P.rh);
+  const sc = toward(hc, hc, mid(P.ls, P.rs), 1, [0, -1]);
+  [out.lh, out.rh] = span(hc, P.lh, P.rh, segLen(S0.lh, S0.rh));
+  [out.ls, out.rs] = span(sc, P.ls, P.rs, segLen(S0.ls, S0.rs));
+  out.nose = toward(sc, mid(P.ls, P.rs), P.nose, 0.5, [0, -0.5]);
+  for (const [sh, el, wr] of [['ls', 'le', 'lw'], ['rs', 're', 'rw']]) {
+    if (keepArms) {
+      // Hand break games: the hands must stay exactly where the camera saw them.
+      const dx = out[sh][0] - P[sh][0], dy = out[sh][1] - P[sh][1];
+      out[el] = [P[el][0] + dx * 0.5, P[el][1] + dy * 0.5]; out[wr] = P[wr];
+      continue;
+    }
+    out[el] = toward(out[sh], P[sh], P[el], segLen(S0[sh], S0[el]), [0, 0.48]);
+    out[wr] = toward(out[el], P[el], P[wr], segLen(S0[el], S0[wr]), [0, 0.44]);
+  }
+  for (const [hp, kn, an] of [['lh', 'lk', 'la'], ['rh', 'rk', 'ra']]) {
+    out[kn] = toward(out[hp], P[hp], P[kn], 0.8, [0, 0.8]);
+    out[an] = toward(out[kn], P[kn], P[an], 0.8, [0, 0.8]);
+  }
+  return out;
+}
+
 function drawAvatar(ctx, L, p, time, ch) {
   let P;
   if (p.pts && p.base) {
     // Smooth out camera jitter so the character doesn't twitch.
-    const raw = cameraPose(p), prev = p.drawPose;
+    const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type)), prev = p.drawPose;
     P = prev ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [prev[k][0] + (v[0] - prev[k][0]) * 0.45, prev[k][1] + (v[1] - prev[k][1]) * 0.45]])) : raw;
     p.drawPose = P;
   }
