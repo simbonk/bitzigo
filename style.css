@@ -289,3 +289,8 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
   .wide .seg button { padding: .35em .6em; }
   .wide .label { width: 4.6em; }
 }
+#roomWant { align-items: center; gap: 4px; }
+#roomWant .wantLabel { opacity: .8; margin-right: 2px; }
+#roomWant button { padding: 0.25em 0.6em; }
+/* A guest in a friend game plays the code maker's world, length and tutorial. */
+body.roomGuest #length, body.roomGuest #theme, body.roomGuest #intro { opacity: .4; pointer-events: none; }

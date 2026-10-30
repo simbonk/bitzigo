@@ -6,7 +6,7 @@ import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 import { saveGame, addHeartRates, clearStats, showStats } from './stats.js';
-import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere, friendTicks, MAX_DEVICES } from './net.js';
+import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere, friendTicks, setWant } from './net.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#stage');
@@ -190,10 +190,16 @@ let lastFriends = [];   // the friends' latest updates, kept for the results aft
 let ownSettings = null; // the guest's own length and tutorial, while the code maker's are in use
 let ownCount = null;    // the player count from before a big room, given back on leaving
 // Four lanes in all: 2 kids per device with one friend's device, 1 each with 3 or 4 devices.
-const kidsPerDevice = () => (room.devices > 2 ? 1 : MAX_KIDS);
+const kidsPerDevice = () => (Math.max(room.devices, room.want) > 2 ? 1 : MAX_KIDS);
+// Everyone the code maker is waiting for has joined.
+const allJoined = () => room.devices >= room.want;
 function renderRoom() {
   const s = room.status;
   const on = s !== 'off' && s !== 'error';
+  // A guest plays the code maker's world, length and tutorial: grey those out.
+  document.body.classList.toggle('roomGuest', on && room.role === 'guest');
+  $('#roomJoin').disabled = s === 'joining';
+  if (s === 'connected' && room.role === 'guest') { try { localStorage.setItem('bitzigo-room', room.code); } catch { } }
   const cap = on ? kidsPerDevice() : MAX_KIDS;
   document.querySelectorAll('#count button').forEach(b => { b.disabled = Number(b.dataset.n) > cap; });
   if (settings.count > cap) { ownCount ??= settings.count; settings.count = cap; }
@@ -206,14 +212,20 @@ function renderRoom() {
   const msg = {
     starting: 'Making a code…',
     joining: `Joining ${room.code}…`,
-    waiting: 'Send your friend the invite, then press Let\'s go.',
-    connected: (room.role === 'host' ? `${room.devices - 1} friend${room.devices > 2 ? 's' : ''} joined! Press Let's go and you'll all start together.`
-      : `Joined (${room.devices} devices)! Press Let's go. The code maker picks the world and workout length.`) + (room.devices > 2 ? ' One player each.' : ''),
+    waiting: `Pick how many devices will play, send the invite, then press Let's go.`,
+    connected: (allJoined() ? 'Everyone joined! Press Let\'s go. The game starts when every device is ready.'
+      : `${room.devices} of ${room.want} devices here, waiting for the rest.`)
+      + (room.role === 'guest' ? ' The code maker picks the world and length.' : '') + (room.want > 2 ? ' One player each.' : ''),
     lost: 'Lost the connection to your friend.',
   }[s] || '';
   const el = $('#roomText');
   el.textContent = msg;
   el.className = `roomText ${s === 'connected' ? 'good' : s === 'lost' ? 'bad' : ''}`;
+  $('#roomWant').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  $('#roomWant').querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.w) === room.want);
+    b.disabled = Number(b.dataset.w) < room.devices; // can't go below who's already here
+  });
   $('#roomCopy').classList.toggle('hidden', room.role !== 'host' || !room.code);
   $('#roomShare').classList.toggle('hidden', room.role !== 'host' || !room.code || !navigator.share);
   if (s === 'error') $('#status').textContent = room.error;
@@ -234,9 +246,12 @@ onRoom(msg => {
   if (msg.type === 'go') friendSaysGo(msg);
 });
 $('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch(e => console.error(e)); };
+// The last code joined is filled in, so rejoining after a reload is one tap.
+try { $('#roomCode').value = localStorage.getItem('bitzigo-room') || ''; } catch { }
 $('#roomJoin').onclick = () => { $('#status').textContent = ''; joinRoom($('#roomCode').value).catch(e => console.error(e)); };
 $('#roomCode').onkeydown = e => { if (e.key === 'Enter') $('#roomJoin').click(); };
 $('#roomLeave').onclick = () => leaveRoom();
+$('#roomWant').querySelectorAll('button').forEach(b => { b.onclick = () => setWant(Number(b.dataset.w)); });
 // The invite: steps rather than a bare link. A link opened in iPhone Safari
 // can't go full screen, and the Home Screen icon opens without the link's
 // code, so the friend adds Bitzigo to the Home Screen and types the code.
@@ -752,12 +767,14 @@ addEventListener('keydown', e => {
   if (e.code === 'Backquote') debug = !debug;
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyC' && (state === 'play' || state === 'tutorial')) recalibrate();
-  if (e.code === 'Enter' && state === 'lobby') lobby.waiting ? startReady() : lobbyDone();
+  if (e.code === 'Enter') startNow();
   if (e.code === 'Escape' && ['lobby', 'ready', 'tutorial', 'play'].includes(state)) endRound(true);
 });
 addEventListener('keyup', e => keys.delete(e.code));
-// Start now: start with whoever is here. Pressed while waiting for a friend, it starts without them.
-$('#btnStart').onclick = () => state === 'lobby' && (lobby.waiting ? startReady() : lobbyDone());
+// Start now: start with whoever is here. With friends it says we're ready; pressed
+// again after 10 seconds of waiting, it starts without them.
+const startNow = () => state === 'lobby' && (lobby.waiting && now() - lobby.waiting > 10 ? startReady() : lobbyDone());
+$('#btnStart').onclick = startNow;
 $('#btnCam').onclick = () => { showCam = !showCam; };
 $('#btnMute').onclick = toggleMute;
 $('#btnStop').onclick = () => endRound(true);
@@ -1071,7 +1088,7 @@ function lobbyDone() {
   if (!friendHere() && room.status !== 'waiting') return startReady();
   if (!lobby.waiting) lobby.waiting = now();
   const fs = friendTicks();
-  if (room.role === 'host' && friendHere() && fs.length && fs.every(f => f.state === 'lobby' && f.waiting)) {
+  if (room.role === 'host' && friendHere() && allJoined() && fs.length >= room.want - 1 && fs.every(f => f.state === 'lobby' && f.waiting)) {
     if (!breakBag.length) fillBreakBag();
     sendRoom({ type: 'go', theme: roundTheme, seconds: settings.seconds, intro: settings.intro, round: setRound, breaks: breakBag });
     startReady();
@@ -1442,7 +1459,9 @@ function drawLobby(t) {
   }
   if (lobby.waiting) {
     headline = 'Waiting for your friends…';
-    sub = 'We\'ll start together when they\'re ready. Start now plays without them.';
+    sub = !allJoined() ? `${room.devices} of ${room.want} devices have joined so far.`
+      : now() - lobby.waiting > 10 ? 'Taking a while? Press Start now again to play without them.'
+      : 'We\'ll all start together when everyone is ready.';
   }
   text(ctx, headline, W / 2, H * 0.06, H * 0.065, '#ffe14d');
   const line = friendLine();
@@ -1485,7 +1504,7 @@ function drawLobby(t) {
 
 // What the friends are up to, for the bottom of the lobby.
 function friendLine() {
-  if (room.status === 'waiting') return `🤝 Code ${room.code}: waiting for friends to join`;
+  if (room.status === 'waiting' || (room.status === 'connected' && !allJoined())) return `🤝 ${room.code}: ${room.devices} of ${room.want} devices joined`;
   if (room.status === 'lost') return '🤝 Lost the connection to your friends';
   const fs = friendTicks();
   if (!friendHere() || !fs.length) return '';
