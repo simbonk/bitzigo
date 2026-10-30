@@ -1,3 +1,4 @@
+:root { --safeX: max(env(safe-area-inset-left), env(safe-area-inset-right)); } /* notch side, landscape */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; height: 100%; overflow: hidden;
@@ -10,7 +11,7 @@ html, body {
 
 .panel {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  width: min(560px, calc(100vw - 32px - 2 * var(--safeX))); max-height: calc(100vh - 32px); overflow-y: auto;
   background: rgba(16, 24, 48, 0.94); border: 3px solid #ffd23f; border-radius: 24px;
   padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
@@ -82,7 +83,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .heartBtn { background: #ff5d73; color: #fff; }
 
 /* Heart check */
-.heart { text-align: center; width: min(720px, calc(100vw - 32px)); }
+.heart { text-align: center; width: min(720px, calc(100vw - 32px - 2 * var(--safeX))); }
 .hc-who { display: flex; align-items: center; justify-content: center; gap: 16px; }
 .face.xl { width: 110px; height: 110px; border: 4px solid #fff; }
 .hc-name { font-size: 34px; font-weight: bold; }
@@ -116,7 +117,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 }
 
 /* Setup fits one screen: two columns, sizes follow the viewport height. */
-.panel.wide { width: min(940px, calc(100vw - 24px)); font-size: clamp(12px, 2.6vh, 17px); padding: clamp(10px, 2.4vh, 20px) clamp(12px, 2.4vw, 24px); }
+.panel.wide { width: min(940px, calc(100vw - 24px - 2 * var(--safeX))); font-size: clamp(12px, 2.6vh, 17px); padding: clamp(10px, 2.4vh, 20px) clamp(12px, 2.4vw, 24px); }
 .wide .head { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .wide h1 { font-size: clamp(24px, 6vh, 40px); margin: 0; }
 .wide .tag { margin: 0; }
@@ -132,7 +133,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .wide .actions .big { flex: 1; margin: 0; padding: 0.45em; font-size: clamp(18px, 4.5vh, 26px); }
 .wide .actions .small { margin: 0; white-space: nowrap; }
 .wide .status { min-height: 0; margin: 4px 0 0; }
-#help { width: min(640px, calc(100vw - 24px)); font-size: clamp(13px, 2.6vh, 16px); }
+#help { width: min(640px, calc(100vw - 24px - 2 * var(--safeX))); font-size: clamp(13px, 2.6vh, 16px); }
 #help h2 { margin: 0 0 6px; color: #ffd23f; }
 #help li { margin: 4px 0; }
 @media (max-width: 640px) {
@@ -165,7 +166,7 @@ body:not(.testing) .testOnly { display: none; }
 
 .topBtns { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
 .topBtns .setupBtn { position: static; }
-#stats { width: min(860px, calc(100vw - 24px)); font-size: clamp(12px, 2.4vh, 15px); }
+#stats { width: min(860px, calc(100vw - 24px - 2 * var(--safeX))); font-size: clamp(12px, 2.4vh, 15px); }
 #stats h2 { margin: 0; color: #ffd23f; }
 #stats h3 { margin: 14px 0 4px; color: #ffd23f; font-size: 1.05em; }
 #stats .note { margin: 2px 0 10px; opacity: .75; }
