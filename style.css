@@ -193,3 +193,28 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #kidPick .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 #kidPick .sw.big { width: 1.4em; height: 1.4em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 #kidPick .sw.big:disabled { opacity: .25; }
+
+/* Stats as a contained modal: stays clear of the iPhone status bar and the
+   home bar, with the tables scrolling inside it. */
+#stats {
+  display: flex; flex-direction: column;
+  width: min(820px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  top: calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2);
+  overflow: hidden; padding: 14px 16px 12px;
+}
+#stats.hidden { display: none; }
+#statsBody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#stats .big { margin-top: 10px; padding: .4em; font-size: 1.15em; }
+#stats .small { margin-top: 6px; }
+#stats .closeX { position: absolute; top: 10px; right: 12px; width: 2em; height: 2em; border-radius: 50%; border: 2px solid #3a4a80; background: #24305a; color: #fff; font: inherit; font-weight: bold; cursor: pointer; }
+@media (max-height: 500px) {
+  #stats { font-size: 12px; padding: 10px 12px 8px; }
+  #stats h3 { margin: 8px 0 2px; }
+  table.stats td, table.stats th { padding: 2px 4px; }
+}
+#stats .statsActions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+#stats .statsActions .big { flex: 1; margin: 0; }
+#stats .statsActions .small { margin: 0; white-space: nowrap; }
+/* Every panel stays clear of the iPhone status bar and home bar. */
+.panel { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); top: calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2); }
