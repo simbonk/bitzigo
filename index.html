@@ -12,21 +12,44 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
 <title>Bitzigo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="stage"></canvas>
 <video id="cam" playsinline muted></video>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- One icon set for the menus: thick rounded strokes over a soft fill of the same colour. -->
+    <symbol id="i-home" viewBox="0 0 24 24"><path class="f" d="M4 11 12 4l8 7v9H4z"/><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M10 20v-5h4v5"/></symbol>
+    <symbol id="i-friends" viewBox="0 0 24 24"><circle class="f" cx="8" cy="8" r="3.2"/><circle class="f" cx="16.5" cy="9" r="2.7"/><circle cx="8" cy="8" r="3.2"/><circle cx="16.5" cy="9" r="2.7"/><path d="M2.5 19.5c.6-3.6 2.8-5.5 5.5-5.5s4.9 1.9 5.5 5.5M13.6 14.6c.9-.7 1.9-1 2.9-1 2.4 0 4.3 1.7 4.9 5"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h16"/><circle class="k" cx="9" cy="6.5" r="2.4"/><circle class="k" cx="15.5" cy="12" r="2.4"/><circle class="k" cx="7.5" cy="17.5" r="2.4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><rect class="f" x="4" y="12" width="4" height="8" rx="1"/><rect class="f" x="10" y="6" width="4" height="14" rx="1"/><rect class="f" x="16" y="9" width="4" height="11" rx="1"/><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="16" y="9" width="4" height="11" rx="1"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path class="f" d="M3 8.5h4l1.6-2.5h6.8L17 8.5h4V19H3z"/><path d="M3 8.5h4l1.6-2.5h6.8L17 8.5h4V19H3z"/><circle cx="12" cy="13.3" r="3.3"/></symbol>
+    <symbol id="i-selfie" viewBox="0 0 24 24"><rect class="f" x="6" y="2.5" width="12" height="19" rx="2.5"/><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="10" r="2.4"/><path d="M8.6 16.5c.6-1.8 1.9-2.7 3.4-2.7s2.8.9 3.4 2.7M10.5 5.3h3"/></symbol>
+    <symbol id="i-dice" viewBox="0 0 24 24"><rect class="f" x="4" y="4" width="16" height="16" rx="4"/><rect x="4" y="4" width="16" height="16" rx="4"/><circle class="d" cx="9" cy="9" r="1.4"/><circle class="d" cx="15" cy="15" r="1.4"/><circle class="d" cx="12" cy="12" r="1.4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect class="f" x="8" y="8" width="12" height="12" rx="2.5"/><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 5.5V5a1.5 1.5 0 0 0-1.5-1.5h-9A1.5 1.5 0 0 0 4 5v9a1.5 1.5 0 0 0 1.5 1.5H6"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path class="f" d="M4 5h16v11H11l-5 4v-4H4z"/><path d="M4 5h16v11H11l-5 4v-4H4z"/></symbol>
+    <symbol id="i-together" viewBox="0 0 24 24"><circle class="f" cx="7.5" cy="5" r="2.2"/><circle class="f" cx="16.5" cy="5" r="2.2"/><circle cx="7.5" cy="5" r="2.2"/><circle cx="16.5" cy="5" r="2.2"/><path d="M7.5 8v6l-2.5 6M7.5 14l2.5 6M4.5 11h6M16.5 8v6l-2.5 6M16.5 14l2.5 6M13.5 11h6"/></symbol>
+    <symbol id="i-pace" viewBox="0 0 24 24"><circle class="f" cx="12" cy="13.5" r="7.5"/><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 2.8h4M12 2.8V6M18.3 6.4l1.3-1.3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path class="f" d="M15 5 8 12l7 7z"/><path d="M15 5 8 12l7 7z"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path class="f" d="M9 5l7 7-7 7z"/><path d="M9 5l7 7-7 7z"/></symbol>
+  </defs>
+</svg>
 <section id="setup" class="panel wide">
   <header class="head">
-    <div class="topBtns"><button id="statsBtn" class="setupBtn">📊 Stats</button><button id="helpBtn" class="setupBtn">📷 Setup</button></div>
+    <div class="topBtns"><button id="statsBtn" class="setupBtn"><svg class="ic"><use href="#i-chart"/></svg>Stats</button><button id="helpBtn" class="setupBtn"><svg class="ic"><use href="#i-camera"/></svg>Setup</button></div>
     <h1>Bitzigo</h1>
     <p class="tag">Jump, punch, dodge and swing. Up to 2 players per camera.</p>
   </header>
 
   <div class="tabs" id="modeTabs" role="tablist">
-    <button data-mode="here" class="on" role="tab">🏠 Play here</button><button data-mode="friends" role="tab">🤝 Play with friends</button><button data-mode="extras" role="tab">⚙️ Extra settings</button>
+    <button data-mode="here" class="on" role="tab"><svg class="ic"><use href="#i-home"/></svg>Play here</button><button data-mode="friends" role="tab"><svg class="ic"><use href="#i-friends"/></svg>Play with friends</button><button data-mode="extras" role="tab"><svg class="ic"><use href="#i-gear"/></svg>Extra settings</button>
   </div>
 
   <div class="friendRow">
@@ -34,7 +57,7 @@
       <div class="roomCard">
         <div class="cardHead">Start a game</div>
         <p>Get a code to send to friends. You pick the world and length.</p>
-        <button id="roomMake" class="setupBtn">🤝 Make a code</button>
+        <button id="roomMake" class="setupBtn"><svg class="ic"><use href="#i-friends"/></svg>Make a code</button>
       </div>
       <div class="roomCard">
         <div class="cardHead">Join a game</div>
@@ -44,10 +67,10 @@
     </div>
     <div id="roomOn" class="roomBox hidden">
       <span id="roomBadge" class="roomBadge"></span>
-      <span id="roomWant" class="seg hidden" title="How many phones or tablets will play"><span class="wantLabel">Devices</span><button data-w="2">2</button><button data-w="3">3</button><button data-w="4">4</button></span>
+      <span id="roomWantBox" class="wantBox hidden"><span class="wantLabel">Devices</span><span id="roomWant" class="seg" title="How many phones or tablets will play"><button data-w="2">2</button><button data-w="3">3</button><button data-w="4">4</button></span></span>
       <span id="roomText" class="roomText"></span>
-      <button id="roomCopy" class="setupBtn hidden">📋 Copy invite</button>
-      <button id="roomShare" class="setupBtn hidden">Text it</button>
+      <button id="roomCopy" class="setupBtn hidden"><svg class="ic"><use href="#i-copy"/></svg>Copy invite</button>
+      <button id="roomShare" class="setupBtn hidden"><svg class="ic"><use href="#i-share"/></svg>Text it</button>
       <button id="roomLeave" class="setupBtn">Leave</button>
     </div>
   </div>
@@ -67,7 +90,7 @@
       <div class="row">
         <span class="label">Input</span>
         <div class="seg" id="input">
-          <button data-input="user">Front cam</button><button data-input="environment">Back cam</button><button data-input="keys" class="testOnly">Keyboard</button>
+          <button data-input="user"><svg class="ic"><use href="#i-selfie"/></svg>Front</button><button data-input="environment"><svg class="ic"><use href="#i-camera"/></svg>Back</button><button data-input="keys" class="testOnly">Keyboard</button>
         </div>
       </div>
       <div class="row">
@@ -78,18 +101,18 @@
       </div>
       <div class="row">
         <span class="label">World</span>
-        <select id="theme" class="pick"></select>
+        <select id="theme" class="pick hidden" aria-hidden="true" tabindex="-1"></select><div id="worldPick" class="worldPick"><button class="wArrow" data-d="-1" aria-label="Previous world"><svg class="ic"><use href="#i-left"/></svg></button><div class="wCard"><span class="wSwatch"></span><span class="wName"></span></div><button class="wArrow" data-d="1" aria-label="Next world"><svg class="ic"><use href="#i-right"/></svg></button></div>
       </div>
       <div class="row">
         <span class="label">Course</span>
         <div class="seg" id="course">
-          <button data-course="together" class="on">Together</button><button data-course="own">Own pace</button>
+          <button data-course="together" class="on"><svg class="ic"><use href="#i-together"/></svg>Together</button><button data-course="own"><svg class="ic"><use href="#i-pace"/></svg>Own pace</button>
         </div>
       </div>
       <div class="row">
         <span class="label">Tutorial</span>
         <div class="seg" id="intro">
-          <button data-intro="1" class="on">On</button><button data-intro="0">Off</button>
+          <button data-intro="1" class="on"><svg class="ic"><use href="#i-check"/></svg>On</button><button data-intro="0"><svg class="ic"><use href="#i-x"/></svg>Off</button>
         </div>
       </div>
     </div>

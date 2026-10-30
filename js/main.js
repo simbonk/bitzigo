@@ -171,12 +171,29 @@ seg('#count', 'n', 'count', Number);
   mark();
 }
 seg('#length', 'sec', 'seconds', Number);
-// World picker: a drop-down, with Surprise me (a random world) as the default.
+// World picker: arrows either side of a little picture of the world, with
+// Surprise me (a random world) first. A hidden drop-down keeps the choice.
 {
   const el = $('#theme');
-  el.innerHTML = `<option value="random">🎲 Surprise me</option>` + Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('');
+  el.innerHTML = `<option value="random">Surprise me</option>` + Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('');
   el.value = THEMES[settings.theme] ? settings.theme : 'random';
-  el.onchange = () => { settings.theme = el.value; roundTheme = pickTheme(); save(); };
+  const show = () => {
+    const t = THEMES[el.value];
+    $('#worldPick .wName').textContent = el.selectedOptions[0]?.textContent || '';
+    $('#worldPick .wSwatch').innerHTML = t ? '' : '<svg class="ic"><use href="#i-dice"/></svg>';
+    $('#worldPick .wSwatch').style.background = t
+      ? `linear-gradient(${t.sky[0]}, ${t.sky[1]} 55%, ${t.grass[0]} 55%, ${t.grass[1]} 72%, ${t.road[0]} 72%)`
+      : 'linear-gradient(135deg, #ff5d73, #ffd23f, #3ddc84, #4fb6ff, #b07bff)';
+  };
+  el.onchange = () => { settings.theme = el.value; roundTheme = pickTheme(); save(); show(); };
+  document.querySelectorAll('#worldPick .wArrow').forEach(b => {
+    b.onclick = () => {
+      const n = el.options.length;
+      el.selectedIndex = (el.selectedIndex + Number(b.dataset.d) + n) % n;
+      el.dispatchEvent(new Event('change'));
+    };
+  });
+  show();
 }
 seg('#intro', 'intro', 'intro', v => v === '1');
 seg('#course', 'course', 'course');
@@ -222,7 +239,7 @@ function renderRoom() {
   const el = $('#roomText');
   el.textContent = msg;
   el.className = `roomText ${s === 'connected' ? 'good' : s === 'lost' ? 'bad' : ''}`;
-  $('#roomWant').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  $('#roomWantBox').classList.toggle('hidden', room.role !== 'host' || !room.code);
   $('#roomWant').querySelectorAll('button').forEach(b => {
     b.classList.toggle('on', Number(b.dataset.w) === room.want);
     b.disabled = Number(b.dataset.w) < room.devices; // can't go below who's already here
@@ -290,9 +307,10 @@ setTab(settings.tab);
 function renderExtrasSum() {
   const len = settings.seconds ? `${settings.seconds / 60} min` : 'No time limit';
   const world = $('#theme').selectedOptions[0]?.textContent || '';
+  const sumIcon = '<svg class="ic"><use href="#i-gear"/></svg>';
   const bits = [len, world, settings.intro ? 'Tutorial on' : 'Tutorial off'];
   if (settings.count > 1) bits.push(settings.course === 'own' ? 'Own pace' : 'Together');
-  $('#extrasSum').textContent = bits.join(' · ');
+  $('#extrasSum').innerHTML = sumIcon + bits.join(' · ');
 }
 $('#extrasCol').addEventListener('click', () => setTimeout(renderExtrasSum));
 $('#theme').addEventListener('change', renderExtrasSum);
@@ -316,6 +334,7 @@ const roomInvite = () => [
   '3. Open Bitzigo from the new icon',
   `4. Tap Play with friends, type ${room.code} and tap Join`,
 ].join('\n');
+const copyLabel = $('#roomCopy').innerHTML;
 $('#roomCopy').onclick = async () => {
   const words = roomInvite();
   try { await navigator.clipboard.writeText(words); } catch {
@@ -326,8 +345,8 @@ $('#roomCopy').onclick = async () => {
     try { document.execCommand('copy'); } catch { }
     box.remove();
   }
-  $('#roomCopy').textContent = '✓ Copied';
-  setTimeout(() => { $('#roomCopy').textContent = '📋 Copy invite'; }, 2000);
+  $('#roomCopy').innerHTML = '<svg class="ic"><use href="#i-check"/></svg>Copied';
+  setTimeout(() => { $('#roomCopy').innerHTML = copyLabel; }, 2000);
 };
 $('#roomShare').onclick = () => {
   navigator.share?.({ title: 'Bitzigo', text: roomInvite() }).catch(() => { });
