@@ -486,3 +486,10 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 @media (pointer: coarse) {
   input, select, textarea { font-size: max(16px, 1em) !important; }
 }
+/* Pause: a dim screen with one big Resume button. */
+#pauseBox { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(8, 12, 30, .6); }
+#pauseBox.hidden { display: none; }
+#pauseBox .pauseTitle { font-family: "Lilita One", system-ui, sans-serif; font-size: clamp(40px, 12vh, 96px); color: #ffd23f; text-shadow: 0 4px 0 #b5830f, 0 7px 0 rgba(0,0,0,.35); }
+#pauseBox p { margin: 0; color: #fff; opacity: .85; min-height: 1.2em; }
+#pauseBox .big { width: min(320px, 70vw); }
+body.gamePaused #hudButtons { opacity: 1; z-index: 21; }

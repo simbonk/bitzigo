@@ -155,6 +155,8 @@ function use(c) {
     if (!msg || typeof msg !== 'object' || !links.has(c.peer)) return;
     room.heard = now();
     if (msg.type === 'full') { setStatus('error', 'That game is already full.'); return; }
+    // The code maker passes a guest's pause on to the other guests.
+    if (msg.type === 'pause' && room.role === 'host') for (const [id, l] of links) if (id !== c.peer && l.open) l.send(msg);
     if (msg.type === 'tick') {
       // The code maker passes each guest's update on to the other guests.
       const from = msg.from || c.peer;

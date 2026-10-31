@@ -16,7 +16,15 @@ export function unlockAudio() {
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
     loadVoices();
   }
-  if (ac.state !== 'running' && ac.state !== 'closed') ac.resume().catch(() => { });
+  if (!held && ac.state !== 'running' && ac.state !== 'closed') ac.resume().catch(() => { });
+}
+
+// Pause: freeze every sound and the music exactly where they are.
+let held = false;
+export function holdAudio(on) {
+  held = on;
+  if (!ac) return;
+  (on ? ac.suspend() : ac.resume()).catch(() => { });
 }
 
 export function setMuted(m) {

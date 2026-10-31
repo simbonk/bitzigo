@@ -2,7 +2,7 @@ import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions }
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
 import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
-import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity, holdAudio } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 import { saveGame, addHeartRates, clearStats, showStats } from './stats.js';
@@ -263,6 +263,7 @@ onRoom(msg => {
   if (msg.type === 'status') renderRoom();
   if (msg.type === 'tick') { lastFriends = friendTicks(); if (state === 'end') renderFriendResults(); }
   if (msg.type === 'go') friendSaysGo(msg);
+  if (msg.type === 'pause' && ['ready', 'tutorial', 'play'].includes(state)) setPaused(!!msg.on, true);
 });
 // Two tabs on the home screen: Play here (just this camera) and Play with
 // friends (a room code, then the same setup). Leaving the friends tab leaves
@@ -474,6 +475,8 @@ function setState(s) {
   stateT = now();
   $('#hudButtons').classList.toggle('hidden', !['lobby', 'ready', 'tutorial', 'play'].includes(s));
   $('#btnStart').classList.toggle('hidden', s !== 'lobby');
+  $('#btnPause').classList.toggle('hidden', !['ready', 'tutorial', 'play'].includes(s));
+  if (!['ready', 'tutorial', 'play'].includes(s) && pausedAt) setPaused(false);
   updateFsNudge();
 }
 
@@ -843,6 +846,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyV') showCam = !showCam;
   if (e.code === 'Backquote') debug = !debug;
   if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'KeyP' && ['ready', 'tutorial', 'play'].includes(state)) setPaused(!pausedAt);
   if (e.code === 'KeyC' && (state === 'play' || state === 'tutorial')) recalibrate();
   if (e.code === 'Enter') startNow();
   if (e.code === 'Escape' && ['lobby', 'ready', 'tutorial', 'play'].includes(state)) endRound(true);
@@ -855,6 +859,22 @@ $('#btnStart').onclick = startNow;
 $('#btnCam').onclick = () => { showCam = !showCam; };
 $('#btnMute').onclick = toggleMute;
 $('#btnStop').onclick = () => endRound(true);
+
+// Pause: the whole game, sound and music stop where they are. In a friend
+// game it pauses (and resumes) every device in the room.
+function setPaused(on, fromFriend = false) {
+  if (!!pausedAt === on) return;
+  if (on) pausedAt = realNow();
+  else { pausedFor += realNow() - pausedAt; pausedAt = 0; last = realNow() - pausedFor; }
+  holdAudio(on);
+  document.body.classList.toggle('gamePaused', on);
+  $('#btnPause').textContent = on ? '▶ Resume' : '❚❚ Pause';
+  $('#pauseBox').classList.toggle('hidden', !on);
+  $('#pauseWho').textContent = fromFriend ? 'A friend paused the game.' : '';
+  if (!fromFriend && room.status === 'connected') sendRoom({ type: 'pause', on });
+}
+$('#btnPause').onclick = () => setPaused(!pausedAt);
+$('#pauseGo').onclick = () => setPaused(false);
 
 function toggleMute() {
   muted = !muted;
@@ -1044,7 +1064,10 @@ function captureFace(p) {
 
 // ---------------- Main loop ----------------
 
-const now = () => performance.now() / 1000;
+// The game clock stands still while the game is paused.
+let pausedAt = 0, pausedFor = 0;
+const realNow = () => performance.now() / 1000;
+const now = () => (pausedAt || realNow()) - pausedFor;
 let last = now();
 
 function resize() {
@@ -1068,7 +1091,7 @@ function loop() {
   if (state === 'heart') return; // the heart check draws its own screens
 
   if (tracker && state !== 'setup' && state !== 'end') {
-    try { frame = tracker.detect(t * 1000) || frame; } catch (e) { console.warn(e); }
+    try { frame = tracker.detect(performance.now()) || frame; } catch (e) { console.warn(e); }
     watchCamera(t);
   }
 
