@@ -5,6 +5,8 @@ html, body {
   background: #101830; color: #fff;
   font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif;
   -webkit-user-select: none; user-select: none;
+  /* iPhone Safari blows text up in landscape unless told not to. */
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
 /* Below the status bar / Dynamic Island when held upright (0 in landscape). */
 #stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); bottom: 0; width: 100vw; height: calc(100dvh - env(safe-area-inset-top)); display: block; }
@@ -441,3 +443,16 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 .tabShort { display: none; }
 @media (max-width: 520px) { .tabLong { display: none; } .tabShort { display: inline; } }
 #help .privacy { font-size: .9em; opacity: .85; margin: 4px 0 10px; line-height: 1.35; }
+/* Friend room on a landscape phone: code, devices, buttons and Leave on one line. */
+@media (max-height: 500px) {
+  .friendRow .roomBox { flex-wrap: wrap; column-gap: 6px; }
+  .friendRow .roomBox .setupBtn { padding: .3em .6em; }
+  .friendRow #roomLeave { margin-left: auto; }
+  .friendRow .roomBadge { font-size: 1.1em; }
+  body.tabFriends .wide #playersCol .row { margin: 2px 0; }
+  body.tabFriends .friendRow { margin: 4px 0 2px; }
+}
+@media (max-height: 500px) and (max-width: 900px) {
+  .friendRow .roomBox .long { display: none; }
+  .friendRow .wantLabel { display: none; }
+}
