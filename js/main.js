@@ -480,8 +480,19 @@ function setState(s) {
   $('#btnStart').classList.toggle('hidden', s !== 'lobby');
   $('#btnPause').classList.toggle('hidden', !['ready', 'tutorial', 'play'].includes(s));
   if (!['ready', 'tutorial', 'play'].includes(s) && pausedAt) setPaused(false);
+  showHud();
   updateFsNudge();
 }
+
+// During a game the toolbar tucks away after a few seconds, and pops back up
+// whenever someone taps the screen. It stays out while paused or in the lobby.
+let hudTimer = 0;
+function showHud() {
+  clearTimeout(hudTimer);
+  $('#hudButtons').classList.remove('tuck');
+  if (['ready', 'tutorial', 'play'].includes(state) && !pausedAt) hudTimer = setTimeout(() => $('#hudButtons').classList.add('tuck'), 4000);
+}
+document.addEventListener('pointerdown', () => { if (['lobby', 'ready', 'tutorial', 'play'].includes(state)) showHud(); }, true);
 
 function enterLobby(auto = false) {
   course = null;
@@ -874,6 +885,7 @@ function setPaused(on, fromFriend = false) {
   holdAudio(on);
   document.body.classList.toggle('gamePaused', on);
   setIcon('#btnPause', on ? '#i-play' : '#i-pause', on ? 'Resume' : 'Pause');
+  showHud();
   $('#pauseBox').classList.toggle('hidden', !on);
   $('#pauseWho').textContent = fromFriend ? 'A friend paused the game.' : '';
   if (!fromFriend && room.status === 'connected') sendRoom({ type: 'pause', on });

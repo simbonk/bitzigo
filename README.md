@@ -13,7 +13,7 @@ Everything runs in the browser. There is no account, and the camera picture neve
 5. "Arms down, stand tall!" calibrates each kid's normal stance, then a short spoken intro shows each obstacle once before the workout starts.
 6. After the workout, the results screen shows each kid's score and an award. **Heart check** walks through each kid lying down with the phone flat on their chest for 15 seconds, then shows the highest score and the hardest-working heart.
 
-Parent controls: the toolbar of arcade buttons along the bottom (or keys) pauses, hides or shows the camera view, mutes and ends the workout; in the lobby its **Start now** starts early with whoever is there. `` ` `` shows debug numbers, `C` recalibrates.
+Parent controls: the toolbar of arcade buttons along the bottom (it tucks away during a game; tap the screen to bring it back), or keys, pauses, hides or shows the camera view, mutes and ends the workout; in the lobby its **Start now** starts early with whoever is there. `` ` `` shows debug numbers, `C` recalibrates.
 
 ## How difficulty works
 
