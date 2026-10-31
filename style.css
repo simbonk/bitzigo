@@ -456,3 +456,10 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
   .friendRow .roomBox .long { display: none; }
   .friendRow .wantLabel { display: none; }
 }
+/* Extras on a landscape phone: both columns fit inside the panel. */
+@media (max-height: 500px) {
+  .wide #extrasCol { gap: 0 16px; grid-template-columns: auto minmax(0, 1fr); }
+  .wide #extrasCol .label { width: 4.3em; }
+  .wide #extrasCol .seg button { padding-left: .55em; padding-right: .55em; }
+  .wide #extrasCol .seg button .ic { margin-right: .25em; }
+}
