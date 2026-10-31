@@ -1257,7 +1257,6 @@ function updateGame(t, dt) {
     if (!cam) {
       const a = keyActions(keys, p.index);
       if (p.throwing && a.jump && !p.act.jump) p.onThrow(); // up key throws in throw time
-      if (a.spin && p.charged && !p.throwing) p.superSpin(); // down alone spins when super charged
       if (MINI.includes(p.throwing?.type)) {
         const [u, l, d, r] = KEYMAP[p.index];
         p.hands = keyHandsFor(p.throwing.type, keys.has(u), keys.has(l), keys.has(d), keys.has(r));
@@ -1424,8 +1423,8 @@ function draw(t) {
     // Upright phones get a taller box, or the upright picture ends up tiny.
     const cw = W * (H > W ? 0.3 : 0.18), ch = H > W ? cw * 1.5 : cw * 0.6;
     const L0 = laneBox(0, n, W, H);
-    // Odd lane counts: on the right, clear of the notch and the button column.
-    const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12 - SAFE.r - 56 * W / (innerWidth || W);
+    // Odd lane counts: on the right, clear of the notch.
+    const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12 - SAFE.r;
     const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01) + friendsH;
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: String(p.index + 1) }));
     drawCamera(ctx, video, frame.aspect, x, y, cw, ch, people);
@@ -1460,7 +1459,7 @@ function friendLanes(t) {
     return Object.assign(q, {
       index: players.length + i, name: `🤝 ${k.name}`, color: k.color || '#8fd3ff', character: CHARACTERS[charIndex(k.char)],
       score: k.score || 0, streak: k.streak || 0, skill: k.skill ?? 2, act: k.act || {}, lift: k.lift || 0,
-      gear: k.gear || {}, level: Math.floor(k.skill ?? 2) + 1, charged: (k.streak || 0) >= 8,
+      gear: k.gear || {}, level: Math.floor(k.skill ?? 2) + 1,
       clock: k.clock != null ? k.clock + ahead : t, run: k.run != null ? k.run + (k.throwing ? 0 : ahead) : undefined,
       paceSkill: k.paceSkill ?? null, swing: k.swing || 0, bonk: k.bonk || 0, shake: k.shake || 0, spin: k.spin || 0,
       hands: k.hands || null, throwing: k.throwing || null, fx: k.fx || [], obstacles: k.obstacles || [], house: k.house,
@@ -1494,12 +1493,12 @@ function drawBanner(t) {
     return;
   }
   if (!banner || t > banner.until) return;
+  // Low on the screen with no dark band, so the road ahead stays in view.
   const k = Math.min(1, (t - banner.from) * 5);
-  const size = H * 0.085 * (0.7 + 0.3 * k);
-  ctx.fillStyle = 'rgba(10,14,30,0.55)';
-  ctx.fillRect(0, H * 0.4, W, H * (banner.sub ? 0.2 : 0.14));
-  text(ctx, banner.text, W / 2, H * 0.47, size, '#ffe14d');
-  if (banner.sub) text(ctx, banner.sub, W / 2, H * 0.555, H * 0.04, '#ffffff');
+  const size = H * (H > W ? 0.06 : 0.08) * (0.7 + 0.3 * k);
+  const top = H * (H > W ? 0.68 : 0.7);
+  text(ctx, banner.text, W / 2, top + H * 0.065, size, '#ffe14d');
+  if (banner.sub) text(ctx, banner.sub, W / 2, top + H * (H > W ? 0.12 : 0.15), H * (H > W ? 0.03 : 0.045), '#ffffff');
 }
 
 // Behind the setup and results panels: the squad running along.

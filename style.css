@@ -62,10 +62,12 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .result .award { color: #ffd23f; }
 .result .score { font-size: 26px; font-weight: bold; }
 
-/* In-game controls: chunky arcade buttons stacked in the top-right corner,
-   under the full screen button, clear of the notch. */
-#hudButtons { position: fixed; z-index: 15; top: calc(max(6px, env(safe-area-inset-top)) + 46px); right: calc(6px + var(--safeX)); display: flex; flex-direction: column; gap: 8px; opacity: .9; }
-body:has(#fsFab.hidden) #hudButtons { top: max(6px, env(safe-area-inset-top)); }
+/* In-game controls: one toolbar of chunky arcade buttons along the very bottom. */
+#hudButtons {
+  position: fixed; z-index: 15; left: 50%; transform: translateX(-50%); bottom: calc(6px + env(safe-area-inset-bottom));
+  display: flex; gap: 8px; padding: 5px 7px; border-radius: 16px; background: rgba(16, 24, 48, .55); opacity: .95;
+}
+@media (orientation: landscape) { #hudButtons { left: auto; transform: none; right: calc(8px + var(--safeX)); } }
 .arcade {
   --face: #3d7be0; --ink: #fff;
   display: inline-flex; align-items: center; justify-content: center; gap: .35em;
@@ -79,13 +81,13 @@ body:has(#fsFab.hidden) #hudButtons { top: max(6px, env(safe-area-inset-top)); }
 #btnPause { --face: #ffd23f; --ink: #1a2a40; }
 #btnPause .ic .f { opacity: .45; }
 .arcade.end { --face: #ff5d73; }
-#btnStart { position: fixed; z-index: 15; right: calc(12px + var(--safeX)); bottom: calc(12px + env(safe-area-inset-bottom)); height: 48px; padding: 0 18px; --face: #3ddc84; --ink: #10301e; font-size: 22px; }
-#btnStart .ic { width: 20px; height: 20px; }
+#btnStart { padding: 0 14px; --face: #3ddc84; --ink: #10301e; }
+#btnStart .ic { width: 18px; height: 18px; }
 @media (max-height: 500px) {
   .arcade { min-width: 36px; height: 36px; border-radius: 11px; }
   .arcade .ic { width: 20px; height: 20px; }
-  #hudButtons { gap: 6px; top: calc(max(6px, env(safe-area-inset-top)) + 42px); }
-  #btnStart { height: 42px; font-size: 18px; padding: 0 14px; }
+  #hudButtons { gap: 6px; padding: 4px 6px; bottom: calc(4px + env(safe-area-inset-bottom)); }
+  #btnStart { font-size: 17px; padding: 0 12px; }
 }
 
 .tip { font-size: 15px; text-align: center; color: #ffd23f; margin: 8px 0 0; }

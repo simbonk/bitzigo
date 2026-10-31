@@ -45,7 +45,6 @@ export const GEAR = [
 ];
 
 // A streak this long electrifies the kid: crackling sparks and bonus points.
-export const SUPER_STREAK = 8;
 
 // Where a kid of this age starts. Everyone starts a bit below their age and
 // the game climbs quickly in the first few obstacles to find their level.
@@ -181,7 +180,6 @@ export class Player {
       if (raw[k]) this.lastTrue[k] = now;
       latched[k] = now - this.lastTrue[k] < 0.15;
     }
-    if (this.charged && !this.throwing) this.watchSpin(pts, now);
     const brk = this.throwing?.type;
     // Hands around the body, for the hand-zone break games.
     this.hands = f.wrists.map(w => (w.v >= 0.3 ? { x: (w.x - f.hip.x) / t, y: (w.y - B.hipY) / t } : null));
@@ -564,34 +562,6 @@ export class Player {
     this.onEvent?.('gear', o);
   }
 
-  get charged() { return this.streak >= SUPER_STREAK; }
-
-  // Super spin: while super charged, turning all the way round cashes the
-  // charge in for a big bonus. Turning away makes the shoulders look narrow
-  // to the camera; they widen again on the way back to the front.
-  watchSpin(pts, now) {
-    const sw = Math.abs(pts[LM.lSh].x - pts[LM.rSh].x);
-    const normal = this.base.torso * 0.72;
-    if (sw < 0.4 * normal) {
-      this.spinNarrow ??= now;
-    } else if (sw > 0.75 * normal) {
-      const turned = this.spinNarrow != null && now - this.spinNarrow > 0.12 && now - this.spinNarrow < 2.5;
-      this.spinNarrow = null;
-      if (turned) this.superSpin();
-    }
-  }
-
-  superSpin() {
-    if (!this.charged) return;
-    const bonus = 80 * this.streak * this.breakMult;
-    this.spin = 0.8;
-    this.streak = 0;
-    this.addPoints(bonus, 'SUPER SPIN!');
-    this.fx.push({ type: 'super', text: 'MEGA BONUS!', t: 0, life: 1.8 });
-    for (let i = 0; i < 3; i++) this.confetti();
-    this.onEvent?.('spin');
-  }
-
   record(o, ok) {
     const s = (this.typeStats[o.kind] ||= { hit: 0, miss: 0 });
     ok ? s.hit++ : s.miss++;
@@ -624,7 +594,7 @@ export class Player {
       const avg = ps.reduce((a, q) => a + q.score, 0) / ps.length;
       even = Math.min(2.2, Math.max(0.45, ((avg + 250) / (this.score + 250)) ** 1.6));
     }
-    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1) * (this.boost || 1) * even;
+    const mult = (this.rush ? 2 : 1) * (this.boost || 1) * even;
     const gained = Math.max(10, Math.round((pts * mult) / 10) * 10);
     this.score += gained;
     this.shake = 0.3;
@@ -651,17 +621,13 @@ export class Player {
     o.tier = tier;
     this.tiers[tier]++;
     const base = [100, 70, 40][tier] * (o.kind === 'rope' ? 1.4 : 1);
-    if (this.streak === SUPER_STREAK) {
-      this.fx.push({ type: 'super', text: 'SUPER CHARGED!', t: 0, life: 1.8 });
-      this.onEvent?.('super');
-    }
     this.addPoints(base + 5 * Math.min(this.streak, 20), ['PERFECT!', 'GREAT!', false][tier]);
     this.counts[{ log: 'jump', crate: 'punch', bird: 'dodge', rope: 'swing' }[o.kind]]++;
     if (o.kind === 'rope') this.swing = 0.9;
     // Climb fast while we are still finding their level, then gently.
     // Up +0.2 / down -0.8 settles around an 80% success rate.
     if (!o.tutorial) this.setSkill(this.skill + (this.judged <= 8 ? 0.45 : 0.2));
-    if (this.streak >= 5 && this.streak % 5 === 0 && this.streak !== SUPER_STREAK) {
+    if (this.streak >= 5 && this.streak % 5 === 0) {
       this.fx.push({ type: 'fire', text: this.streak >= 15 ? 'UNSTOPPABLE!' : this.streak >= 10 ? 'ON FIRE!' : `${this.streak} IN A ROW!`, t: 0, life: 1.6 });
       this.onEvent?.('streak');
     }
@@ -688,7 +654,6 @@ export class Player {
     this.skill = clamp(s, 0, MAX_SKILL);
     this.peakSkill = Math.max(this.peakSkill, this.skill);
     if (this.level > prevLevel) {
-      this.fx.push({ type: 'levelup', text: `LEVEL ${this.level}!`, t: 0, life: 1.3 });
       this.onEvent?.('level');
     }
   }
