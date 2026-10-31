@@ -1049,8 +1049,8 @@ let last = now();
 
 function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  W = Math.round(innerWidth * dpr);
-  H = Math.round(innerHeight * dpr);
+  W = Math.round((canvas.clientWidth || innerWidth) * dpr);
+  H = Math.round((canvas.clientHeight || innerHeight) * dpr);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
   PX = Math.max(2, Math.round(H / 270));
   const lw = Math.ceil(W / PX), lh = Math.ceil(H / PX);
@@ -1382,7 +1382,8 @@ function draw(t) {
 
   const friendsH = drawSquadScores(hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01));
   if (showCam && frame && tracker) {
-    const cw = W * 0.18, ch = cw * 0.6;
+    // Upright phones get a taller box, or the upright picture ends up tiny.
+    const cw = W * (H > W ? 0.3 : 0.18), ch = H > W ? cw * 1.5 : cw * 0.6;
     const L0 = laneBox(0, n, W, H);
     const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12;
     const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01) + friendsH;
@@ -1515,7 +1516,8 @@ function drawLobby(t) {
   const top = H * 0.155;
   if (cam && frame) {
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: `${p.index + 1}` }));
-    drawCamera(ctx, video, frame.aspect, W * 0.2, top, W * 0.6, H * 0.4, people);
+    // Held upright the picture is tall, so keep it shorter than the screen is.
+    drawCamera(ctx, video, frame.aspect, W * 0.2, top, W * 0.6, H * (H > W ? 0.3 : 0.4), people);
   } else if (cam) {
     text(ctx, 'Waking up the camera…', W / 2, H * 0.35, H * 0.04, '#ffffff');
   }

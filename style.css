@@ -6,7 +6,8 @@ html, body {
   font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif;
   -webkit-user-select: none; user-select: none;
 }
-#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+/* Below the status bar / Dynamic Island when held upright (0 in landscape). */
+#stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); bottom: 0; width: 100vw; height: calc(100dvh - env(safe-area-inset-top)); display: block; }
 #cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .panel {
@@ -439,3 +440,4 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 @media (max-width: 520px) { .tabs button { padding-left: .3em; padding-right: .3em; font-size: .95em; } }
 .tabShort { display: none; }
 @media (max-width: 520px) { .tabLong { display: none; } .tabShort { display: inline; } }
+#help .privacy { font-size: .9em; opacity: .85; margin: 4px 0 10px; line-height: 1.35; }
