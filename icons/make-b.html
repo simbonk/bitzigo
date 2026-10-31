@@ -1,0 +1,21 @@
+<!doctype html>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap">
+<canvas id="c"></canvas>
+<script>
+// Home screen icon: the "B" from the Bitzigo title, on the menu's dark blue.
+window.make = size => {
+  const c = document.getElementById('c'); c.width = c.height = size;
+  const g = c.getContext('2d'), u = size / 512;
+  const bg = g.createLinearGradient(0, 0, 0, size);
+  bg.addColorStop(0, '#1c2a5c'); bg.addColorStop(1, '#0d1430');
+  g.fillStyle = bg; g.fillRect(0, 0, size, size);
+  g.font = `${380 * u}px "Lilita One"`;
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  const x = size / 2 + 6 * u, y = size / 2 + 132 * u;
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillText('B', x, y + 26 * u);
+  g.fillStyle = '#b5830f'; g.fillText('B', x, y + 16 * u);
+  g.fillStyle = '#ffd23f'; g.fillText('B', x, y);
+  return c.toDataURL('image/png');
+};
+document.fonts.load('100px "Lilita One"').then(() => { window.ready = true; });
+</script>
