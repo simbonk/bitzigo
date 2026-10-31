@@ -82,10 +82,17 @@ def post(model, body, key, what):
     raise RuntimeError(f'gave up on {what}')
 
 
+def spoken(q):
+    """The question and then its answers: "...have as a superpower? Fly like a bird, swim like a dolphin, or run like a cheetah?\""""
+    ts = [c['t'][0].lower() + c['t'][1:] if not c['t'].startswith('I ') else c['t'] for c in q['c']]
+    ts[0] = ts[0][0].upper() + ts[0][1:]
+    return q['q'] + ' ' + (', '.join(ts[:-1]) + (',' if len(ts) > 2 else '') + ' or ' + ts[-1]) + '?'
+
+
 def speak(q, key, path):
-    """The announcer (the game's Puck voice) reads the question, trimmed and squeezed small."""
+    """The announcer (the game's Puck voice) reads the question and its answers, trimmed and squeezed small."""
     body = {
-        'contents': [{'parts': [{'text': 'Say like an excited, friendly cartoon game show announcer for kids: ' + q['q']}]}],
+        'contents': [{'parts': [{'text': 'Say like an excited, friendly cartoon game show announcer for kids, with a short pause before each answer: ' + spoken(q)}]}],
         'generationConfig': {'responseModalities': ['AUDIO'], 'speechConfig': {'voiceConfig': {'prebuiltVoiceConfig': {'voiceName': 'Puck'}}}},
     }
     pcm = post(TTS_MODEL, body, key, f'voice {q["id"]}')
@@ -208,7 +215,7 @@ def main():
                 continue
             speak(q, key, path)
             said += 1
-            print(f'  said {q["id"]:03d}: {q["q"]}')
+            print(f'  said {q["id"]:03d}: {spoken(q)}')
         print(f'recorded {said} questions')
     if not a.images:
         return

@@ -1648,17 +1648,19 @@ export function drawWyrBoard(ctx, S, players, W, H) {
   if (!S || (S.phase !== 'ask' && S.phase !== 'reveal')) return;
   const q = S.qs[S.i], n = q.c.length, poses = posesFor(n);
   const reveal = S.phase === 'reveal';
-  const cw = Math.min((W * 0.88) / (n + 0.4 * n), H * 0.24);
-  const gap = cw * 0.4;
+  // As big as the screen allows: a phone held sideways still gets cards
+  // about a third of its height, with words a kid can read from the couch.
+  const cw = Math.min((W * 0.94) / (n * 1.25), H * 0.36);
+  const gap = cw * 0.25;
   const x0 = W / 2 - (n * (cw + gap)) / 2 + gap / 2;
   const top = H * WYR_TOP;
-  const fs = clamp(cw * 0.11, 12, 30);
+  const fs = clamp(cw * 0.15, 14, 44);
   const votes = q.c.map((_, k) => players.filter(p => S.picks[p.index] === k));
   const most = Math.max(...votes.map(v => v.length));
   ctx.font = `bold ${R(fs)}px ${FONT}`;
   const labels = q.c.map(c => wrapLines(ctx, c[0], cw * 0.92, 2));
-  const ch = cw * 0.9 + fs * 2.6;
-  const r = Math.min(gap * 0.36, cw * 0.12);
+  const ch = cw * 0.88 + fs * 2.5;
+  const r = Math.min(gap * 0.4, cw * 0.11);
   for (let k = 0; k < n; k++) {
     const x = x0 + k * (cw + gap);
     const win = reveal && votes[k].length === most && most > 0;
@@ -1669,7 +1671,7 @@ export function drawWyrBoard(ctx, S, players, W, H) {
     ctx.lineWidth = win ? Math.max(5, cw * 0.04) : 3;
     ctx.strokeStyle = win ? '#ffe14d' : '#1b2340';
     ctx.strokeRect(x, top, cw, ch);
-    const im = wyrImage(q.id, k), is = cw * 0.84;
+    const im = wyrImage(q.id, k), is = cw * 0.82;
     if (im) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(im, x + (cw - is) / 2, top + cw * 0.04, is, is);
@@ -1683,7 +1685,7 @@ export function drawWyrBoard(ctx, S, players, W, H) {
     ctx.fillStyle = '#1b2340';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    labels[k].forEach((ln, i) => ctx.fillText(ln, x + cw / 2, top + cw * 0.9 + fs * (0.75 + 1.1 * i + (2 - labels[k].length) * 0.55)));
+    labels[k].forEach((ln, i) => ctx.fillText(ln, x + cw / 2, top + cw * 0.88 + fs * (0.7 + 1.1 * i + (2 - labels[k].length) * 0.55)));
     ctx.restore();
     // Votes beside the card, top down, plus rings for kids still holding.
     const vx = x + cw + gap / 2;
@@ -1703,7 +1705,7 @@ export function drawWyrBoard(ctx, S, players, W, H) {
       if (fill >= 1) text(ctx, String(p.index + 1), vx, vy + r * 0.05, r * 1.25, '#ffffff');
     });
     // The pose that picks this card, under it.
-    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + cw * 0.04, Math.min(cw * 0.6, H * 0.14), poses[k]);
+    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + H * 0.01, Math.min(cw * 0.6, (H - top - ch - H * 0.03) / 1.2), poses[k]);
     else if (votes[k].length) text(ctx, votes[k].length === 1 ? '1 vote' : `${votes[k].length} votes`, x + cw / 2, top + ch + fs * 1.2, fs * 1.3, win ? '#ffe14d' : '#ffffff');
   }
 }

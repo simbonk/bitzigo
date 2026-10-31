@@ -56,7 +56,7 @@ GEMINI_API_KEY=... python3 tools/wyr.py --images --only 105 --force   # redraw o
 GEMINI_API_KEY=... python3 tools/wyr.py --voice        # record any missing spoken questions (needs ffmpeg)
 ```
 
-The announcer reads each question out (`voice/wyr/<id>.mp3`, about 10 KB each). A card shows its emoji until its picture exists.
+The announcer reads each question and then its answers out (`voice/wyr/<id>.mp3`, about 35 KB each), and a question can't end until it has finished. `--voice` stops at Gemini's free daily limit of 100 text-to-speech requests; `WYR_TTS_MODEL=gemini-2.5-pro-preview-tts` has its own limit. A card shows its emoji until its picture exists.
 
 ## Hosting
 
