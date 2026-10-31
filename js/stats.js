@@ -1,3 +1,6 @@
+import { PALETTE } from './game.js';
+// Fallback colours in an order that keeps neighbours easy to tell apart.
+const SPREAD = ['#3fa7ff', '#3ddc84', '#ffd23f', '#b57bff', '#ff9f1c', '#ff4fa3', '#8fd3ff', ...PALETTE];
 // Game history, kept only in this browser's storage on this device.
 // Each finished round is one game; a heart check adds to the latest one.
 
@@ -49,7 +52,7 @@ const avg = a => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length)
 const pct = v => (v == null ? '–' : `${v}%`);
 
 const DAY = 864e5;
-const PERIODS = [['day', 'Today'], ['week', 'This week'], ['month', 'This month'], ['year', 'This year'], ['all', 'All time']];
+const PERIODS = [['day', 'Today', 'Today'], ['week', 'This week', 'Week'], ['month', 'This month', 'Month'], ['year', 'This year', 'Year'], ['all', 'All time', 'All']];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const view = { period: 'all', kid: null };
@@ -70,6 +73,14 @@ function kidColors(games) {
   const out = new Map();
   for (const g of games) for (const r of g.players) if (r.color) out.set(r.name, r.color);
   for (const k of Object.values(kids)) if (k.color) out.set(k.name, k.color);
+  // Two kids can share a colour (each played as player 1, say): give the
+  // later one the next free colour so they never look alike in the charts.
+  const used = new Set();
+  for (const [name, c] of out) {
+    let col = c;
+    if (used.has(col)) col = SPREAD.find(x => !used.has(x)) || col;
+    used.add(col); out.set(name, col);
+  }
   return out;
 }
 
@@ -151,7 +162,7 @@ export function statsHtml() {
   if (view.kid && !names.includes(view.kid)) view.kid = null;
   const dot = n => `<i class="kdot" style="background:${colors.get(n) || '#8a96c8'}"></i>`;
 
-  let html = '<div class="seg statsSeg">' + PERIODS.map(([k, l]) => `<button data-period="${k}"${view.period === k ? ' class="on"' : ''}>${l}</button>`).join('') + '</div>';
+  let html = '<div class="seg statsSeg">' + PERIODS.map(([k, l, sh]) => `<button data-period="${k}"${view.period === k ? ' class="on"' : ''}><span class="pLong">${l}</span><span class="pShort">${sh}</span></button>`).join('') + '</div>';
   html += `<div class="kidChips"><button data-kid=""${view.kid ? '' : ' class="on"'}>Everyone</button>` +
     names.map(n => `<button data-kid="${esc(n)}"${view.kid === n ? ' class="on"' : ''} style="--kc:${colors.get(n) || '#8a96c8'}">${dot(n)}${esc(n)}</button>`).join('') + '</div>';
 

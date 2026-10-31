@@ -9,7 +9,7 @@ html, body {
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
 /* Below the status bar / Dynamic Island when held upright (0 in landscape). */
-#stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); bottom: 0; width: 100vw; height: calc(100dvh - env(safe-area-inset-top)); display: block; }
+#stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); width: 100%; height: calc(100% - env(safe-area-inset-top)); display: block; }
 #cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .panel {
@@ -103,16 +103,19 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .hc-note { font-size: 13px; opacity: .65; margin-top: 14px; }
 @keyframes beat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.18); } 30% { transform: scale(1); } }
 
-/* Portrait phones: ask for landscape (the heart check works either way). */
+/* Upright phone with two players or friends: a short tip, never a blocker. */
 #rotate { display: none; }
 @media (orientation: portrait) and (max-width: 600px) {
-  body:not(.heart-mode):not(.solo) #rotate {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-    position: fixed; inset: 0; z-index: 10; background: #101830; text-align: center; padding: 24px;
+  body.playing:not(.solo) #rotate {
+    display: flex; align-items: center; gap: 8px; position: fixed; z-index: 40; left: 50%; transform: translateX(-50%);
+    top: calc(env(safe-area-inset-top) + 50px); width: max-content; max-width: calc(100vw - 32px);
+    background: #101830ee; border: 2px solid #ffd23f; border-radius: 14px; padding: 8px 12px;
+    pointer-events: none; animation: tipFade 7s ease forwards;
   }
-  #rotate img { width: 120px; height: 120px; border-radius: 26px; image-rendering: pixelated; }
-  #rotate p { margin: 0; font-size: 26px; font-weight: bold; color: #ffd23f; }
-  #rotate .small-note { font-size: 16px; color: #fff; font-weight: normal; opacity: .8; }
+  #rotate img { width: 28px; height: 28px; border-radius: 7px; }
+  #rotate p { margin: 0; font-size: 14px; color: #fff; }
+}
+@keyframes tipFade { 0% { opacity: 0; } 6%, 85% { opacity: 1; } 100% { opacity: 0; } }
 }
 @media (max-height: 500px) {
   #hudButtons button { padding: 3px 8px; font-size: 12px; border-radius: 8px; }
@@ -245,7 +248,7 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 .bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; cursor: pointer; min-width: 0; }
 .bars .line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .bar .pt { position: absolute; width: 8px; height: 8px; margin-bottom: -4px; border-radius: 50%; box-shadow: 0 0 0 2px #1b2548; }
-.bars .bar.sel::before, .bars .bar:hover::before { content: ''; position: absolute; top: 0; bottom: 0; width: 1px; background: #ffffff55; }
+.bars:not(.kidBars) .bar.sel::before { content: ''; position: absolute; top: 0; bottom: 0; width: 1px; background: #ffffff55; }
 .bar.sel .pt { width: 12px; height: 12px; margin-bottom: -6px; }
 .bar span { position: absolute; top: 100%; margin-top: 2px; font-size: .7em; opacity: .65; white-space: nowrap; }
 .bars + * { margin-top: 0; }
@@ -462,4 +465,20 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
   .wide #extrasCol .label { width: 4.3em; }
   .wide #extrasCol .seg button { padding-left: .55em; padding-right: .55em; }
   .wide #extrasCol .seg button .ic { margin-right: .25em; }
+}
+/* Stats on narrow screens: short period names, two charts a row. */
+#stats .pShort { display: none; }
+@media (max-width: 600px) {
+  #stats .pLong { display: none; }
+  #stats .pShort { display: inline; }
+  #stats .statsSeg { width: 100%; }
+  #stats .statsSeg button { flex: 1; padding: .3em .2em; }
+  #stats .charts { grid-template-columns: 1fr 1fr; gap: 8px; }
+  #stats .chart { padding: 6px 8px 18px; }
+  #stats .bars { height: 70px; }
+}
+.bar { -webkit-tap-highlight-color: transparent; }
+.kidBars .bar.sel .fill { outline: 2px solid #fff; outline-offset: 1px; }
+@media (max-width: 600px) {
+  #statsBody table.stats { display: block; overflow-x: auto; white-space: nowrap; font-size: .92em; }
 }

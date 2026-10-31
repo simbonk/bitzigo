@@ -1079,6 +1079,7 @@ function loop() {
   // A drawing bug must never freeze the whole screen: skip the bad frame.
   // One player alone can play in portrait; two or a friend game need landscape.
   document.body.classList.toggle('solo', settings.count === 1 && room.status === 'off');
+  document.body.classList.toggle('playing', ['lobby', 'ready', 'tutorial', 'play'].includes(state));
   try { draw(t); } catch (e) { if (!loop.warned) { loop.warned = true; console.error(e); } }
 }
 
