@@ -868,17 +868,7 @@ function drawAvatar(ctx, L, p, time, ch) {
     return z > -0.03 && z < (o.kind === 'bird' ? 0.45 : 0.22);
   });
   const look = { sx, sy, wow };
-  if (p.charged) drawSparks(ctx, ox, oy, S, time, true);
-  if (p.spin > 0) {
-    // Super spin: the character twirls round twice.
-    ctx.save();
-    ctx.translate(ox, 0);
-    ctx.scale(Math.cos((1 - p.spin / 0.8) * Math.PI * 4) || 0.05, 1);
-    ctx.translate(-ox, 0);
-    drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear, look);
-    ctx.restore();
-  } else drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear, look);
-  if (p.charged) drawSparks(ctx, ox, oy, S, time, false);
+  drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
 // Little dust puffs kicked up behind each footstep.
@@ -896,30 +886,6 @@ function drawDust(ctx, cx, ground, S, steps) {
     rect(ctx, x - r * 0.5, y - r, r, r * 2, '#fffaf0');
     rect(ctx, x + side * r * 1.1, y - r * 1.2, r * 0.6, r * 0.6, '#fffaf0');
     ctx.globalAlpha = 1;
-  }
-}
-
-// Super charged: a crackling glow behind and lightning zigzags in front.
-function drawSparks(ctx, ox, oy, S, time, behind) {
-  const f = Math.floor(time * 20);
-  if (behind) {
-    // A soft rounded glow made of stacked bands, flickering.
-    ctx.save();
-    ctx.globalAlpha = 0.16 + 0.08 * (f % 2);
-    for (const [w, h] of [[1.0, 2.6], [0.8, 2.9], [0.55, 3.1]]) rect(ctx, ox - S * w, oy - S * (h + 0.4) + S * 0.9, S * w * 2, S * h * 2 - S * 1.4, '#7df9ff');
-    ctx.restore();
-    return;
-  }
-  for (let k = 0; k < 4; k++) {
-    const seed = (f * 7 + k * 13) % 17;
-    const a = (seed / 17) * Math.PI * 2;
-    let x = ox + Math.cos(a) * S * 1.1, y = oy - S * 0.8 + Math.sin(a) * S * 1.9;
-    const col = (f + k) % 2 ? '#ffffff' : '#7df9ff';
-    for (let j = 0; j < 4; j++) {
-      const nx = x + (j % 2 ? 1 : -1) * S * 0.25, ny = y + S * 0.22;
-      rect(ctx, Math.min(x, nx), y, Math.abs(nx - x) + Math.max(1, S * 0.1), Math.max(1, S * 0.1), col);
-      x = nx; y = ny;
-    }
   }
 }
 
@@ -1174,69 +1140,20 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Sizes of the floating level badge at the top of a lane.
+// Sizes of the score plate at the top of a lane.
 function hudSize(L) {
-  const fs = clamp(L.w * 0.06, 14, 34);
-  return { fs, pad: clamp(L.w * 0.025, 8, 18), rb: fs * 1.25 };
+  const r = clamp(Math.min(L.w * 0.1, L.h * 0.085), 22, 64);
+  return { r, pad: clamp(L.w * 0.025, 8, 18) };
 }
-// Bottom edge of the badge, for things placed under it.
 export function laneHudBottom(L) {
-  const { pad, rb } = hudSize(L);
-  return pad + rb * 2 + pad * 0.5;
+  const { pad, r } = hudSize(L);
+  return pad + r * 2 + pad * 0.5;
 }
 
 export function drawLaneHud(ctx, L, p, ch, opts) {
-  const { fs, pad, rb } = hudSize(L);
-  const cw = ctx.canvas.width, scale = cw / (innerWidth || cw);
-  // Clear of the notch on the left, and of the button column on the right.
-  const x0 = L.x + pad + (L.x < 1 ? SAFE.l : 0);
-  const rightEdge = L.x + L.w - pad - (L.x + L.w > cw - 2 ? SAFE.r + 52 * scale : 0);
-
-  // Floating level badge: a round LV medal with a glossy yellow bar coming out of it.
-  const bcx = x0 + rb, bcy = pad + rb;
-  const barX = bcx, barW = Math.max(rb * 2, Math.min(fs * 10, rightEdge - barX));
-  const bh = fs * 0.85, by = bcy + rb * 0.12;
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowOffsetY = fs * 0.12; ctx.shadowBlur = fs * 0.3;
-  roundRect(ctx, barX, by, barW, bh, bh / 2);
-  ctx.fillStyle = 'rgba(26,42,64,0.8)';
-  ctx.fill();
-  ctx.restore();
-  const fillW = rb + (barW - rb) * clamp(p.skill % 1, 0.04, 1);
-  ctx.save();
-  roundRect(ctx, barX, by, barW, bh, bh / 2);
-  ctx.clip();
-  ctx.fillStyle = '#ffc61a';
-  ctx.fillRect(barX, by, fillW, bh);
-  ctx.fillStyle = '#ffe14d';
-  ctx.fillRect(barX, by, fillW, bh * 0.62);
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  roundRect(ctx, barX + rb, by + bh * 0.14, Math.max(0, fillW - rb - bh * 0.4), bh * 0.18, bh * 0.09);
-  ctx.fill();
-  ctx.restore();
-  roundRect(ctx, barX, by, barW, bh, bh / 2);
-  ctx.lineWidth = Math.max(2, fs * 0.14);
-  ctx.strokeStyle = '#1a2a40';
-  ctx.stroke();
-  // The medal itself: gold rim, the kid's colour in the middle.
-  ctx.beginPath(); ctx.arc(bcx, bcy, rb, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffd23f'; ctx.fill();
-  ctx.lineWidth = Math.max(2, fs * 0.16); ctx.strokeStyle = '#1a2a40'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(bcx, bcy, rb * 0.76, 0, Math.PI * 2);
-  ctx.fillStyle = p.color; ctx.fill();
-  ctx.beginPath(); ctx.arc(bcx, bcy, rb * 0.76, Math.PI * 1.1, Math.PI * 1.9);
-  ctx.lineWidth = Math.max(1.5, rb * 0.1); ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.stroke();
-  text(ctx, 'LV', bcx, bcy - rb * 0.36, rb * 0.36, '#ffffff');
-  text(ctx, String(p.level), bcx, bcy + rb * 0.18, rb * (p.level > 9 ? 0.7 : 0.85), '#ffffff');
-  // Name above the bar.
-  ctx.save();
-  const nameW = barW - rb * 1.3;
-  ctx.font = `${R(fs)}px ${FONT}`;
-  const nw = ctx.measureText(p.name).width;
-  text(ctx, p.name, bcx + rb * 1.15, pad + fs * 0.62, nw > nameW ? fs * nameW / nw : fs, '#ffffff', 'left');
-  ctx.restore();
-  const bx = barX, bw = barW;
-  if (p.streak >= 3) text(ctx, `x${p.streak}`, barX + barW - bh * 0.4, by + bh / 2, fs * 0.72, '#ff8a1a', 'right');
+  const { r, pad } = hudSize(L);
+  drawScore(ctx, L, p, r, pad);
+  const fs = r * 0.6, by = pad + r * 2, bh = 0;
 
   // Picture cue for the next obstacle, so non-readers know what to do.
   const next = p.obstacles
@@ -1375,30 +1292,10 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     ctx.restore();
   }
 
-  // Super charged: the lane edges crackle with electricity.
-  if (p.charged) {
-    const f = Math.floor(performance.now() / 50);
-    ctx.save();
-    ctx.globalAlpha = 0.55 + 0.3 * (f % 2);
-    ctx.strokeStyle = f % 2 ? '#7df9ff' : '#ffffff';
-    ctx.lineWidth = Math.max(4, L.w * 0.012);
-    ctx.beginPath();
-    for (const side of [0, 1]) {
-      const x = L.x + side * L.w + (side ? -1 : 1) * ctx.lineWidth;
-      ctx.moveTo(x, 0);
-      for (let y = 0; y <= L.h; y += L.h / 12) ctx.lineTo(x + (((y / L.h * 12 + f) % 2) ? 1 : -1) * L.w * 0.012, y);
-    }
-    ctx.stroke();
-    ctx.restore();
-    text(ctx, p.throwing ? '⚡ SUPER ⚡' : '⚡ SPIN AROUND = MEGA BONUS ⚡', L.cx, L.horizon * 0.66 + clamp(L.w * 0.1, 22, 64) * 1.6, clamp(L.w * 0.05, 13, 28), '#7df9ff');
-  }
-
   // Speed lines rush in from the lane edges on a lean or a big moment.
-  const rush = Math.max(p.act?.leanL || p.act?.leanR ? 0.7 : 0, p.spin > 0 ? 1 : 0,
-    ...p.fx.filter(e => ['fire', 'levelup', 'super'].includes(e.type)).map(e => 1 - e.t / e.life));
+  const rush = Math.max(p.act?.leanL || p.act?.leanR ? 0.7 : 0,
+    ...p.fx.filter(e => ['fire', 'levelup'].includes(e.type)).map(e => 1 - e.t / e.life));
   if (rush > 0.05 && !p.paused) drawSpeedLines(ctx, L, rush, p.act?.leanL ? -1 : p.act?.leanR ? 1 : 0);
-
-  drawBubble(ctx, L, p);
 
   if (p.paused) text(ctx, p.paused, L.cx, L.h * 0.5, clamp(L.w * 0.075, 18, 44), '#ffffff');
 
@@ -1435,58 +1332,65 @@ function drawSpeedLines(ctx, L, k, lean) {
   ctx.restore();
 }
 
-// Face bubble in the lane's bottom corner: score as a notification badge,
-// heart rate underneath (filled in after the heart check).
-function drawBubble(ctx, L, p) {
-  const r = clamp(Math.min(L.w * 0.11, L.h * 0.065), 22, 70);
-  // The score bubble rattles and swells each time points go up.
+// Score plate in the lane's top-left corner: the kid's face (or number), their
+// name and a big score, plus a streak counter once they get going.
+function drawScore(ctx, L, p, r, pad) {
+  // The plate swells and rattles a little each time points go up.
   const k = p.bump > 0 ? p.bump / 0.5 : 0;
-  const jig = k * r * 0.12 * Math.sin(performance.now() / 18);
-  const x = L.x + r + clamp(L.w * 0.04, 8, 24) + jig, y = L.h - r - L.h * 0.07;
+  const x0 = L.x + pad + (L.x < 1 ? SAFE.l : 0), y0 = pad;
+  const cx = x0 + r, cy = y0 + r;
+  const label = p.score.toLocaleString();
+  const sf = r * 1.05, nf = r * 0.4;
+  ctx.font = `${R(sf)}px ${FONT}`;
+  const tw = Math.max(ctx.measureText(label).width, r * 1.2);
+  const maxW = L.w - pad * 2 - r * 2;
+  const pw = Math.min(r * 2 + r * 0.35 + tw + r * 0.55, r * 2 + maxW);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = p.color;
+  ctx.translate(cx, cy);
+  ctx.scale(1 + 0.12 * k, 1 + 0.12 * k);
+  ctx.rotate(k * 0.04 * Math.sin(performance.now() / 25));
+  ctx.translate(-cx, -cy);
+  // Plate.
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowOffsetY = r * 0.08; ctx.shadowBlur = r * 0.25;
+  roundRect(ctx, x0, y0 + r * 0.18, pw, r * 1.64, r * 0.82);
+  ctx.fillStyle = 'rgba(26,42,64,0.82)';
   ctx.fill();
+  ctx.restore();
+  roundRect(ctx, x0, y0 + r * 0.18, pw, r * 1.64, r * 0.82);
+  ctx.lineWidth = Math.max(2, r * 0.1); ctx.strokeStyle = p.color; ctx.stroke();
+  // Face circle.
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = p.color; ctx.fill();
   if (p.faceImg?.complete && p.faceImg.naturalWidth) {
     ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.86, 0, Math.PI * 2);
     ctx.clip();
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(p.faceImg, x - r, y - r, r * 2, r * 2);
+    ctx.drawImage(p.faceImg, cx - r * 0.86, cy - r * 0.86, r * 1.72, r * 1.72);
     ctx.restore();
-  } else {
-    text(ctx, String(p.index + 1), x, y, r, '#ffffff');
+  } else text(ctx, String(p.index + 1), cx, cy + r * 0.05, r * 1.1, '#ffffff');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.lineWidth = Math.max(2, r * 0.1); ctx.strokeStyle = '#1a2a40'; ctx.stroke();
+  // Name and score.
+  const tx = x0 + r * 2 + r * 0.3, room = pw - (tx - x0) - r * 0.4;
+  ctx.font = `${R(nf)}px ${FONT}`;
+  const nw = ctx.measureText(p.name).width;
+  text(ctx, p.name, tx, cy - r * 0.42, nw > room ? nf * room / nw : nf, '#ffffff', 'left');
+  ctx.font = `${R(sf)}px ${FONT}`;
+  const sw = ctx.measureText(label).width;
+  text(ctx, label, tx, cy + r * 0.28, sw > room ? sf * room / sw : sf, k > 0.3 ? '#ffb02e' : '#ffe14d', 'left');
+  ctx.restore();
+  // Streak counter.
+  if (p.streak >= 3) {
+    const sx = x0 + pw + r * 0.25, sr = r * 0.55;
+    if (sx + sr * 2.6 < L.x + L.w - pad) {
+      roundRect(ctx, sx, cy - sr, sr * 2.6, sr * 2, sr);
+      ctx.fillStyle = '#ff8a1a'; ctx.fill();
+      ctx.lineWidth = Math.max(2, r * 0.08); ctx.strokeStyle = '#1a2a40'; ctx.stroke();
+      text(ctx, `x${p.streak}`, sx + sr * 1.3, cy + sr * 0.05, sr * 1.15, '#ffffff');
+    }
   }
-  ctx.lineWidth = Math.max(3, r * 0.12);
-  ctx.strokeStyle = p.color;
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
-
-  // Notification badge with the score.
-  const label = p.score >= 10000 ? `${Math.round(p.score / 1000)}k` : p.score.toLocaleString();
-  const bf = r * 0.48;
-  ctx.font = `${R(bf)}px ${FONT}`;
-  const bw = Math.max(bf * 1.6, ctx.measureText(label).width + bf * 0.9), bh = bf * 1.45;
-  const bx = x + r * 0.55, by = y - r * 1.05;
-  ctx.save();
-  ctx.translate(bx + bw / 2, by + bh / 2);
-  ctx.scale(1 + 0.45 * k, 1 + 0.45 * k);
-  ctx.rotate(k * 0.25 * Math.sin(performance.now() / 25));
-  ctx.translate(-(bx + bw / 2), -(by + bh / 2));
-  ctx.fillStyle = k > 0.5 ? '#ffb02e' : '#ff3b30';
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = Math.max(2, bf * 0.12);
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, bh / 2) : ctx.rect(bx, by, bw, bh);
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, bx + bw / 2, by + bh / 2 + 1);
-  ctx.restore();
-
-  // Heart rate slot.
-  text(ctx, `♥ ${p.heartRate ? p.heartRate : '--'}`, x, y + r + r * 0.42, r * 0.5, '#ff6b81');
-  ctx.restore();
 }
 
 // Chunky icon drawn at full res (squares, so it matches the world).
