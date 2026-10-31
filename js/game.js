@@ -105,12 +105,14 @@ export class Player {
     this.score = 0;
     this.streak = 0;
     this.tiers = [0, 0, 0]; // perfect, great, good
+    this.recent = [];
+    this.activeSecs = 0; // time in view and moving, for the calorie guess
     this.bestStreak = 0;
     this.hits = 0;
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0, fly: 0, wyr: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0, fly: 0, swim: 0, wyr: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;
@@ -198,7 +200,9 @@ export class Player {
       B.noseX = lerp(B.noseX, f.nose.x, 0.02);
       B.hipY = lerp(B.hipY, f.hip.y, a);
       B.noseY = lerp(B.noseY, f.nose.y, a);
-      B.torso = lerp(B.torso, f.torso, a);
+      // Hips hidden means the size is only a guess from shoulder width, which
+      // shrinks when a kid turns side on; don't let that resize the character.
+      if (f.hip.v >= 0.3 || B.noHip) B.torso = lerp(B.torso, f.torso, a);
     }
   }
 
@@ -213,7 +217,7 @@ export class Player {
     }
     this.calibProgress = (now - c.start) / 1.2;
     if (this.calibProgress >= 1) {
-      this.base = { hipX: f.hip.x, hipY: f.hip.y, noseX: f.nose.x, noseY: f.nose.y, torso: f.torso };
+      this.base = { hipX: f.hip.x, hipY: f.hip.y, noseX: f.nose.x, noseY: f.nose.y, torso: f.torso, noHip: f.hip.v < 0.3 };
       this.calib = null;
     }
   }
@@ -592,10 +596,35 @@ export class Player {
     const s = (this.typeStats[o.kind] ||= { hit: 0, miss: 0 });
     ok ? s.hit++ : s.miss++;
     if (!o.tutorial) this.judged++;
+    if (!o.tutorial) (this.recent ||= []).push(ok ? 1 : 0), this.recent.length > 8 && this.recent.shift();
+  }
+
+  // A rough calorie guess from minutes of movement: jumping, punching and
+  // arm games are vigorous play (about 6.5 METs), body weight is guessed from
+  // age, and kids burn a bit more per kilo than adults.
+  get kcal() {
+    const kid = this.age < 12;
+    const kg = kid ? 2.6 * this.age + 6 : 70;
+    return Math.round((6.5 * 3.5 * kg / 200) * (kid ? 1.25 : 1) * (this.activeSecs / 60));
+  }
+
+  // How the last few moves went (1 = all hit), for easing off the speed.
+  get recentAcc() {
+    const r = this.recent || [];
+    return r.length < 4 ? 1 : r.reduce((a, b) => a + b, 0) / r.length;
   }
 
   addPoints(pts, word) {
-    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1) * (this.boost || 1);
+    // Keep the scores close: points are quietly scaled by how far this kid is
+    // from the group's average, so whoever is behind catches up and whoever
+    // is ahead pulls away slowly. Hit rates in Stats still show the real story.
+    let even = 1;
+    const ps = Player.group;
+    if (ps && ps.length > 1) {
+      const avg = ps.reduce((a, q) => a + q.score, 0) / ps.length;
+      even = Math.min(2.2, Math.max(0.45, ((avg + 250) / (this.score + 250)) ** 1.6));
+    }
+    const mult = (this.rush ? 2 : 1) * (this.charged ? 1.5 : 1) * (this.boost || 1) * even;
     const gained = Math.max(10, Math.round((pts * mult) / 10) * 10);
     this.score += gained;
     this.shake = 0.3;

@@ -5,7 +5,8 @@ import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
-import { saveGame, addHeartRates, clearStats, statsHtml } from './stats.js';
+import { saveGame, addHeartRates, clearStats, showStats } from './stats.js';
+import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere, friendTicks, setWant } from './net.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#stage');
@@ -15,7 +16,7 @@ const lctx = low.getContext('2d');
 const video = $('#cam');
 
 const settings = {
-  count: 4, mode: 'camera', facing: 'user', seconds: 120, theme: 'random', intro: true, course: 'together',
+  count: 2, mode: 'camera', facing: 'user', seconds: 120, theme: 'random', intro: true, course: 'together',
   players: [
     { name: 'Player 1', age: 10 }, { name: 'Player 2', age: 8 },
     { name: 'Player 3', age: 6 }, { name: 'Player 4', age: 4 },
@@ -27,6 +28,10 @@ const save = () => { try { localStorage.setItem('bitzigo', JSON.stringify(settin
 const testing = /[?&](debug|keys)\b/.test(location.search);
 document.body.classList.toggle('testing', testing);
 if (!testing && settings.mode === 'keys') settings.mode = 'camera';
+// Two kids per camera: tracking more than that was too much for a tablet.
+// With a friend's house joined, their two kids make four lanes.
+const MAX_KIDS = 2;
+settings.count = Math.min(MAX_KIDS, settings.count);
 settings.theme = 'random'; // every visit starts on Surprise me
 
 let state = 'setup';   // setup | loading | lobby | ready | tutorial | play | end | heart
@@ -85,6 +90,38 @@ function updateKidList() {
 updateKidList();
 const charIndex = id => Math.max(0, CHARACTERS.findIndex(c => c.id === id));
 
+// Pick list under a player's dot: saved kids first, then colours.
+function openKidPicker(i, row) {
+  closeKidPicker();
+  const p = settings.players[i];
+  const others = settings.players.slice(0, settings.count).filter((q, j) => j !== i);
+  const inUse = new Set(others.map(q => q.name.trim().toLowerCase()));
+  const taken = others.map((q, j) => colorOf(settings.players.indexOf(q)));
+  const box = document.createElement('div');
+  box.id = 'kidPick';
+  const list = Object.values(kids).sort((a, b) => b.at - a.at);
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  box.innerHTML = (list.length ? `<div class="pickHead">Who is this?</div><div class="kidList">${list.map(k => {
+    const busy = inUse.has(k.name.toLowerCase());
+    const ch = CHARACTERS[charIndex(k.char)];
+    return `<button class="kid" data-k="${esc(k.name.toLowerCase())}" ${busy ? 'disabled' : ''}><span class="sw" style="background:${k.color || '#888'}"></span>${esc(k.name)}<span class="meta">${k.age === 12 ? '12+' : k.age} · ${k.char ? ch.name : ''}</span></button>`;
+  }).join('')}</div>` : `<div class="pickHead">Saved kids show up here after they play.</div>`) +
+    `<div class="pickHead">Colour</div><div class="swatches">${PALETTE.map(c => `<button class="sw big" data-c="${c}" style="background:${c}" ${taken.includes(c) ? 'disabled' : ''}></button>`).join('')}</div>`;
+  box.querySelectorAll('.kid').forEach(b => b.onclick = () => {
+    const k = kids[b.dataset.k];
+    p.name = k.name; p.age = k.age; p.char = k.char;
+    if (k.color && !taken.includes(k.color)) p.color = k.color;
+    save(); closeKidPicker(); renderPlayerRows();
+  });
+  box.querySelectorAll('.swatches .sw').forEach(b => b.onclick = () => {
+    p.color = b.dataset.c; save(); rememberKid(p); closeKidPicker(); renderPlayerRows();
+  });
+  box.onclick = e => e.stopPropagation();
+  row.after(box);
+}
+function closeKidPicker() { $('#kidPick')?.remove(); }
+document.addEventListener('click', closeKidPicker);
+
 function renderPlayerRows() {
   const box = $('#players');
   box.innerHTML = '';
@@ -93,17 +130,9 @@ function renderPlayerRows() {
     const row = document.createElement('div');
     row.className = 'player';
     const ages = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(a => `<option value="${a}" ${a === p.age ? 'selected' : ''}>${a === 12 ? 'age 12+' : `age ${a}`}</option>`).join('');
-    row.innerHTML = `<button class="dot" title="Tap to change colour" style="background:${colorOf(i)}"></button><input maxlength="12" value="" list="kidNames" autocomplete="off"><select>${ages}</select>`;
-    // Tap the dot for the next colour nobody else has.
-    row.querySelector('.dot').onclick = e => {
-      const taken = settings.players.slice(0, settings.count).map((q, j) => j !== i && colorOf(j));
-      let k = PALETTE.indexOf(colorOf(i));
-      do { k = (k + 1) % PALETTE.length; } while (taken.includes(PALETTE[k]));
-      p.color = PALETTE[k];
-      e.target.style.background = p.color;
-      save();
-      rememberKid(p);
-    };
+    row.innerHTML = `<button class="dot" title="Pick a kid or colour" style="background:${colorOf(i)}"></button><input maxlength="12" value="" list="kidNames" autocomplete="off"><select>${ages}</select>`;
+    // Tap the dot to pick a saved kid (or just a colour).
+    row.querySelector('.dot').onclick = e => { e.stopPropagation(); openKidPicker(i, row); };
     const input = row.querySelector('input');
     input.value = p.name;
     input.oninput = () => {
@@ -142,16 +171,192 @@ seg('#count', 'n', 'count', Number);
   mark();
 }
 seg('#length', 'sec', 'seconds', Number);
-// World picker: a drop-down, with Surprise me (a random world) as the default.
+// World picker: arrows either side of a little picture of the world, with
+// Surprise me (a random world) first. A hidden drop-down keeps the choice.
 {
   const el = $('#theme');
-  el.innerHTML = `<option value="random">🎲 Surprise me</option>` + Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('');
+  el.innerHTML = `<option value="random">Surprise me</option>` + Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('');
   el.value = THEMES[settings.theme] ? settings.theme : 'random';
-  el.onchange = () => { settings.theme = el.value; roundTheme = pickTheme(); save(); };
+  const show = () => {
+    const t = THEMES[el.value];
+    $('#worldPick .wName').textContent = el.selectedOptions[0]?.textContent || '';
+    $('#worldPick .wSwatch').innerHTML = t ? '' : '<svg class="ic"><use href="#i-dice"/></svg>';
+    $('#worldPick .wSwatch').style.background = t
+      ? `linear-gradient(${t.sky[0]}, ${t.sky[1]} 55%, ${t.grass[0]} 55%, ${t.grass[1]} 72%, ${t.road[0]} 72%)`
+      : 'linear-gradient(135deg, #ff5d73, #ffd23f, #3ddc84, #4fb6ff, #b07bff)';
+  };
+  el.onchange = () => { settings.theme = el.value; roundTheme = pickTheme(); save(); show(); };
+  document.querySelectorAll('#worldPick .wArrow').forEach(b => {
+    b.onclick = () => {
+      const n = el.options.length;
+      el.selectedIndex = (el.selectedIndex + Number(b.dataset.d) + n) % n;
+      el.dispatchEvent(new Event('change'));
+    };
+  });
+  show();
 }
 seg('#intro', 'intro', 'intro', v => v === '1');
 seg('#course', 'course', 'course');
 renderPlayerRows();
+
+// ---------------- Play with a friend ----------------
+// One household makes a code and texts it; up to three others type it in
+// (or open the shared link). See net.js.
+
+let lastFriends = [];   // the friends' latest updates, kept for the results after they leave
+let ownSettings = null; // the guest's own length and tutorial, while the code maker's are in use
+let ownCount = null;    // the player count from before a big room, given back on leaving
+// Four lanes in all: 2 kids per device with one friend's device, 1 each with 3 or 4 devices.
+const kidsPerDevice = () => (Math.max(room.devices, room.want) > 2 ? 1 : MAX_KIDS);
+// Everyone the code maker is waiting for has joined.
+const allJoined = () => room.devices >= room.want;
+function renderRoom() {
+  const s = room.status;
+  const on = s !== 'off' && s !== 'error';
+  // A guest plays the code maker's world, length and tutorial: grey those out.
+  document.body.classList.toggle('roomGuest', on && room.role === 'guest');
+  $('#roomJoin').disabled = s === 'joining';
+  if (s === 'connected' && room.role === 'guest') { try { localStorage.setItem('bitzigo-room', room.code); } catch { } }
+  const cap = on ? kidsPerDevice() : MAX_KIDS;
+  document.querySelectorAll('#count button').forEach(b => { b.disabled = Number(b.dataset.n) > cap; });
+  if (settings.count > cap) { ownCount ??= settings.count; settings.count = cap; }
+  else if (!on && ownCount != null) { settings.count = ownCount; ownCount = null; }
+  document.querySelectorAll('#count button').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === settings.count));
+  if (document.querySelectorAll('#players .player').length !== settings.count) renderPlayerRows();
+  if (on && settings.tab !== 'friends') setTab('friends');
+  $('#roomIdle').classList.toggle('hidden', on);
+  $('#roomOn').classList.toggle('hidden', !on);
+  $('#roomBadge').textContent = on ? room.code || '' : '';
+  const msg = {
+    starting: 'Making a code…',
+    joining: `Joining ${room.code}…`,
+    waiting: `Pick how many devices will play, send the invite, then press Let's go.`,
+    connected: (allJoined() ? 'Everyone joined! Press Let\'s go. The game starts when every device is ready.'
+      : `${room.devices} of ${room.want} devices here, waiting for the rest.`)
+      + (room.role === 'guest' ? ' The code maker picks the world and length.' : '') + (room.want > 2 ? ' One player each.' : ''),
+    lost: 'Lost the connection to your friend.',
+  }[s] || '';
+  const el = $('#roomText');
+  el.textContent = msg;
+  el.className = `roomText ${s === 'connected' ? 'good' : s === 'lost' ? 'bad' : ''}`;
+  $('#roomWantBox').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  $('#roomWant').querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.w) === room.want);
+    b.disabled = Number(b.dataset.w) < room.devices; // can't go below who's already here
+  });
+  $('#roomCopy').classList.toggle('hidden', room.role !== 'host' || !room.code);
+  $('#roomShare').classList.toggle('hidden', room.role !== 'host' || !room.code || !navigator.share);
+  if (s === 'error') $('#status').textContent = room.error;
+  if (s === 'off') {
+    lastFriends = [];
+    if (ownSettings) {
+      Object.assign(settings, ownSettings);
+      ownSettings = null;
+      save();
+      seg('#length', 'sec', 'seconds', Number);
+      seg('#intro', 'intro', 'intro', v => v === '1');
+      renderExtrasSum();
+    }
+  }
+}
+onRoom(msg => {
+  if (msg.type === 'status') renderRoom();
+  if (msg.type === 'tick') { lastFriends = friendTicks(); if (state === 'end') renderFriendResults(); }
+  if (msg.type === 'go') friendSaysGo(msg);
+});
+// Two tabs on the home screen: Play here (just this camera) and Play with
+// friends (a room code, then the same setup). Leaving the friends tab leaves
+// the room.
+// Extras is a third tab for the rarely changed options; it doesn't
+// change which way you play.
+let showExtras = false;
+function setTab(t) {
+  showExtras = t === 'extras';
+  if (!showExtras) settings.tab = t === 'friends' ? 'friends' : 'here';
+  document.body.classList.toggle('tabFriends', !showExtras && settings.tab === 'friends');
+  document.body.classList.toggle('tabExtras', showExtras);
+  renderExtrasSum();
+  document.querySelectorAll('#modeTabs button').forEach(b => {
+    const on = b.dataset.mode === (showExtras ? 'extras' : settings.tab);
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on);
+  });
+  renderGoLabel();
+}
+function renderGoLabel() {
+  const friends = settings.tab === 'friends';
+  const ready = room.status !== 'off' && room.status !== 'error';
+  $('#go').textContent = friends && !ready ? 'Make or join a game first' : "Let's go!";
+  $('#go').classList.toggle('waitRoom', friends && !ready);
+}
+onRoom(msg => { if (msg.type === 'status') renderGoLabel(); });
+document.querySelectorAll('#modeTabs button').forEach(b => {
+  b.onclick = () => {
+    if (b.dataset.mode === (showExtras ? 'extras' : settings.tab)) return;
+    if (b.dataset.mode === 'here' && room.status !== 'off') {
+      if (friendHere() && !confirm('Leave the friend game?')) return;
+      leaveRoom();
+    }
+    $('#status').textContent = '';
+    setTab(b.dataset.mode);
+    save();
+  };
+});
+setTab(settings.tab);
+// A one-line reminder of the extra settings under the players.
+function renderExtrasSum() {
+  const len = settings.seconds ? `${settings.seconds / 60} min` : 'No time limit';
+  const world = $('#theme').selectedOptions[0]?.textContent || '';
+  const sumIcon = '<svg class="ic"><use href="#i-gear"/></svg>';
+  const bits = [len, world, settings.intro ? 'Tutorial on' : 'Tutorial off'];
+  if (settings.count > 1) bits.push(settings.course === 'own' ? 'Own pace' : 'Together');
+  $('#extrasSum').innerHTML = sumIcon + bits.join(' · ');
+}
+$('#extrasCol').addEventListener('click', () => setTimeout(renderExtrasSum));
+$('#theme').addEventListener('change', renderExtrasSum);
+$('#count').addEventListener('click', () => setTimeout(renderExtrasSum));
+$('#extrasSum').onclick = () => setTab('extras');
+
+$('#roomMake').onclick = () => { $('#status').textContent = ''; hostRoom().catch(e => console.error(e)); };
+// The last code joined is filled in, so rejoining after a reload is one tap.
+try { $('#roomCode').value = localStorage.getItem('bitzigo-room') || ''; } catch { }
+$('#roomJoin').onclick = () => { $('#status').textContent = ''; joinRoom($('#roomCode').value).catch(e => console.error(e)); };
+$('#roomCode').onkeydown = e => { if (e.key === 'Enter') $('#roomJoin').click(); };
+$('#roomLeave').onclick = () => leaveRoom();
+$('#roomWant').querySelectorAll('button').forEach(b => { b.onclick = () => setWant(Number(b.dataset.w)); });
+// The invite: steps rather than a bare link. A link opened in iPhone Safari
+// can't go full screen, and the Home Screen icon opens without the link's
+// code, so the friend adds Bitzigo to the Home Screen and types the code.
+const roomInvite = () => [
+  `Race us in Bitzigo! Our code is ${room.code}`,
+  `1. Open ${location.origin}${location.pathname} in Safari (Chrome on Android)`,
+  '2. Tap Share, then Add to Home Screen',
+  '3. Open Bitzigo from the new icon',
+  `4. Tap Play with friends, type ${room.code} and tap Join`,
+].join('\n');
+const copyLabel = $('#roomCopy').innerHTML;
+$('#roomCopy').onclick = async () => {
+  const words = roomInvite();
+  try { await navigator.clipboard.writeText(words); } catch {
+    // Older browsers: copy from a hidden text box.
+    const box = Object.assign(document.createElement('textarea'), { value: words });
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); } catch { }
+    box.remove();
+  }
+  $('#roomCopy').innerHTML = '<svg class="ic"><use href="#i-check"/></svg>Copied';
+  setTimeout(() => { $('#roomCopy').innerHTML = copyLabel; }, 2000);
+};
+$('#roomShare').onclick = () => {
+  navigator.share?.({ title: 'Bitzigo', text: roomInvite() }).catch(() => { });
+};
+// A shared link (…?room=FROG-42) joins straight away.
+{
+  const code = new URLSearchParams(location.search).get('room');
+  if (code) { $('#roomCode').value = code; joinRoom(code).catch(e => console.error(e)); }
+}
+renderRoom();
 
 // Full screen: real fullscreen where the browser allows it (Chrome, iPad
 // Safari, desktop). iPhone Safari doesn't, so it points to Add to Home Screen,
@@ -169,24 +374,29 @@ function enterFullscreen() {
 }
 function toggleFullscreen() {
   if (!canFs) { $('#fsTip').classList.toggle('hidden'); return; }
-  if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  if (fsEl()) exitFullscreen()?.catch?.(() => { });
   else enterFullscreen();
 }
-if (standalone) $('#fs').classList.add('hidden');
-$('#fs').onclick = toggleFullscreen;
+// One small full screen button in the corner on every screen. It hides when
+// the game already runs full screen from the home screen icon.
+$('#fsFab').classList.toggle('hidden', !!standalone);
+$('#fsFab').onclick = e => { e.stopPropagation(); toggleFullscreen(); };
+$('#fsTip').onclick = e => { e.stopPropagation(); if (e.target.tagName === 'BUTTON') $('#fsTip').classList.add('hidden'); };
+document.addEventListener('click', () => $('#fsTip').classList.add('hidden'));
 $('#helpBtn').onclick = () => { $('#setup').classList.add('hidden'); $('#help').classList.remove('hidden'); };
-$('#statsBtn').onclick = () => { $('#statsBody').innerHTML = statsHtml(); $('#setup').classList.add('hidden'); $('#stats').classList.remove('hidden'); };
-$('#statsClose').onclick = () => { $('#stats').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
-$('#statsClear').onclick = () => { if (confirm('Clear all saved stats on this device?')) { clearStats(); $('#statsBody').innerHTML = statsHtml(); } };
+$('#statsBtn').onclick = () => { showStats($('#statsBody'), true); $('#setup').classList.add('hidden'); $('#stats').classList.remove('hidden'); };
+$('#statsX').onclick = $('#statsClose').onclick = () => { $('#stats').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
+$('#statsClear').onclick = () => { if (confirm('Clear all saved stats on this device?')) { clearStats(); showStats($('#statsBody')); } };
 $('#helpClose').onclick = () => { $('#help').classList.add('hidden'); $('#setup').classList.remove('hidden'); };
-$('#btnFs').onclick = toggleFullscreen;
-if (standalone || !canFs) $('#btnFs').classList.add('hidden');
 
 const exitFullscreen = () => (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
 document.addEventListener('fullscreenchange', updateFsNudge);
 document.addEventListener('webkitfullscreenchange', updateFsNudge);
 $('#fsNudge').onclick = () => { enterFullscreen(); setTimeout(updateFsNudge, 500); };
 function updateFsNudge() {
+  const full = !!fsEl();
+  $('#fsFab').textContent = full ? '🗗' : '⛶';
+  $('#fsFab').title = $('#fsFab').ariaLabel = full ? 'Leave full screen' : 'Full screen';
   $('#fsNudge').classList.toggle('hidden', state !== 'lobby' || !canFs || standalone || !!fsEl());
 }
 
@@ -214,6 +424,10 @@ async function openCamera() {
 }
 
 $('#go').onclick = async () => {
+  if (settings.tab === 'friends' && (room.status === 'off' || room.status === 'error')) {
+    $('#status').textContent = 'Make a code for your friends, or type the code they sent you. Or switch to Play here.';
+    return;
+  }
   unlockAudio();
   $('#status').textContent = '';
   awake.start();
@@ -356,7 +570,7 @@ function startTutorial() {
   setState('tutorial');
   startMusic(songTurn);
   players.forEach(p => { p.tutorial = true; });
-  tut = { step: -1, next: now() + 0.3 };
+  tut = { step: -1, next: players[0].clock + 0.3 };
 }
 
 const LESSONS = [
@@ -412,6 +626,7 @@ const BREAK_INFO = {
   climb: { title: 'BEANSTALK CLIMB!', sub: 'Reach up with one hand, then the other!', clip: 'climb_time' },
   fly: { title: 'FLY HIGH!', sub: 'Flap your arms as fast as you can to fly up!', clip: 'fly_time' },
   chops: { title: 'KARATE FRENZY!', sub: 'Chop, chop, chop as fast as you can!', clip: 'chops_time' },
+  swim: { title: 'SWIM TIME!', sub: 'Big arm strokes, one arm then the other, to cross the pond!', clip: 'swim_time' },
   rain: { title: 'RAINSTORM!', sub: 'Hands over your head like a roof, then lean to pour into the bucket!', clip: 'rain_time' },
   tray: { title: 'PANCAKE TOWER!', sub: 'Move your hands to catch pancakes. Dodge the boots!', clip: 'tray_time' },
   wyr: { title: 'WOULD YOU RATHER?', sub: 'Strike the pose under the picture you pick!', clip: 'wyr_time' },
@@ -421,10 +636,11 @@ let wyr = null;         // the shared Would You Rather round, during that break
 // Breaks come out of a shuffled bag, so every game is different and nothing
 // repeats until they've all had a turn.
 let breakBag = [];
+function fillBreakBag() {
+  breakBag = BREAKS.filter(b => b !== (roundTheme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
+}
 function nextBreak() {
-  if (!breakBag.length) {
-    breakBag = BREAKS.filter(b => b !== (roundTheme === 'snow' ? 'cans' : 'snowman')).sort(() => Math.random() - 0.5);
-  }
+  if (!breakBag.length) fillBreakBag();
   return breakBag.shift();
 }
 let slotGear = [];      // hats each player slot has collected
@@ -443,6 +659,7 @@ function startPlay() {
     players.forEach(p => { p.clock = c; p.obstacles = []; });
   }
   players.forEach(p => { p.startRound(); p.shared = together; p.paceSkill = null; });
+  Player.group = players;
   // Later rounds of a set quietly give whoever is behind a few extra points
   // per move (up to +30%), so nobody falls hopelessly out of the running.
   const lead = Math.max(1, ...players.map(p => setScores[p.index] || 0));
@@ -507,7 +724,7 @@ function showResults() {
     const face = p.face ? `<img class="face" src="${p.face}" alt="">` : `<span class="face noface" style="background:${p.color}">${p.index + 1}</span>`;
     div.innerHTML = `<span class="bubble" style="border-color:${p.color}">${face}<span class="badge">${shortScore(total(p))}</span></span>
       <div class="who"><div class="name"></div><div class="award"></div>
-      <div class="sub">Level ${Math.floor(p.peakSkill) + 1} · ${p.hits} moves · best streak ${p.bestStreak}</div></div>
+      <div class="sub">Level ${Math.floor(p.peakSkill) + 1} · ${p.hits} moves · best streak ${p.bestStreak} · 🔥 about ${p.kcal} cal</div></div>
       <div class="nums"><div class="score">${total(p).toLocaleString()}</div>
       ${multi ? `<div class="sub">+${p.score.toLocaleString()} this round</div>` : ''}
       <div class="hr">♥ ${p.heartRate ? `${p.heartRate} bpm` : '--'}</div></div>`;
@@ -518,7 +735,26 @@ function showResults() {
   const hasHR = players.some(p => p.heartRate);
   $('#heart').textContent = hasHR ? '♥ Redo heart check' : '♥ Heart check';
   $('#splash').innerHTML = splashHtml();
+  renderFriendResults();
   $('#end').classList.remove('hidden');
+}
+
+// The friends' scores under ours, and which squad is ahead.
+function renderFriendResults() {
+  const box = $('#friendResults');
+  const kids = lastFriends.flatMap(f => f.kids || []);
+  let html = '';
+  if (kids.length && players.length) {
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const ours = players.reduce((a, p) => a + total(p), 0);
+    const theirs = kids.reduce((a, k) => a + (k.total || 0), 0);
+    const done = lastFriends.every(f => f.state === 'end' || f.state === 'heart');
+    const verdict = !done ? 'They are still playing…' : ours > theirs ? 'Your squad wins this one!' : ours < theirs ? 'Your friends win this one!' : 'It\'s a tie!';
+    html = `<h3>🤝 Friends${room.code ? ` (${esc(room.code)})` : ''}</h3>
+      <div class="vs">Your squad ${ours.toLocaleString()} · Friends ${theirs.toLocaleString()}. ${verdict}</div>` +
+      [...kids].sort((a, b) => b.total - a.total).map(k => `<div class="fk"><span class="sw" style="background:${esc(k.color)}"></span><span class="n">${esc(k.name)}</span><span class="s">${(k.total || 0).toLocaleString()}</span></div>`).join('');
+  }
+  if (box.dataset.html !== html) { box.dataset.html = html; box.innerHTML = html; }
 }
 
 function shortScore(n) {
@@ -563,6 +799,7 @@ function pickAwards(ps) {
     ['Beanstalk Climber', p => p.counts.climb],
     ['Pancake Stacker', p => p.counts.stack],
     ['Rain Catcher', p => p.counts.rain],
+    ['Super Swimmer', p => p.counts.swim],
     ['Sky Flyer', p => p.counts.fly],
     ['Perfect Timing', p => p.tiers[0]],
     ['Level Climber', p => p.peakSkill - p.startSkill],
@@ -607,11 +844,14 @@ addEventListener('keydown', e => {
   if (e.code === 'Backquote') debug = !debug;
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyC' && (state === 'play' || state === 'tutorial')) recalibrate();
-  if (e.code === 'Enter' && state === 'lobby') startReady();
+  if (e.code === 'Enter') startNow();
   if (e.code === 'Escape' && ['lobby', 'ready', 'tutorial', 'play'].includes(state)) endRound(true);
 });
 addEventListener('keyup', e => keys.delete(e.code));
-$('#btnStart').onclick = () => state === 'lobby' && startReady();
+// Start now: start with whoever is here. With friends it says we're ready; pressed
+// again after 10 seconds of waiting, it starts without them.
+const startNow = () => state === 'lobby' && (lobby.waiting && now() - lobby.waiting > 10 ? startReady() : lobbyDone());
+$('#btnStart').onclick = startNow;
 $('#btnCam').onclick = () => { showCam = !showCam; };
 $('#btnMute').onclick = toggleMute;
 $('#btnStop').onclick = () => endRound(true);
@@ -809,8 +1049,8 @@ let last = now();
 
 function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  W = Math.round(innerWidth * dpr);
-  H = Math.round(innerHeight * dpr);
+  W = Math.round((canvas.clientWidth || innerWidth) * dpr);
+  H = Math.round((canvas.clientHeight || innerHeight) * dpr);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
   PX = Math.max(2, Math.round(H / 270));
   const lw = Math.ceil(W / PX), lh = Math.ceil(H / PX);
@@ -821,7 +1061,9 @@ function loop() {
   requestAnimationFrame(loop);
   resize();
   const t = now();
-  const dt = Math.min(0.05, t - last);
+  // Capped so a stall doesn't jump the game, but loose enough that a slow
+  // computer (10 frames a second) still plays at real speed.
+  const dt = Math.min(0.1, t - last);
   last = t;
   if (state === 'heart') return; // the heart check draws its own screens
 
@@ -830,11 +1072,27 @@ function loop() {
     watchCamera(t);
   }
 
+  shareTick(t);
   if (state === 'lobby') updateLobby(t);
   else if (['ready', 'tutorial', 'play'].includes(state)) updateGame(t, dt);
 
-  draw(t);
+  // A drawing bug must never freeze the whole screen: skip the bad frame.
+  // One player alone can play in portrait; two or a friend game need landscape.
+  document.body.classList.toggle('solo', settings.count === 1 && room.status === 'off');
+  try { draw(t); } catch (e) { if (!loop.warned) { loop.warned = true; console.error(e); } }
 }
+
+// After a phone call or switching apps, iOS pauses sound and the camera.
+// Wake them both up as soon as the page is back (or on the next tap).
+function wakeUp() {
+  if (document.hidden) return;
+  unlockAudio();
+  if (settings.mode === 'camera' && video.srcObject && video.paused) video.play().catch(() => { });
+}
+document.addEventListener('visibilitychange', wakeUp);
+addEventListener('pageshow', wakeUp);
+addEventListener('focus', wakeUp);
+addEventListener('pointerdown', wakeUp);
 
 // If the picture stops moving, nudge the video; if that doesn't help,
 // restart the camera stream (the tracker stays).
@@ -850,6 +1108,7 @@ function watchCamera(t) {
 }
 
 function updateLobby(t) {
+  if (lobby.waiting) lobbyDone(); // the friends may be ready now, or gone
   if (settings.mode === 'camera') {
     lobby.found = assignLobby(t);
   } else {
@@ -893,10 +1152,63 @@ function updateLobby(t) {
     // Next round of a set: no hands-up needed, just everyone back in view
     // (or whoever is there after a while).
     const all = lobby.every(L => L.found);
-    if ((all && t - stateT > 1.2) || (t - stateT > 6 && lobby.some(L => L.found))) startReady();
+    if ((all && t - stateT > 1.2) || (t - stateT > 6 && lobby.some(L => L.found))) lobbyDone();
     return;
   }
-  if (allReady && t - stateT > 1) startReady();
+  if (allReady && t - stateT > 1) lobbyDone();
+}
+
+// Our squad is ready. With friends, every household starts together: each
+// says when it is ready, and the code maker starts the race for all. If the
+// friends go away, we just play.
+function lobbyDone() {
+  if (!friendHere() && room.status !== 'waiting') return startReady();
+  if (!lobby.waiting) lobby.waiting = now();
+  const fs = friendTicks();
+  if (room.role === 'host' && friendHere() && allJoined() && fs.length >= room.want - 1 && fs.every(f => f.state === 'lobby' && f.waiting)) {
+    if (!breakBag.length) fillBreakBag();
+    sendRoom({ type: 'go', theme: roundTheme, seconds: settings.seconds, intro: settings.intro, round: setRound, breaks: breakBag });
+    startReady();
+  }
+}
+
+// The code maker started the race: use their world, length and break games.
+function friendSaysGo(msg) {
+  if (state !== 'lobby' || room.role !== 'guest') return;
+  ownSettings ||= { seconds: settings.seconds, intro: settings.intro };
+  if (THEMES[msg.theme]) roundTheme = msg.theme;
+  if (typeof msg.seconds === 'number') settings.seconds = msg.seconds;
+  settings.intro = !!msg.intro;
+  if (msg.round) setRound = msg.round;
+  if (Array.isArray(msg.breaks)) breakBag = msg.breaks.filter(b => BREAKS.includes(b));
+  startReady();
+}
+
+// A small update to the friend: a few times a second while playing, once a
+// second otherwise.
+let lastShare = 0;
+function shareTick(t) {
+  if (room.status !== 'connected') return;
+  const busy = ['ready', 'tutorial', 'play'].includes(state);
+  if (t - lastShare < (busy ? 0.12 : 1)) return;
+  lastShare = t;
+  sendRoom({
+    type: 'tick', state, round: setRound,
+    waiting: state === 'lobby' && !!lobby.waiting,
+    found: state === 'lobby' ? lobby.filter(L => L.found).length : 0,
+    kids: players.map(p => ({
+      name: p.name, color: p.color, char: (p.character || CHARACTERS[slotChar[p.index]]).id,
+      score: p.score, total: total(p), streak: p.streak, skill: Math.round(p.skill * 100) / 100, lift: Math.round(p.lift * 100) / 100,
+      act: Object.fromEntries(Object.entries(p.act).filter(([, v]) => v === true)), gear: p.gear,
+      // What they're facing, so the friends see it in their lane: obstacles
+      // coming up, the break game (cans, pancakes, bubbles…) and score pops.
+      ...(busy && {
+        clock: p.clock, run: p.run, paceSkill: p.paceSkill, swing: p.swing, bonk: p.bonk, shake: p.shake, spin: p.spin,
+        hands: p.hands, throwing: p.throwing, fx: p.fx,
+        obstacles: p.obstacles.filter(o => o.arrive - p.clock > -1),
+      }),
+    })),
+  });
 }
 
 function updateGame(t, dt) {
@@ -947,14 +1259,18 @@ function updateGame(t, dt) {
   }
 
   if (state === 'tutorial') {
-    const tn = t;
-    if (tn >= tut.next) {
+    // Lessons run on the game clock, the same one the walls and crates move
+    // on. On a slow computer that clock runs behind real time, and timing the
+    // lessons by real time made the voice drift ahead of what was on screen.
+    const tn = players[0].clock;
+    if (tut.done && tn >= tut.next) startPlay();
+    else if (tn >= tut.next) {
       tut.step++;
       if (tut.step >= LESSONS.length) {
         showBanner("You've got it!", 'Now the real thing…', 2);
         cue('got_it');
-        tut.next = Infinity;
-        setTimeout(() => state === 'tutorial' && startPlay(), 2200);
+        tut.next = tn + 2.2;
+        tut.done = true;
       } else {
         const L = LESSONS[tut.step];
         showBanner(L.title, '', 4.2);
@@ -1007,7 +1323,10 @@ function updateGame(t, dt) {
     setIntensity(dur ? roundT / dur : Math.min(1, roundT / 180));
     if (dur) {
       const left = dur - roundT;
-      ramp = 1.5 * Math.min(1, roundT / dur);
+      // The course speeds up a little as the timer runs down, but only while
+      // everyone is keeping up: it eases off as soon as moves start getting missed.
+      const acc = Math.min(...players.map(p => p.recentAcc));
+      ramp = 1.0 * Math.min(1, roundT / dur) * Math.max(0, Math.min(1, (acc - 0.6) / 0.3));
       const rush = left <= 15;
       if (rush && !players[0].rush) {
         setIntensity(1);
@@ -1026,6 +1345,7 @@ function updateGame(t, dt) {
     // even for a kid the camera has lost for a moment.
     p.absent = !!(together && p.paused);
     p.update(dt, moving && (together || !p.paused), ramp);
+    if (state === 'play' && !p.paused) p.activeSecs += dt;
   }
   if (together) players.forEach(p => { p.clock = players[0].clock; });
 }
@@ -1043,11 +1363,14 @@ function draw(t) {
     return;
   }
   const theme = themeNow();
-  const n = players.length;
+  const fl = friendLanes(t);
+  const n = players.length + fl.length;
   lctx.clearRect(0, 0, low.width, low.height);
   for (const p of players) drawLaneWorld(lctx, laneBox(p.index, n, low.width, low.height), p, t, p.character || CHARACTERS[0], theme);
+  for (const q of fl) drawLaneWorld(lctx, laneBox(q.index, n, low.width, low.height), q, t, q.character, theme);
   ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
   for (const p of players) drawLaneHud(ctx, laneBox(p.index, n, W, H), p, p.character, { debug });
+  for (const q of fl) drawLaneHud(ctx, laneBox(q.index, n, W, H), q, q.character, {});
 
   // Timer.
   if (state === 'play' && settings.seconds) {
@@ -1057,11 +1380,13 @@ function draw(t) {
     text(ctx, `${m}:${String(s).padStart(2, '0')}`, W / 2, hudBottom(n) + size * 0.7, size, left <= 15 ? '#ff5d73' : '#ffffff');
   }
 
+  const friendsH = drawSquadScores(hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01));
   if (showCam && frame && tracker) {
-    const cw = W * 0.18, ch = cw * 0.6;
+    // Upright phones get a taller box, or the upright picture ends up tiny.
+    const cw = W * (H > W ? 0.3 : 0.18), ch = H > W ? cw * 1.5 : cw * 0.6;
     const L0 = laneBox(0, n, W, H);
     const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12;
-    const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01);
+    const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01) + friendsH;
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: String(p.index + 1) }));
     drawCamera(ctx, video, frame.aspect, x, y, cw, ch, people);
   }
@@ -1071,6 +1396,49 @@ function draw(t) {
   }
 
   drawBanner(t);
+}
+
+// The friends' kids get their own lanes after ours, showing what their kid
+// is doing and facing right now: their moves, obstacles, break game and
+// score pops. Their clock runs on from the last update, so things keep
+// moving smoothly between updates.
+let friendKids = [];
+function friendLanes(t) {
+  // Every friend device's kids, in the order they joined, up to 4 lanes in all.
+  const kids = friendHere() ? friendTicks().flatMap(f => (f.kids || []).map(k => ({ ...k, house: f }))).slice(0, 4 - players.length) : [];
+  // Two houses can pick the same colour: a repeat gets the next free one.
+  const used = players.map(p => p.color);
+  kids.forEach(k => {
+    if (used.includes(k.color)) k.color = PALETTE.find(c => !used.includes(c)) || k.color;
+    used.push(k.color);
+  });
+  friendKids = kids.map((k, i) => {
+    const q = friendKids[i] || { obstacles: [], fx: [], bonk: 0, bump: 0, throwing: null, misses: 0, hits: 0 };
+    if (q.score != null && k.score > q.score) q.bump = 0.5; // the score bubble jiggles, as for our kids
+    q.bump = Math.max(0, (q.bump || 0) - 1 / 60);
+    const ahead = Math.min(0.5, Math.max(0, t - k.house.at));
+    return Object.assign(q, {
+      index: players.length + i, name: `🤝 ${k.name}`, color: k.color || '#8fd3ff', character: CHARACTERS[charIndex(k.char)],
+      score: k.score || 0, streak: k.streak || 0, skill: k.skill ?? 2, act: k.act || {}, lift: k.lift || 0,
+      gear: k.gear || {}, level: Math.floor(k.skill ?? 2) + 1, charged: (k.streak || 0) >= 8,
+      clock: k.clock != null ? k.clock + ahead : t, run: k.run != null ? k.run + (k.throwing ? 0 : ahead) : undefined,
+      paceSkill: k.paceSkill ?? null, swing: k.swing || 0, bonk: k.bonk || 0, shake: k.shake || 0, spin: k.spin || 0,
+      hands: k.hands || null, throwing: k.throwing || null, fx: k.fx || [], obstacles: k.obstacles || [], house: k.house,
+    });
+  });
+  return friendKids;
+}
+
+// Both squads' totals under the timer, with one friend's house. With more
+// houses it's one kid each, and every lane already shows its own score.
+function drawSquadScores(y) {
+  const fs = friendHere() ? friendTicks().filter(f => f.kids?.length) : [];
+  if (fs.length !== 1) return 0;
+  const ours = players.reduce((a, p) => a + total(p), 0);
+  const theirs = fs[0].kids.reduce((a, q) => a + (q.total || 0), 0);
+  const size = H * 0.032;
+  text(ctx, `Us ${ours.toLocaleString()}  ·  Friends ${theirs.toLocaleString()}`, W / 2, y + size * 0.6, size, ours >= theirs ? '#3ddc84' : '#ffe14d');
+  return size * 1.4;
 }
 
 // Bottom edge of the name plates at the top of each lane.
@@ -1116,7 +1484,8 @@ const attractPlayers = [0, 1, 2, 3].map(i => ({
 
 function drawLobby(t) {
   const theme = themeNow();
-  const n = players.length;
+  const fl = friendLanes(t);
+  const n = players.length + fl.length;
   const cam = settings.mode === 'camera';
 
   // Backdrop + big characters in their lanes (pixel layer).
@@ -1135,32 +1504,50 @@ function drawLobby(t) {
     drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
     lctx.globalAlpha = 1;
   });
+  fl.forEach((q, i) => {
+    const fr = q.house;
+    const L = laneBox(q.index, n, low.width, low.height);
+    const S = Math.min(low.height * 0.05, L.w * 0.12);
+    const P = cartoonPose(q.act, Math.sin(t * 6 + q.index) * 0.05);
+    lctx.globalAlpha = fr.state === 'lobby' ? 1 : 0.5;
+    drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, q.character, false, q.gear);
+    lctx.globalAlpha = 1;
+  });
   ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
 
   // Camera view on top.
   const top = H * 0.155;
   if (cam && frame) {
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: `${p.index + 1}` }));
-    drawCamera(ctx, video, frame.aspect, W * 0.2, top, W * 0.6, H * 0.4, people);
+    // Held upright the picture is tall, so keep it shorter than the screen is.
+    drawCamera(ctx, video, frame.aspect, W * 0.2, top, W * 0.6, H * (H > W ? 0.3 : 0.4), people);
   } else if (cam) {
     text(ctx, 'Waking up the camera…', W / 2, H * 0.35, H * 0.04, '#ffffff');
   }
 
   // Headline.
-  const found = lobby.found ?? 0;
+  const found = lobby.found ?? 0, here = players.length;
   let headline, sub;
-  if (cam && found < n) {
-    headline = found === 0 ? 'Step into the picture!' : `Found ${found} of ${n}`;
+  if (cam && found < here) {
+    headline = found === 0 ? 'Step into the picture!' : `Found ${found} of ${here}`;
     sub = 'Spread out so the camera can see everyone, head to knees';
-  } else if (cam && found > n) {
+  } else if (cam && found > here) {
     headline = `I see ${found} people`;
-    sub = `Only ${n} can play. Extra people, step out of the picture please`;
+    sub = `Only ${here} can play. Extra people, step out of the picture please`;
   } else {
     headline = 'Everyone is here!';
     sub = cam ? 'Point an arm to the side to change character. Both hands up when ready!'
       : 'Left/right to change character. Up when ready!';
   }
+  if (lobby.waiting) {
+    headline = 'Waiting for your friends…';
+    sub = !allJoined() ? `${room.devices} of ${room.want} devices have joined so far.`
+      : now() - lobby.waiting > 10 ? 'Taking a while? Press Start now again to play without them.'
+      : 'We\'ll all start together when everyone is ready.';
+  }
   text(ctx, headline, W / 2, H * 0.06, H * 0.065, '#ffe14d');
+  const line = friendLine();
+  if (line) text(ctx, line, W / 2, H * 0.935, H * 0.032, '#8fd3ff');
   text(ctx, sub, W / 2, H * 0.125, H * 0.032, '#ffffff');
 
   // Name cards under each character.
@@ -1185,6 +1572,32 @@ function drawLobby(t) {
       }
     }
   });
+  fl.forEach(q => {
+    const L = laneBox(q.index, n, W, H);
+    const fs = Math.min(H * 0.04, L.w * 0.085);
+    ctx.fillStyle = q.color;
+    ctx.fillRect(L.x + L.w * 0.1, H * 0.80, L.w * 0.8, H * 0.08);
+    text(ctx, `${q.name} · ${q.character.name}`, L.cx, H * 0.825, fs, '#ffffff');
+    const fr = q.house;
+    const status = fr.state !== 'lobby' ? 'Not here yet' : fr.waiting ? 'READY!' : 'Getting ready…';
+    text(ctx, status, L.cx, H * 0.86, fs * 0.8, fr.waiting ? '#3ddc84' : '#ffffff');
+  });
+}
+
+// What the friends are up to, for the bottom of the lobby.
+function friendLine() {
+  if (room.status === 'waiting' || (room.status === 'connected' && !allJoined())) return `🤝 ${room.code}: ${room.devices} of ${room.want} devices joined`;
+  if (room.status === 'lost') return '🤝 Lost the connection to your friends';
+  const fs = friendTicks();
+  if (!friendHere() || !fs.length) return '';
+  const here = fs.filter(f => f.state === 'lobby'), ready = here.filter(f => f.waiting);
+  if (ready.length === fs.length) return fs.length > 1 ? '🤝 All your friends are ready!' : '🤝 Your friends are ready!';
+  if (fs.length > 1) return `🤝 ${ready.length} of ${fs.length} friends ready`;
+  const f = fs[0], n = f.kids?.length || 0;
+  if (f.state === 'lobby') return `🤝 Friends: found ${f.found} of ${n}`;
+  if (f.state === 'setup') return '🤝 Your friends are on the home screen';
+  if (f.state === 'end' || f.state === 'heart') return '🤝 Your friends are looking at their scores';
+  return '🤝 Your friends are playing';
 }
 
 requestAnimationFrame(loop);

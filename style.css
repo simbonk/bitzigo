@@ -1,16 +1,20 @@
+:root { --safeX: max(env(safe-area-inset-left), env(safe-area-inset-right)); } /* notch side, landscape */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; height: 100%; overflow: hidden;
   background: #101830; color: #fff;
   font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif;
   -webkit-user-select: none; user-select: none;
+  /* iPhone Safari blows text up in landscape unless told not to. */
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
-#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+/* Below the status bar / Dynamic Island when held upright (0 in landscape). */
+#stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); bottom: 0; width: 100vw; height: calc(100dvh - env(safe-area-inset-top)); display: block; }
 #cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .panel {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  width: min(560px, calc(100vw - 32px - 2 * var(--safeX))); max-height: calc(100vh - 32px); overflow-y: auto;
   background: rgba(16, 24, 48, 0.94); border: 3px solid #ffd23f; border-radius: 24px;
   padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
@@ -82,7 +86,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .heartBtn { background: #ff5d73; color: #fff; }
 
 /* Heart check */
-.heart { text-align: center; width: min(720px, calc(100vw - 32px)); }
+.heart { text-align: center; width: min(720px, calc(100vw - 32px - 2 * var(--safeX))); }
 .hc-who { display: flex; align-items: center; justify-content: center; gap: 16px; }
 .face.xl { width: 110px; height: 110px; border: 4px solid #fff; }
 .hc-name { font-size: 34px; font-weight: bold; }
@@ -102,7 +106,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 /* Portrait phones: ask for landscape (the heart check works either way). */
 #rotate { display: none; }
 @media (orientation: portrait) and (max-width: 600px) {
-  body:not(.heart-mode) #rotate {
+  body:not(.heart-mode):not(.solo) #rotate {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
     position: fixed; inset: 0; z-index: 10; background: #101830; text-align: center; padding: 24px;
   }
@@ -116,7 +120,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 }
 
 /* Setup fits one screen: two columns, sizes follow the viewport height. */
-.panel.wide { width: min(940px, calc(100vw - 24px)); font-size: clamp(12px, 2.6vh, 17px); padding: clamp(10px, 2.4vh, 20px) clamp(12px, 2.4vw, 24px); }
+.panel.wide { width: min(940px, calc(100vw - 24px - 2 * var(--safeX))); font-size: clamp(12px, 2.6vh, 17px); padding: clamp(10px, 2.4vh, 20px) clamp(12px, 2.4vw, 24px); }
 .wide .head { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .wide h1 { font-size: clamp(24px, 6vh, 40px); margin: 0; }
 .wide .tag { margin: 0; }
@@ -132,7 +136,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .wide .actions .big { flex: 1; margin: 0; padding: 0.45em; font-size: clamp(18px, 4.5vh, 26px); }
 .wide .actions .small { margin: 0; white-space: nowrap; }
 .wide .status { min-height: 0; margin: 4px 0 0; }
-#help { width: min(640px, calc(100vw - 24px)); font-size: clamp(13px, 2.6vh, 16px); }
+#help { width: min(640px, calc(100vw - 24px - 2 * var(--safeX))); font-size: clamp(13px, 2.6vh, 16px); }
 #help h2 { margin: 0 0 6px; color: #ffd23f; }
 #help li { margin: 4px 0; }
 @media (max-width: 640px) {
@@ -165,7 +169,7 @@ body:not(.testing) .testOnly { display: none; }
 
 .topBtns { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
 .topBtns .setupBtn { position: static; }
-#stats { width: min(860px, calc(100vw - 24px)); font-size: clamp(12px, 2.4vh, 15px); }
+#stats { width: min(860px, calc(100vw - 24px - 2 * var(--safeX))); font-size: clamp(12px, 2.4vh, 15px); }
 #stats h2 { margin: 0; color: #ffd23f; }
 #stats h3 { margin: 14px 0 4px; color: #ffd23f; font-size: 1.05em; }
 #stats .note { margin: 2px 0 10px; opacity: .75; }
@@ -182,3 +186,280 @@ button.dot { padding: 0; cursor: pointer; border: 3px solid #fff; -webkit-tap-hi
 
 /* No double-tap zoom when kids tap buttons quickly (iPhone and iPad). */
 html, body, button, select, input, .panel { touch-action: manipulation; }
+
+#kidPick { background: #0d1430; border: 2px solid #3a4a80; border-radius: 14px; padding: 8px 10px; margin: 2px 0 8px; }
+#kidPick .pickHead { font-size: .85em; opacity: .75; margin: 2px 0 6px; }
+#kidPick .kidList { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+#kidPick .kid { display: flex; align-items: center; gap: 6px; background: #24305a; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: .35em .6em; font: inherit; font-weight: bold; cursor: pointer; }
+#kidPick .kid:disabled { opacity: .35; }
+#kidPick .meta { font-weight: normal; opacity: .7; font-size: .85em; }
+#kidPick .sw { display: inline-block; width: 1em; height: 1em; border-radius: 50%; border: 2px solid #fff; padding: 0; }
+#kidPick .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+#kidPick .sw.big { width: 1.4em; height: 1.4em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#kidPick .sw.big:disabled { opacity: .25; }
+
+/* Stats as a contained modal: stays clear of the iPhone status bar and the
+   home bar, with the tables scrolling inside it. */
+#stats {
+  display: flex; flex-direction: column;
+  width: min(820px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  top: calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2);
+  overflow: hidden; padding: 14px 16px 12px;
+}
+#stats.hidden { display: none; }
+#statsBody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#stats .big { margin-top: 10px; padding: .4em; font-size: 1.15em; }
+#stats .small { margin-top: 6px; }
+#stats .closeX { position: absolute; top: 10px; right: 12px; width: 2em; height: 2em; border-radius: 50%; border: 2px solid #3a4a80; background: #24305a; color: #fff; font: inherit; font-weight: bold; cursor: pointer; }
+@media (max-height: 500px) {
+  #stats { font-size: 12px; padding: 10px 12px 8px; }
+  #stats h3 { margin: 8px 0 2px; }
+  table.stats td, table.stats th { padding: 2px 4px; }
+}
+#stats .statsActions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+#stats .statsActions .big { flex: 1; margin: 0; }
+#stats .statsActions .small { margin: 0; white-space: nowrap; }
+/* Every panel stays clear of the iPhone status bar and home bar. */
+.panel { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); top: calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2); }
+/* Stats filters and per-kid charts */
+#stats .statsSeg { margin: 6px 0; }
+#stats .statsSeg button { padding: .3em .7em; font-size: .95em; }
+.kidChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.kidChips button { display: inline-flex; align-items: center; gap: 6px; padding: .3em .8em; border-radius: 999px; border: 2px solid var(--kc, #3a4a80); background: #1b2548; color: #fff; font: inherit; font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.kidChips button.on { background: var(--kc, #ffd23f); color: #101830; border-color: var(--kc, #ffd23f); }
+.kidChips button.on .kdot { box-shadow: 0 0 0 2px #101830; }
+.kdot { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: 5px; vertical-align: -1px; flex: none; }
+.kidChips .kdot { margin-right: 0; }
+.kidLink { background: none; border: 0; color: inherit; font: inherit; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.kidTiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 6px; }
+.kidTiles div { background: #1b2548; border-radius: 10px; padding: 6px 8px; text-align: center; }
+.kidTiles b { display: block; font-size: 1.5em; }
+.kidTiles span { font-size: .8em; opacity: .7; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.chart { background: #1b2548; border-radius: 10px; padding: 8px 10px 4px; position: relative; }
+.chartHead { display: flex; justify-content: space-between; gap: 8px; font-size: .95em; min-height: 1.3em; }
+.chartVal { opacity: .85; font-size: .9em; white-space: nowrap; }
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 90px; margin-top: 6px; border-bottom: 1px solid #3a4a80; position: relative; }
+.bars { gap: 0; }
+.bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; cursor: pointer; min-width: 0; }
+.bars .line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.bar .pt { position: absolute; width: 8px; height: 8px; margin-bottom: -4px; border-radius: 50%; box-shadow: 0 0 0 2px #1b2548; }
+.bars .bar.sel::before, .bars .bar:hover::before { content: ''; position: absolute; top: 0; bottom: 0; width: 1px; background: #ffffff55; }
+.bar.sel .pt { width: 12px; height: 12px; margin-bottom: -6px; }
+.bar span { position: absolute; top: 100%; margin-top: 2px; font-size: .7em; opacity: .65; white-space: nowrap; }
+.bars + * { margin-top: 0; }
+.chart { padding-bottom: 20px; }
+.noData { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; opacity: .6; font-size: .9em; }
+.kidBars .bar .fill { width: min(70%, 36px); border-radius: 4px 4px 0 0; }
+.kidBars .bar em { font-style: normal; font-size: .75em; opacity: .85; margin-bottom: 2px; white-space: nowrap; }
+.kidBars .bar span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.kidBars .bar + .bar { margin-left: 2px; }
+#stats .charts + table.stats { margin-top: 10px; }
+
+/* Play with a friend: room code row on the setup screen, friends on the results. */
+.friendRow { flex-wrap: wrap !important; }
+.roomBox { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.roomBox.hidden { display: none; }
+.roomBox .or { opacity: .6; }
+#roomCode { width: 7.5em; font: inherit; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; padding: 0.35em 0.6em; border-radius: 10px; border: 2px solid #3a4a80; background: #0d1430; color: #fff; }
+.roomBadge { font-weight: bold; font-size: 1.25em; letter-spacing: 2px; color: #101830; background: #ffd23f; border-radius: 10px; padding: 0.1em 0.5em; }
+.roomBadge:empty { display: none; }
+.roomText { flex: 1; min-width: 8em; opacity: .9; }
+.roomText.bad { color: #ffb3b3; opacity: 1; }
+.roomText.good { color: #3ddc84; opacity: 1; }
+#friendResults:empty { display: none; }
+#friendResults { margin: -4px 0 14px; padding: 10px 14px; border-radius: 14px; background: #152040; border: 2px dashed #3d4f86; }
+#friendResults h3 { margin: 0 0 6px; color: #ffd23f; font-size: 18px; }
+#friendResults .vs { font-size: 20px; font-weight: bold; margin-bottom: 6px; }
+#friendResults .fk { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 18px; }
+#friendResults .fk .sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; flex: none; }
+#friendResults .fk .n { flex: 1; }
+#friendResults .fk .s { font-weight: bold; }
+.seg button:disabled { opacity: .35; cursor: default; }
+#fsFab { position: fixed; z-index: 30; top: max(6px, env(safe-area-inset-top)); right: calc(6px + var(--safeX)); width: 34px; height: 34px; border-radius: 10px; border: 2px solid #3a4a80; background: rgba(16, 24, 48, .7); color: #fff; font: bold 18px/1 system-ui, sans-serif; cursor: pointer; opacity: .7; -webkit-tap-highlight-color: transparent; }
+#fsFab:hover { opacity: 1; }
+#fsTip { position: fixed; z-index: 31; top: calc(max(6px, env(safe-area-inset-top)) + 42px); right: calc(6px + var(--safeX)); width: min(320px, calc(100vw - 24px - 2 * var(--safeX))); background: #101830; border: 2px solid #ffd23f; border-radius: 14px; padding: 10px 12px; color: #fff; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+#fsTip p { margin: 6px 0 8px; line-height: 1.35; }
+#fsTip .shareIco { display: inline-block; border: 1px solid #fff8; border-radius: 4px; padding: 0 4px; }
+/* A phone held upright (one player): setup in one column. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .panel.wide { font-size: 14px; padding: 12px 14px; }
+  .wide .head { padding-right: 0; }
+  .topBtns { position: static; margin-top: 6px; }
+  .wide .cols { grid-template-columns: 1fr; }
+  .wide .seg { flex-wrap: wrap; }
+  .wide .seg button { padding: .35em .6em; }
+  .wide .label { width: 4.6em; }
+}
+#roomWant { align-items: center; gap: 4px; }
+#roomWant .wantLabel { opacity: .8; margin-right: 2px; }
+#roomWant button { padding: 0.25em 0.6em; }
+/* A guest in a friend game plays the code maker's world, length and tutorial. */
+body.roomGuest #length, body.roomGuest #worldPick, body.roomGuest #intro { opacity: .4; pointer-events: none; }
+
+/* Home screen tabs: Play here / Play with friends. */
+.tabs { display: flex; gap: 6px; margin: clamp(6px, 1.6vh, 12px) 0 0; border-bottom: 2px solid #3d4f86; }
+.tabs button { flex: 1; font: inherit; font-weight: bold; font-size: 1.1em; color: #fff; background: transparent; border: 2px solid transparent; border-bottom: none; border-radius: 12px 12px 0 0; padding: 0.45em 0.8em; margin-bottom: -2px; cursor: pointer; opacity: .65; }
+.tabs button.on { background: #1a2550; border-color: #3d4f86; border-bottom: 2px solid #1a2550; color: #ffd23f; opacity: 1; }
+body:not(.tabFriends) .friendRow { display: none; }
+.friendRow { margin: clamp(6px, 1.6vh, 12px) 0 clamp(2px, 1vh, 8px); }
+.roomIdle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.roomIdle.hidden { display: none; }
+.roomCard { background: #152040; border: 2px solid #3d4f86; border-radius: 14px; padding: 0.6em 0.8em; display: flex; flex-direction: column; gap: 0.4em; align-items: flex-start; }
+.roomCard .cardHead { font-weight: bold; color: #ffd23f; font-size: 1.1em; }
+.roomCard p { margin: 0; opacity: .85; font-size: .92em; }
+.roomCard .joinRow { display: flex; gap: 6px; }
+.roomCard #roomMake { margin-top: auto; }
+.friendRow .roomBox { background: #152040; border: 2px solid #3ddc84; border-radius: 14px; padding: 0.5em 0.8em; }
+.wantLabel { font-weight: bold; opacity: .8; align-self: center; margin-right: 2px; }
+.big.waitRoom { background: #26335c; color: #fff; }
+@media (max-width: 520px) { .roomIdle { grid-template-columns: 1fr; } }
+@media (max-height: 500px) {
+  .roomCard { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 0.35em 0.6em; }
+  .roomCard p { display: none; }
+  .roomCard #roomMake { margin-top: 0; }
+  .tabs button { padding: 0.25em 0.6em; font-size: 1em; }
+}
+
+/* Extra settings tab: the options column only; the other tabs show just the players. */
+body:not(.tabExtras) #extrasCol { display: none; }
+body.tabExtras #playersCol { display: none; }
+.wide .cols { grid-template-columns: 1fr; max-width: 560px; margin-left: auto; margin-right: auto; }
+.extrasSum { margin: clamp(4px, 1.2vh, 10px) 0 0; opacity: .7; font-size: .9em; cursor: pointer; }
+.tabs button { white-space: nowrap; }
+
+/* Landscape phones: bigger text and tap targets, using the whole width. */
+@media (max-height: 500px) {
+  .panel.wide { width: calc(100vw - 16px - 2 * var(--safeX)); max-height: calc(100vh - 12px); font-size: clamp(16px, 4.3vh, 20px); padding: 8px 14px 10px; border-radius: 18px; }
+  .wide h1 { font-size: clamp(24px, 7vh, 32px); }
+  .wide .cols { max-width: none; margin-top: 6px; }
+  .wide .row { margin: 5px 0; gap: 10px; }
+  .wide .seg { gap: 6px; }
+  .wide .seg button { min-height: 44px; min-width: 48px; padding: 0.3em 0.8em; }
+  .wide .player { margin: 6px 0; gap: 10px; }
+  .wide .player input, .wide .player select { min-height: 44px; font-size: 1em; }
+  .wide #theme { min-height: 44px; font-size: 1em; }
+  .wide .actions .big { min-height: 50px; font-size: clamp(20px, 6vh, 26px); }
+  .wide .actions { margin-top: 8px; }
+  .tabs { margin-top: 6px; }
+  .tabs button { font-size: 1em; padding: 0.35em 0.6em; min-height: 42px; }
+  .topBtns .setupBtn { min-height: 38px; }
+  .setupBtn, #roomCode { min-height: 42px; }
+  .extrasSum { margin-top: 6px; }
+}
+@media (max-height: 500px) {
+  .roomCard { flex-wrap: nowrap; }
+  .roomCard .cardHead { white-space: nowrap; }
+  .roomCard .joinRow { min-width: 0; }
+  #roomCode { width: 6.5em; min-width: 0; }
+  .wide #extrasCol { display: grid; grid-template-columns: auto auto; gap: 0 28px; justify-content: start; }
+  body:not(.tabExtras) .wide #extrasCol { display: none; }
+}
+@media (max-height: 420px) {
+  .panel.wide { font-size: 16px; }
+  .wide h1 { font-size: 24px; }
+  .wide .seg button, .wide .player input, .wide .player select, .wide #theme, .setupBtn, #roomCode, .tabs button { min-height: 40px; }
+  .wide .row, .wide .player { margin: 4px 0; }
+  .wide .actions .big { min-height: 46px; }
+}
+@media (max-height: 500px) {
+  .friendRow { margin: 6px 0 2px; }
+  .roomCard { padding: 0.2em 0.6em; }
+  .extrasSum { margin: 2px 0 0; font-size: .85em; }
+  .wide .actions { margin-top: 6px; }
+}
+
+/* ---------- Game-style controls ---------- */
+/* Icons: thick rounded strokes in the text colour, over a soft fill. */
+.ic { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.25em; }
+.ic .f { fill: currentColor; stroke: none; opacity: .28; }
+.ic .d { fill: currentColor; stroke: none; }
+button .ic { margin-right: 0.35em; }
+.extrasSum .ic { width: 1.1em; height: 1.1em; margin-right: .3em; opacity: .9; }
+
+/* Title and big words in a chunky display font. */
+h1, .tabs button, .big, .roomCard .cardHead, #worldPick .wName { font-family: "Lilita One", "Trebuchet MS", system-ui, sans-serif; font-weight: normal; letter-spacing: .5px; }
+h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35); }
+
+/* Toggles: one recessed track per choice, the picked option a raised yellow key. */
+.seg { background: #0b1128; border-radius: 14px; padding: 4px; gap: 4px !important; box-shadow: inset 0 2px 4px rgba(0,0,0,.55); flex-wrap: nowrap !important; display: inline-flex; width: max-content; max-width: 100%; }
+.seg button { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; border: none !important; background: #1f2a50; color: #dfe6ff; border-radius: 10px !important;
+  box-shadow: 0 3px 0 #0f1526; transform: translateY(-1px); transition: transform .06s, box-shadow .06s, background .1s; }
+.seg button.on { background: #ffd23f; color: #101830; box-shadow: 0 4px 0 #d49b15; transform: translateY(-2px); }
+.seg button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 0 0 #0f1526; }
+.seg button.on:active { box-shadow: 0 0 0 #d49b15; }
+
+/* Other buttons get the same lip and squish. */
+.setupBtn { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; border: none; background: #26335c; box-shadow: 0 4px 0 #0f1526; transform: translateY(-2px); transition: transform .06s, box-shadow .06s; }
+.setupBtn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 0 0 #0f1526; }
+.big { box-shadow: 0 5px 0 #1f9a55; transform: translateY(-3px); transition: transform .06s, box-shadow .06s; }
+.big:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 0 0 #1f9a55; }
+.big.waitRoom { box-shadow: 0 5px 0 #0f1526; }
+.tabs button { display: inline-flex; align-items: center; justify-content: center; }
+
+/* Devices picker next to the room code. */
+.wantBox { display: inline-flex; align-items: center; gap: 6px; }
+.wantBox.hidden { display: none; }
+
+/* World carousel. */
+.worldPick { display: inline-flex; align-items: center; gap: 6px; }
+.worldPick .wArrow { font: inherit; display: inline-flex; align-items: center; justify-content: center; width: 2.4em; min-height: 2.4em; padding: 0; border: none; border-radius: 12px; background: #26335c; color: #ffd23f;
+  box-shadow: 0 4px 0 #0f1526; transform: translateY(-2px); cursor: pointer; transition: transform .06s, box-shadow .06s; }
+.worldPick .wArrow .ic { margin: 0; width: 1.3em; height: 1.3em; }
+.worldPick .wArrow:active { transform: translateY(2px); box-shadow: 0 0 0 #0f1526; }
+.worldPick .wCard { display: inline-flex; align-items: center; gap: 8px; min-width: 9.5em; padding: 0.25em 0.6em 0.25em 0.3em; border-radius: 12px; background: #0b1128; box-shadow: inset 0 2px 4px rgba(0,0,0,.55); }
+.worldPick .wSwatch { width: 2.6em; height: 1.9em; border-radius: 8px; border: 2px solid #fff; flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; }
+.worldPick .wSwatch .ic { margin: 0; width: 1.3em; height: 1.3em; filter: drop-shadow(0 1px 0 rgba(0,0,0,.4)); }
+.worldPick .wName { font-size: 1.1em; color: #ffd23f; white-space: nowrap; }
+.ic .k { fill: #101830; }
+.seg button.on .ic .k, .tabs button.on .ic .k { fill: #1a2550; }
+/* In a room: code, devices and buttons on one line, the status under them. */
+.friendRow .roomBox .roomText { order: 10; flex-basis: 100%; font-size: .85em; }
+@media (max-height: 500px) {
+  /* Players side by side, so a friend game still fits on one screen. */
+  .wide #players { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .wide #players .player input { min-width: 0; }
+  .friendRow .roomBox { padding: 0.3em 0.7em; row-gap: 2px; }
+}
+@media (max-height: 500px) and (max-width: 780px) {
+  /* Narrow phones: each setting's name sits above its toggle, two columns. */
+  .wide #extrasCol { gap: 0 18px; }
+  .wide #extrasCol .row { flex-direction: column; align-items: flex-start; gap: 2px; margin: 2px 0 6px; }
+  .wide #extrasCol .label { width: auto; font-size: .8em; }
+  .worldPick .wCard { min-width: 7.5em; }
+}
+@media (max-height: 500px) {
+  .wide #players { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .wide #players .player { min-width: 0; }
+  .wide #players .player select { flex: none; width: auto; }
+}
+@media (max-height: 500px) and (max-width: 780px) {
+  .wide #extrasCol .row { margin: 0 0 4px; }
+}
+/* Tabs shrink to fit on narrow screens rather than running off the edge. */
+.tabs button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) { .tabs button { padding-left: .3em; padding-right: .3em; font-size: .95em; } }
+.tabShort { display: none; }
+@media (max-width: 520px) { .tabLong { display: none; } .tabShort { display: inline; } }
+#help .privacy { font-size: .9em; opacity: .85; margin: 4px 0 10px; line-height: 1.35; }
+/* Friend room on a landscape phone: code, devices, buttons and Leave on one line. */
+@media (max-height: 500px) {
+  .friendRow .roomBox { flex-wrap: wrap; column-gap: 6px; }
+  .friendRow .roomBox .setupBtn { padding: .3em .6em; }
+  .friendRow #roomLeave { margin-left: auto; }
+  .friendRow .roomBadge { font-size: 1.1em; }
+  body.tabFriends .wide #playersCol .row { margin: 2px 0; }
+  body.tabFriends .friendRow { margin: 4px 0 2px; }
+}
+@media (max-height: 500px) and (max-width: 900px) {
+  .friendRow .roomBox .long { display: none; }
+  .friendRow .wantLabel { display: none; }
+}
+/* Extras on a landscape phone: both columns fit inside the panel. */
+@media (max-height: 500px) {
+  .wide #extrasCol { gap: 0 16px; grid-template-columns: auto minmax(0, 1fr); }
+  .wide #extrasCol .label { width: 4.3em; }
+  .wide #extrasCol .seg button { padding-left: .55em; padding-right: .55em; }
+  .wide #extrasCol .seg button .ic { margin-right: .25em; }
+}

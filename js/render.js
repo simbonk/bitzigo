@@ -204,7 +204,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   const treeGap = 0.3, treeOff = dist % treeGap;
   for (let k = -1; k < 5; k++) {
     const z = k * treeGap - treeOff + 0.12;
-    if (z > 1 || z < -0.15) continue;
+    if (z > 1 || z < -0.15 || p.throwing?.type === 'swim') continue;
     items.push({ z, draw: () => drawTree(ctx, L, z, (k + Math.floor(dist / treeGap)) & 1 ? -1 : 1, theme.prop) });
   }
   for (const o of p.obstacles) {
@@ -213,7 +213,15 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   }
   const T = p.throwing;
   if (C?.type === 'climb') items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
-  if (T && MINI.includes(T.type)) items.push({ z: 0.01, draw: () => drawMini(ctx, L, p, T, time) });
+  // Water over the swimmer's legs.
+  if (T?.type === 'swim') items.push({ z: -0.2, draw: () => {
+    const wy = L.ground - L.S * 1.1 + Math.sin(time * 4) * L.S * 0.05;
+    rect(ctx, L.x, wy, L.w, L.h - wy, 'rgba(47,134,214,0.92)');
+    rect(ctx, L.x, wy, L.w, Math.max(1, L.S * 0.08), '#bfe3ff');
+    if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, L.cx + (i - 2.5) * L.S * 0.35, wy - L.S * (0.2 + 0.5 * T.splash) - (i % 2) * L.S * 0.2, L.S * 0.15, L.S * 0.15, '#e6f4ff');
+  } });
+  // The pond sits under everything; other break props draw over the kid.
+  if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
   else if (T && T.type !== 'bubbles') {
     items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
@@ -681,11 +689,54 @@ function cameraPose(p) {
   return P;
 }
 
+// Camera poses stretch and shrink as a kid turns, bends or steps closer, which
+// made the character look big one moment and small the next. Keep each body
+// part close to the cartoon's own length and only take its direction from the
+// camera, with a little of the real length mixed in so it still feels alive.
+const segLen = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+export function steadyPose(P, keepArms) {
+  const firm = (m, ref) => clamp(ref * 0.75 + m * 0.25, ref * 0.85, ref * 1.12);
+  const toward = (from, a, b, ref, fallback) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy);
+    if (m < 0.05) return [from[0] + fallback[0], from[1] + fallback[1]];
+    const k = firm(m, ref) / m;
+    return [from[0] + dx * k, from[1] + dy * k];
+  };
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const span = (c, a, b, w) => {
+    let dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy);
+    if (m < 0.05) { dx = 1; dy = 0; m = 1; }
+    const hw = firm(m, w) / 2 / m;
+    return [[c[0] - dx * hw, c[1] - dy * hw], [c[0] + dx * hw, c[1] + dy * hw]];
+  };
+  const S0 = STAND, out = {};
+  const hc = mid(P.lh, P.rh);
+  const sc = toward(hc, hc, mid(P.ls, P.rs), 1, [0, -1]);
+  [out.lh, out.rh] = span(hc, P.lh, P.rh, segLen(S0.lh, S0.rh));
+  [out.ls, out.rs] = span(sc, P.ls, P.rs, segLen(S0.ls, S0.rs));
+  out.nose = toward(sc, mid(P.ls, P.rs), P.nose, 0.5, [0, -0.5]);
+  for (const [sh, el, wr] of [['ls', 'le', 'lw'], ['rs', 're', 'rw']]) {
+    if (keepArms) {
+      // Hand break games: the hands must stay exactly where the camera saw them.
+      const dx = out[sh][0] - P[sh][0], dy = out[sh][1] - P[sh][1];
+      out[el] = [P[el][0] + dx * 0.5, P[el][1] + dy * 0.5]; out[wr] = P[wr];
+      continue;
+    }
+    out[el] = toward(out[sh], P[sh], P[el], segLen(S0[sh], S0[el]), [0, 0.48]);
+    out[wr] = toward(out[el], P[el], P[wr], segLen(S0[el], S0[wr]), [0, 0.44]);
+  }
+  for (const [hp, kn, an] of [['lh', 'lk', 'la'], ['rh', 'rk', 'ra']]) {
+    out[kn] = toward(out[hp], P[hp], P[kn], 0.8, [0, 0.8]);
+    out[an] = toward(out[kn], P[kn], P[an], 0.8, [0, 0.8]);
+  }
+  return out;
+}
+
 function drawAvatar(ctx, L, p, time, ch) {
   let P;
   if (p.pts && p.base) {
     // Smooth out camera jitter so the character doesn't twitch.
-    const raw = cameraPose(p), prev = p.drawPose;
+    const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type)), prev = p.drawPose;
     P = prev ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [prev[k][0] + (v[0] - prev[k][0]) * 0.45, prev[k][1] + (v[1] - prev[k][1]) * 0.45]])) : raw;
     p.drawPose = P;
   }
@@ -981,7 +1032,24 @@ export function drawGearItem(ctx, id, left, top, u) {
 // ---------------- HUD (full-res canvas) ----------------
 
 export function text(ctx, str, x, y, size, color, align = 'center') {
+  // Too wide for the screen (a phone held upright): split into two lines, or shrink.
+  const maxW = ctx.canvas.width * 0.94;
   ctx.font = `bold ${R(size)}px ${FONT}`;
+  const w = ctx.measureText(str).width;
+  if (w > maxW / 0.75 && align === 'center') {
+    const mid = str.length / 2;
+    let cut = -1;
+    for (let i = 0; i < str.length; i++) if (str[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i;
+    if (cut > 0) {
+      const a = str.slice(0, cut), b = str.slice(cut + 1), s2 = size * 0.9;
+      ctx.font = `bold ${R(s2)}px ${FONT}`;
+      const fit = Math.min(1, maxW / Math.max(ctx.measureText(a).width, ctx.measureText(b).width));
+      text(ctx, a, x, y - s2 * fit * 0.55, s2 * fit, color, align);
+      text(ctx, b, x, y + s2 * fit * 0.55, s2 * fit, color, align);
+      return;
+    }
+  }
+  if (w > maxW) { size *= maxW / w; ctx.font = `bold ${R(size)}px ${FONT}`; }
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.lineWidth = Math.max(3, size * 0.2);
@@ -1025,9 +1093,9 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop' }[type] || 'throw';
+    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop', swim: 'rope' }[type] || 'throw';
     const B = p.throwing;
-    const word = type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
+    const word = type === 'swim' ? `SWIM! ${B.goal - B.dist} to go` : type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
     if (kind === 'dance' && B.move) {
       // Picture card of the move to copy, with a shrinking timer bar.
       const m = B.move, k = Math.min(1, m.t / m.dur);
@@ -1412,6 +1480,24 @@ function drawMini(ctx, L, p, T, time) {
       rect(ctx, x + c.side * u, y - u * 0.2, u * 1.4 * c.side, u * 0.3, '#c9304a');
       rect(ctx, x - (rot ? u * 1.6 : u * 0.6), y - u * 0.9, rot ? u * 3.2 : u * 1.2, u * 0.15, '#3a3a44');
       ctx.restore();
+    }
+  } else if (T.type === 'swim') {
+    // A pond across the lane; the far shore comes closer with every stroke.
+    const k = clamp(T.shown, 0, 1);
+    const shoreY = L.horizon + (L.ground - S * 2.2 - L.horizon) * k;
+    rect(ctx, L.x, L.horizon, L.w, L.h - L.horizon, '#2f86d6');
+    rect(ctx, L.x, shoreY - S * 0.5, L.w, S * 0.5, '#e8cf8a');
+    rect(ctx, L.x, shoreY - S * 0.5, L.w, Math.max(1, S * 0.08), '#5fb83b');
+    // Finish flag on the far shore.
+    rect(ctx, L.cx - S * 0.03, shoreY - S * 1.5, S * 0.08, S * 1.0, '#ffffff');
+    rect(ctx, L.cx + S * 0.05, shoreY - S * 1.5, S * 0.5, S * 0.3, '#ff5d73');
+    for (let r = 0; r < 7; r++) {
+      const yy = shoreY + ((r + 0.5) / 7) * (L.h - shoreY), wx = L.x + (((r * 0.37 + time * 0.08) % 1)) * L.w;
+      rect(ctx, wx, yy, S * 0.7, Math.max(1, S * 0.07), '#7cc4ff');
+    }
+    for (let k2 = 0; k2 < 3; k2++) {
+      const lx = L.x + ((k2 * 0.31 + 0.12 + p.index * 0.17) % 1) * L.w, ly = shoreY + (L.ground - shoreY) * (0.25 + k2 * 0.22);
+      rect(ctx, lx, ly, S * 0.6, S * 0.18, '#3f9e4a');
     }
   } else if (T.type === 'rain') {
     // Rainstorm: dark streaks, a roof over the hands, and two buckets.
