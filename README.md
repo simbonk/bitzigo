@@ -47,7 +47,7 @@ Choose **Keyboard** on the setup screen's Extras tab. P1 uses W/A/S/D, P2 T/F/G/
 
 ## Would You Rather pictures
 
-The 100 questions live in `tools/wyr-questions.txt` (question, then each answer as `label ; emoji ; picture description`). The pixel-art cards in `img/wyr/` were drawn once with Google's Gemini image model and shrunk to 48px sprites (under 1 KB each); the game never calls Gemini. After changing the questions:
+The questions live in `tools/wyr-questions.txt` (question, then each answer as `label ; emoji ; picture description`). The pixel-art cards in `img/wyr/` were drawn once with Google's Gemini image model and shrunk to 48px sprites (under 1 KB each); the game never calls Gemini. After changing the questions:
 
 ```
 python3 tools/wyr.py                                   # rebuild js/wyr-questions.js

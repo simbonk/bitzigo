@@ -1,81 +1,41 @@
-# Would You Rather questions: 100 favourites (funny ones first, nothing gross).
+# Would You Rather questions: only ones a kid can answer from the pictures alone (funny, nothing gross).
 # id | question (after "What would you rather") | choices, each "label ; emoji ; picture description"
 1|have as a superpower?|Fly like a bird;🐦;a kid flying through the sky like a bird|Swim like a dolphin;🐬;a kid swimming fast next to a dolphin|Run like a cheetah;🐆;a kid running super fast next to a cheetah
-2|be able to do?|Turn invisible;👻;a kid turning see-through and invisible|Read minds;🧠;a kid with glowing thought bubbles reading minds
 3|have?|Super strength;💪;a kid lifting a car over their head|Stretchy arms and legs;🤸;a kid with super long stretchy arms|Super high jumps;🦘;a kid jumping over a house
 4|be able to talk to?|Land animals;🐘;a kid chatting with an elephant|Ocean creatures;🐙;a kid chatting with an octopus|Birds and bugs;🐞;a kid chatting with a ladybug and a bird
 5|control with your mind?|Fire;🔥;a friendly swirl of fire|Water;💧;a swirling wave of water|Wind;🌪️;a little whirlwind|Earth;🪨;floating rocks and dirt
 9|be able to do?|Shrink to ant size;🐜;a tiny kid standing next to a giant ant|Grow as big as a house;🏠;a giant kid taller than a house
 11|be able to do?|Breathe underwater;🫧;a kid smiling underwater with fish|Float in space;🚀;a kid floating in space next to the moon
-16|have?|Eagle wings;🦅;a kid with big eagle wings|A monkey tail;🐒;a kid hanging from a branch by a monkey tail|Frog feet and gills;🐸;a kid with webbed frog feet swimming
-19|be able to do?|Clone yourself;👯;two identical kids high-fiving|Turn into any animal;🦁;a kid turning into a lion
 21|be able to do?|Make plants grow;🌱;flowers bursting out of the ground|Clap to make snow;❄️;a kid clapping and snow falling
 31|be able to do?|Jump on clouds;☁️;a kid hopping from cloud to cloud|Walk on water;🌊;a kid walking on top of a lake
-35|be able to do?|Shoot spiderwebs;🕸️;a kid shooting a web from their wrist|Glitter cannons;✨;a kid blasting sparkly glitter from their hands|Slime elbows;🟢;green slime shooting from a kid's elbows
 38|have?|A flying bicycle;🚲;a bicycle flying in the sky|A hover skateboard;🛹;a skateboard hovering over water|Rocket rollerblades;🛼;super fast rollerblades with speed lines
-39|be able to do?|Turn veggies into candy;🍬;a carrot turning into a lollipop|Turn water into juice;🧃;a glass of water turning into orange juice
-40|have?|An invisible helper;🫥;a broom sweeping by itself|A pocket dragon;🐉;a tiny dragon peeking out of a coat pocket
 43|be able to do?|Jump into paintings;🖼️;a kid climbing into a painting|Jump into video games;🎮;a kid inside a video game world|Jump into storybooks;📚;a kid stepping out of an open storybook
 51|eat for dinner every night for a week?|Pizza;🍕;a pizza|Tacos;🌮;tacos|Burgers;🍔;a burger|Pancakes;🥞;a stack of pancakes
 52|give up for a whole month?|Ice cream;🍦;an ice cream cone|Chocolate;🍫;a chocolate bar|French fries;🍟;french fries|Gummy candy;🐻;gummy bears
 53|have right now?|A giant cookie;🍪;a giant chocolate chip cookie|An ice cream sundae;🍨;a triple scoop sundae|Birthday cake;🎂;a slice of birthday cake
-56|have in your backyard?|A nacho cheese fountain;🧀;a fountain of melted cheese with nachos|A cotton candy tree;🍭;a tree with pink cotton candy|A popcorn bush;🍿;a bush covered in popcorn
 60|have?|A pillow-sized gummy bear;🐻;a gummy bear as big as a pillow|A bathtub of chocolate candies;🛁;a bathtub full of colourful candy buttons
 66|have on a hot summer day?|A popsicle;🍧;a fruit popsicle|An ice cream sandwich;🍦;an ice cream sandwich|A slushie;🥤;a slushie cup|Watermelon;🍉;a slice of watermelon
-69|eat?|10-foot spaghetti;🍝;one super long noodle of spaghetti|A basketball meatball;🏀;a meatball as big as a basketball
 73|build and eat?|Gingerbread mansion;🏠;a gingerbread mansion|Rice cereal castle;🏰;a castle made of rice cereal treats|Waffle tower;🧇;a tall tower of waffles
-74|have as a birthday cake?|A cookie cake;🍪;a giant cookie cake with candles|50 donuts;🍩;a tower of donuts with candles|An ice cream cake;🍨;an ice cream cake|A layer cake;🎂;a frosted layer cake
-76|put on your ice cream?|Rainbow sprinkles;🌈;ice cream with rainbow sprinkles|Hot fudge;🍫;ice cream with hot fudge|Cookie crumbs;🍪;ice cream with chocolate cookie crumbs|Gummy worms;🪱;ice cream with gummy worms
-78|have?|A cartoon toaster;🍞;a toaster making toast with a smiley face|A dino waffle maker;🦖;a waffle shaped like a dinosaur
-79|eat?|Green eggs and ham;🥚;green eggs and ham on a plate|Purple mac and cheese;🧀;a bowl of purple macaroni|Blue mashed potatoes;🥔;a bowl of blue mashed potatoes
-91|have?|Basketball marshmallows;🏀;a marshmallow as big as a basketball|Hockey puck chocolate chips;🍫;a chocolate chip as big as a hockey puck
 101|have as a pet?|A hamster-sized dog;🐕;a teeny tiny dog sitting in a teacup|A dog-sized hamster;🐹;a huge hamster as big as a dog
 102|ride to school?|An elephant;🐘;a kid riding an elephant|An ostrich;🦤;a kid riding an ostrich|A fluffy llama;🦙;a kid riding a fluffy llama|A grizzly bear;🐻;a kid riding a friendly bear
 103|be for a day?|A dolphin;🐬;a jumping dolphin|An eagle;🦅;a soaring eagle|A monkey;🐒;a monkey swinging on a vine|A cheetah;🐆;a running cheetah
 104|have as a backyard pet?|A baby penguin;🐧;a baby penguin|A koala;🐨;a koala in a tree|A red panda;🐼;a red panda|A sloth;🦥;a sleepy sloth
 105|have?|A sassy talking cat;🐱;a cat with sunglasses and a sassy look|A gamer dog;🎮;a dog holding a game controller|A homework parrot;🦜;a parrot with a pencil doing homework
 106|discover in the woods?|A baby dragon;🐉;a cute baby dragon|A unicorn;🦄;a unicorn|Talking squirrels;🐿️;squirrels chatting|A fairy village;🧚;tiny mushroom houses with fairies
-107|have?|A rainbow horse;🐴;a horse with a rainbow mane|A glowing turtle;🐢;a turtle with a glowing shell|An opera frog;🐸;a frog singing opera
 109|have?|Bunny ears;🐰;a kid with bunny ears|An elephant trunk;🐘;a kid with an elephant trunk nose|Porcupine quills;🦔;a kid with spiky porcupine quills|Moose antlers;🦌;a kid with moose antlers
 112|see in real life?|A T. rex;🦖;a tyrannosaurus|A woolly mammoth;🦣;a woolly mammoth|A saber-tooth tiger;🐅;a saber-tooth tiger|A giant shark;🦈;a megalodon shark
-116|have?|100 puppies visit;🐶;a big pile of puppies|100 kittens visit;🐱;a big pile of kittens
-119|be able to do?|Sleep like a bat;🦇;a kid sleeping upside down like a bat|Sleep like a flamingo;🦩;a kid sleeping standing on one leg|Sleep like an otter;🦦;a kid floating asleep on their back in water
 120|have?|A mini giraffe;🦒;a tiny giraffe in a backpack|A mini hippo;🦛;a tiny hippo in a bathtub|A mini elephant;🐘;a tiny elephant watering plants
 125|have as a guard for your fort?|A honking goose;🪿;an angry honking goose|A skunk;🦨;a skunk with its tail up|A head-butting goat;🐐;a goat ready to head-butt
-130|see in the sky?|A double rainbow;🌈;a double rainbow|Shooting stars;🌠;shooting stars|Northern lights;🌌;green and purple northern lights|Dinosaur clouds;☁️;clouds shaped like dinosaurs
 137|have as a farm pet?|A fluffy mini cow;🐄;a fluffy highland cow|A goat in pajamas;🐐;a goat wearing pajamas|A belly-rub piglet;🐷;a happy piglet on its back|A duck in boots;🦆;a duck wearing tiny boots
 147|be?|Tall as a giraffe;🦒;a super tall kid next to a giraffe|Small as a mouse;🐭;a tiny kid next to a mouse|Wide as a hippo;🦛;a big round kid next to a hippo
 148|have?|A backflip dog;🐕;a dog doing a backflip|A piano cat;🎹;a cat playing piano|A race car hamster;🏎️;a hamster driving a tiny race car
-151|have?|Spaghetti hair;🍝;a kid with spaghetti hair|Marshmallow fingers;☁️;a hand with marshmallow fingers|Pickle toes;🥒;feet with pickle toes|Pancake ears;🥞;a kid with pancake ears
-152|do for a whole day?|Walk backward;🔙;a kid walking backwards|Hop on one foot;🦶;a kid hopping on one foot|Crab-walk;🦀;a kid doing a crab walk
 153|wear in the summer?|A winter snowsuit;⛄;a kid in a puffy snowsuit in the sun|Flippers and goggles;🤿;a kid in scuba flippers and goggles|A dinosaur costume;🦖;a kid in a puffy dinosaur costume
 154|have happen when you sneeze?|Confetti shoots out;🎉;a kid sneezing confetti|A trumpet plays;🎺;a kid sneezing and a trumpet blaring|You float up;🎈;a kid floating up after a sneeze
-155|have?|A glowing red nose;🔴;a kid with a glowing red nose|Ears that flap;👂;a kid with flapping ears|Hair that stands up;😲;a surprised kid with hair standing straight up
-156|do every time you enter a room?|A silly dance;💃;a kid doing a silly dance in a doorway|A superhero intro;🦸;a kid in a doorway striking a superhero pose|Sing hello like opera;🎤;a kid singing opera in a doorway
-157|have?|Squeaky shoes;👟;squeaky sneakers with sound lines|Giant baggy pants;👖;a kid in huge baggy pants|A color-changing shirt;👕;a shirt changing colours in the sun
-160|do for a week?|Speak in rhymes;📜;a kid speaking with music notes and rhyme words|Speak by singing;🎵;a kid singing with music notes|Speak in whispers;🤫;a kid whispering
 163|wear as a hat?|A watermelon;🍉;a kid wearing a hollow watermelon as a hat|A pasta strainer;🍝;a kid wearing a colander as a hat|A traffic cone;🚧;a kid wearing a traffic cone as a hat|An octopus plush;🐙;a kid wearing a plush octopus as a hat
-164|have happen when you laugh?|Snort like a pig;🐷;a kid laughing and snorting like a pig|Honk like a clown horn;🤡;a kid laughing with a clown horn honk|Bubbles come out;🫧;a kid laughing out bubbles
-169|have rain from the sky?|Ping-pong balls;🏓;ping-pong balls raining from a cloud|Marshmallows;☁️;marshmallows raining from a cloud|Rubber ducks;🦆;rubber ducks raining from a cloud|Sponges;🧽;sponges raining from a cloud
-171|have?|A squeaky mouse voice;🐭;a kid talking with a squeaky mouse voice|A booming robot voice;🤖;a kid talking like a robot|A pirate voice;🏴‍☠️;a kid talking like a pirate
 172|ride around the grocery store?|A race car cart;🏎️;a shopping cart shaped like a race car|A giant skateboard;🛹;a giant skateboard|A pogo stick;🦘;a kid on a pogo stick|Roller skates;🛼;roller skates
-174|have?|Banana-long fingers;🍌;a hand with super long fingers|Super short legs;🐕;a kid with tiny short legs like a dachshund|An ostrich neck;🦤;a kid with a super long neck
-176|wear?|Duct tape clothes;🩶;a kid in clothes made of grey tape|Bubble wrap clothes;🫧;a kid in clothes made of bubble wrap|Tin foil clothes;✨;a kid in shiny tin foil clothes
-177|have?|Giggling grass;🌿;grass giggling under bare feet|High-fiving trees;🌳;a tree high-fiving a kid
-179|have?|A dancing shadow;🕺;a kid standing still while their shadow dances|A silly mirror;🪞;a mirror reflection making a silly face
-180|have as a bed?|A trampoline bed;🤸;a bed that is a trampoline|A jelly waterbed;🍇;a wobbly jelly bed|A palm tree hammock;🌴;a hammock between two palm trees indoors
-181|do when you wake up?|Slide down a fire pole;🚒;a kid sliding down a fire pole into a kitchen|Pillow launch;🛏️;a kid launched from bed into pillows|Zip-line to the bathroom;🚽;a kid on a zip-line in a house
-183|do for a day?|Clothes backward;🔄;a kid with clothes on backwards|Clothes inside-out;👕;a kid with clothes inside out|Two different shoes;👟;a kid wearing a boot and a sneaker
-186|have?|A dad-joke backpack;🎒;a backpack with a face telling jokes|Shoes that compliment you;👟;sneakers with happy faces cheering
 191|play?|Beach ball soccer;⚽;a kid kicking a giant beach ball|Dodgeball basketball;🏀;a kid shooting a big rubber ball at a hoop|Pool noodle baseball;⚾;a kid batting with a pool noodle
-192|have?|A goat doorbell;🐐;a doorbell with a screaming goat|A guitar solo doorbell;🎸;a doorbell with an electric guitar|A riddle doorbell;❓;a doorbell with a question mark
 194|do?|A balloon on your wrist forever;🎈;a kid with a balloon tied to their wrist|Toilet paper on your shoe all day;🧻;a kid with toilet paper stuck to their shoe
-197|do?|Say "Pickle!" after questions;🥒;a kid shouting next to a pickle|Jazz hands when you hear your name;🙌;a kid doing jazz hands
-201|have at school?|Two-hour recess;🛝;kids on a playground slide|No homework ever;📚;a kid throwing homework in the air|Three-day weekends;📅;a calendar with a happy weekend|Free ice cream at lunch;🍦;an ice cream cone on a lunch tray
-203|play on a rainy afternoon?|Board games;🎲;a board game with dice|Video games;🎮;a game controller|Hide-and-seek;🙈;a kid hiding behind a couch|A blanket fort;⛺;a blanket fort with pillows
 205|have on your playground?|A spiral slide;🛝;a giant spiral slide|A zip-line;🪢;a zip-line|A climbing wall;🧗;a rock climbing wall|A pirate ship;🏴‍☠️;a pirate ship playground
-206|do at a sleepover?|Watch movies;🎬;kids watching a movie with popcorn|Pillow fight;🛏️;a pillow fight with feathers|Flashlight stories;🔦;a kid with a flashlight under a blanket|Make pizzas;🍕;kids making pizza
-208|have in your bedroom?|A secret passage;📚;a bookshelf opening into a secret passage|A climbing wall;🧗;a climbing wall up to a loft bed|A basketball hoop;🏀;a mini basketball hoop|Glow-in-the-dark stars;⭐;a ceiling with glowing stars
 209|do on a snow day?|Sledding;🛷;a kid on a sled|Snowball fight;❄️;a snowball fight|Build a snowman;⛄;a giant snowman|Cocoa and toys;☕;a mug of hot cocoa and toy bricks
 211|go on for a field trip?|Dinosaur museum;🦕;a dinosaur skeleton|Chocolate factory;🍫;a chocolate factory|Amusement park;🎢;a roller coaster|Space center;🚀;a rocket on a launch pad
 215|learn how to do?|A backflip;🤸;a kid doing a backflip|Juggle five balls;🤹;a kid juggling|Ride a unicycle;🚲;a kid on a unicycle|Solve a puzzle cube;🧊;a colourful puzzle cube
@@ -95,8 +55,6 @@
 270|have in your spy kit?|See-behind glasses;🕶️;spy glasses with mirrors|A gadget watch;⌚;a spy watch with a grappling hook|Wall-climbing shoes;👟;suction cup shoes on a wall
 277|have as a sidekick?|A wise owl;🦉;a wise owl with glasses|A loyal dog;🐕;a brave dog|A know-it-all robot;🤖;a small funny robot|A cheeky monkey;🐒;a cheeky monkey
 279|do at a carnival?|Win a giant teddy;🧸;a giant teddy bear prize|Funnel cake;🍰;a funnel cake and cotton candy|Spinny ride;🌀;a spinning teacup ride|Funny mirrors;🪞;a kid in a wobbly funhouse mirror
-283|have?|A jetpack;🚀;a kid with a jetpack|A hoverboard;🛹;a floating hoverboard|A mini submarine;🌊;a tiny one-person submarine
 284|do?|Slide down a rainbow;🌈;a kid sliding down a rainbow|Bounce on clouds;☁️;a kid bouncing on clouds|Swing from the moon;🌙;a kid on a swing hanging from the moon
-290|explore?|A candy world;🍭;a world made of candy|A toy brick world;🧱;a world made of toy bricks|A bouncy world;🎈;a world that is all bouncy castles
 295|be?|A dragon rider;🐉;a kid riding a dragon|A griffin trainer;🦅;a kid with a griffin|A sea serpent captain;🐍;a kid riding a sea serpent
 300|have as your next big adventure?|A treasure hunt;🗺️;a treasure hunt map with clues|Island camping;🏝️;a tent on a little island|A mystery train;🚂;a steam train at night|Space camp;🚀;a kid in a space suit
