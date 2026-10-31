@@ -300,8 +300,11 @@ function loadVoices() {
 
 // Extra lines fetched only when needed, like the Would You Rather questions.
 export function preloadLine(name, path) { loadClip(name, path); }
+// Plays a loaded line and returns how long it runs, in seconds (0 if it can't play).
 export function say(name) {
-  if (ac && !muted && clips[name]) playClip(name);
+  if (!ac || muted || !clips[name]) return 0;
+  playClip(name);
+  return clips[name].duration;
 }
 
 function playClip(name) {

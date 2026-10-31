@@ -1087,7 +1087,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     .filter(e => !e.o.result && KIND_INFO[e.o.kind] && e.z > -0.05 && e.z < 0.8)
     .sort((a, b) => a.z - b.z)[0];
   if (p.throwing?.type === 'wyr') {
-    drawWyrCards(ctx, L, p, p.throwing);
+    // Would You Rather draws one shared board in the middle: see drawWyrBoard.
   } else if (p.throwing) {
     const size = clamp(L.w * 0.1, 22, 64);
     const y = L.horizon * 0.66;
@@ -1398,7 +1398,7 @@ function drawVine(ctx, L, C, pan) {
 
 function drawMini(ctx, L, p, T, time) {
   const S = L.S;
-  if (T.type === 'wyr') return; // all on the HUD: see drawWyrCards
+  if (T.type === 'wyr') return; // all on the shared board: see drawWyrBoard
   if (T.type === 'bugs') {
     for (const b of T.bugs) {
       const { x, y } = bodyXY(L, b.x, b.y);
@@ -1640,73 +1640,73 @@ function wrapLines(ctx, str, maxW, maxLines) {
   return lines;
 }
 
-// The answer cards in a kid's lane: a picture, its words, and the pose that
-// picks it. Holding the pose fills the card's bar in the kid's colour; after
-// the answers are in, everyone's colour dots show who picked what.
-function drawWyrCards(ctx, L, p, B) {
-  const S = B.wyr;
+// The answer cards, big in the middle of the screen for the whole squad: a
+// picture, its words and the pose that picks it. Each kid's vote sits beside
+// the card they pick, as a dot in their colour with their number; while a kid
+// holds a pose, a ring fills round the dot that will be theirs.
+export function drawWyrBoard(ctx, S, players, W, H) {
   if (!S || (S.phase !== 'ask' && S.phase !== 'reveal')) return;
   const q = S.qs[S.i], n = q.c.length, poses = posesFor(n);
-  const pad = clamp(L.w * 0.03, 6, 20), gap = pad * 0.7;
-  const cw = Math.min((L.w - pad * 2 - gap * (n - 1)) / n, L.h * 0.16);
-  const x0 = L.cx - (n * cw + (n - 1) * gap) / 2;
-  const top = L.h * WYR_TOP;
-  const fs = clamp(cw * 0.12, 10, 22);
-  const mine = S.picks[p.index];
-  const votes = q.c.map((_, k) => S.picks.map((c, i) => (c === k ? i : -1)).filter(i => i >= 0));
+  const reveal = S.phase === 'reveal';
+  // As big as the screen allows: a phone held sideways still gets cards
+  // about a third of its height, with words a kid can read from the couch.
+  const cw = Math.min((W * 0.94) / (n * 1.25), H * 0.36);
+  const gap = cw * 0.25;
+  const x0 = W / 2 - (n * (cw + gap)) / 2 + gap / 2;
+  const top = H * WYR_TOP;
+  const fs = clamp(cw * 0.15, 14, 44);
+  const votes = q.c.map((_, k) => players.filter(p => S.picks[p.index] === k));
   const most = Math.max(...votes.map(v => v.length));
   ctx.font = `bold ${R(fs)}px ${FONT}`;
-  const labels = q.c.map(c => wrapLines(ctx, c[0], cw * 0.92, 3));
-  const ch = cw * 0.92 + fs * 3.6;
+  const labels = q.c.map(c => wrapLines(ctx, c[0], cw * 0.92, 2));
+  const ch = cw * 0.88 + fs * 2.5;
+  const r = Math.min(gap * 0.4, cw * 0.11);
   for (let k = 0; k < n; k++) {
     const x = x0 + k * (cw + gap);
-    const reveal = S.phase === 'reveal';
-    const lose = reveal && votes[k].length < most;
+    const win = reveal && votes[k].length === most && most > 0;
     ctx.save();
-    if (lose) ctx.globalAlpha = 0.55;
-    ctx.fillStyle = 'rgba(255,248,230,0.94)';
+    if (reveal && !win) ctx.globalAlpha = 0.5;
+    ctx.fillStyle = 'rgba(255,248,230,0.95)';
     ctx.fillRect(x, top, cw, ch);
-    const ring = mine === k ? p.color : '#1b2340';
-    ctx.lineWidth = mine === k ? Math.max(4, cw * 0.06) : 2;
-    ctx.strokeStyle = ring;
+    ctx.lineWidth = win ? Math.max(5, cw * 0.04) : 3;
+    ctx.strokeStyle = win ? '#ffe14d' : '#1b2340';
     ctx.strokeRect(x, top, cw, ch);
-    const im = wyrImage(q.id, k), is = cw * 0.84;
+    const im = wyrImage(q.id, k), is = cw * 0.82;
     if (im) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(im, x + (cw - is) / 2, top + cw * 0.05, is, is);
+      ctx.drawImage(im, x + (cw - is) / 2, top + cw * 0.04, is, is);
     } else {
       ctx.font = `${R(cw * 0.5)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(q.c[k][1], x + cw / 2, top + cw * 0.5);
+      ctx.fillText(q.c[k][1], x + cw / 2, top + cw * 0.46);
     }
     ctx.font = `bold ${R(fs)}px ${FONT}`;
     ctx.fillStyle = '#1b2340';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    labels[k].forEach((ln, i) => ctx.fillText(ln, x + cw / 2, top + cw * 0.92 + fs * (0.65 + 1.1 * i + (3 - labels[k].length) * 0.55)));
-    // Hold bar along the bottom of the card.
-    if (B.cand === k && B.hold > 0) {
-      ctx.fillStyle = p.color;
-      ctx.fillRect(x, top + ch - fs * 0.45, cw * B.hold, fs * 0.45);
-    }
-    if (mine === k) text(ctx, '✔', x + cw - fs * 0.6, top + fs * 0.7, fs * 1.3, p.color);
-    // Who picked it, once everyone's in.
-    if (reveal) {
-      const r = clamp(cw * 0.09, 5, 14);
-      votes[k].forEach((i, j) => {
-        ctx.beginPath();
-        ctx.arc(x + r * 1.4 + j * r * 2.3, top + r * 1.4, r, 0, Math.PI * 2);
-        ctx.fillStyle = S.colors?.[i] || '#ffffff';
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#1b2340';
-        ctx.stroke();
-      });
-    }
+    labels[k].forEach((ln, i) => ctx.fillText(ln, x + cw / 2, top + cw * 0.88 + fs * (0.7 + 1.1 * i + (2 - labels[k].length) * 0.55)));
     ctx.restore();
+    // Votes beside the card, top down, plus rings for kids still holding.
+    const vx = x + cw + gap / 2;
+    const slots = [...votes[k].map(p => ({ p, k: 1 })),
+      ...players.filter(p => p.throwing?.cand === k && p.throwing.hold > 0 && S.picks[p.index] !== k).map(p => ({ p, k: p.throwing.hold }))];
+    slots.forEach(({ p, k: fill }, j) => {
+      const vy = top + r * 1.2 + j * r * 2.4;
+      ctx.beginPath();
+      ctx.arc(vx, vy, r, 0, Math.PI * 2);
+      ctx.fillStyle = fill >= 1 ? p.color : 'rgba(10,14,30,0.55)';
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, r * 0.18);
+      ctx.strokeStyle = fill >= 1 ? '#ffffff' : p.color;
+      ctx.beginPath();
+      ctx.arc(vx, vy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill);
+      ctx.stroke();
+      if (fill >= 1) text(ctx, String(p.index + 1), vx, vy + r * 0.05, r * 1.25, '#ffffff');
+    });
     // The pose that picks this card, under it.
-    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + cw * 0.04, Math.min(cw * 0.85, L.h * 0.12), poses[k]);
+    if (!reveal) drawPoseIcon(ctx, x + cw / 2, top + ch + H * 0.01, Math.min(cw * 0.6, (H - top - ch - H * 0.03) / 1.2), poses[k]);
+    else if (votes[k].length) text(ctx, votes[k].length === 1 ? '1 vote' : `${votes[k].length} votes`, x + cw / 2, top + ch + fs * 1.2, fs * 1.3, win ? '#ffe14d' : '#ffffff');
   }
 }
 

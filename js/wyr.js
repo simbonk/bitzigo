@@ -9,9 +9,10 @@ import { preloadLine, say } from './audio.js';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
-export const WYR_SECS = 30;          // longest a Would You Rather break can run
+export const WYR_SECS = 45;          // longest a Would You Rather break can run
 const INTRO = 3.8;                   // the title banner and its announcer line, before the first question
-const ASK = 10;                      // most time to answer one question
+const ASK = 8;                       // time to answer once the announcer has read the question and answers
+const READ = 7;                      // about how long the announcer takes, for planning how many questions fit
 const REVEAL = 3.2;                  // showing who picked what
 const HOLD = 0.9;                    // hold a pose this long to pick that answer
 
@@ -66,7 +67,7 @@ function pickQuestions(n) {
 
 // Start the shared round. secs is how long the break may run.
 export function startWyr(players, secs = WYR_SECS) {
-  const count = Math.max(1, Math.min(3, Math.floor((secs - INTRO) / (ASK + REVEAL))));
+  const count = Math.max(1, Math.min(3, Math.floor((secs - INTRO) / (READ + ASK + REVEAL))));
   const S = { qs: pickQuestions(count), i: 0, phase: 'intro', t: 0, picks: [], lastPick: 0, done: false, colors: [] };
   players.forEach(p => { S.colors[p.index] = p.color; });
   S.qs.forEach(q => {
@@ -81,7 +82,9 @@ function ask(S, players) {
   S.phase = 'ask';
   S.t = 0;
   S.picks = [];
-  say(`wyr${S.qs[S.i].id}`); // the announcer reads the question out
+  // The announcer reads the question and its answers; the clock runs on past the end of that.
+  S.read = say(`wyr${S.qs[S.i].id}`);
+  S.askLen = S.read + ASK;
   players.forEach(p => Object.assign(p.throwing || {}, { cand: -1, since: 0, hold: 0 }));
 }
 
@@ -109,14 +112,14 @@ export function updateWyr(S, players, dt) {
   } else if (S.phase === 'ask') {
     const here = players.filter(p => !p.paused);
     const allIn = here.length && here.every(p => S.picks[p.index] != null);
-    if ((allIn && S.t - S.lastPick > 0.8) || S.t >= ASK) reveal(S, players);
+    if ((allIn && S.t - S.lastPick > 0.8 && S.t > S.read) || S.t >= S.askLen) reveal(S, players);
   } else if (S.phase === 'reveal' && S.t >= REVEAL) {
     if (++S.i >= S.qs.length) { S.phase = 'done'; S.done = true; } else ask(S, players);
   }
 }
 
 // How long the current question has left, 0..1, for the countdown bar.
-export function askLeft(S) { return S.phase === 'ask' ? Math.max(0, 1 - S.t / ASK) : 0; }
+export function askLeft(S) { return S.phase === 'ask' ? Math.max(0, 1 - S.t / S.askLen) : 0; }
 
 // Called with each kid's hands: holding a card's pose for a moment picks it.
 // A kid can change their mind until everyone has picked.
