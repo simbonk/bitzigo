@@ -434,3 +434,8 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 @media (max-height: 500px) and (max-width: 780px) {
   .wide #extrasCol .row { margin: 0 0 4px; }
 }
+/* Tabs shrink to fit on narrow screens rather than running off the edge. */
+.tabs button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) { .tabs button { padding-left: .3em; padding-right: .3em; font-size: .95em; } }
+.tabShort { display: none; }
+@media (max-width: 520px) { .tabLong { display: none; } .tabShort { display: inline; } }
