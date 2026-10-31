@@ -267,7 +267,7 @@ onRoom(msg => {
 // Two tabs on the home screen: Play here (just this camera) and Play with
 // friends (a room code, then the same setup). Leaving the friends tab leaves
 // the room.
-// Extra settings is a third tab for the rarely changed options; it doesn't
+// Extras is a third tab for the rarely changed options; it doesn't
 // change which way you play.
 let showExtras = false;
 function setTab(t) {
