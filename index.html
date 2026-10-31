@@ -18,7 +18,9 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="world"></canvas>
 <canvas id="stage"></canvas>
+<div id="safeProbe" aria-hidden="true"></div>
 <video id="cam" playsinline muted></video>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -37,6 +39,14 @@
     <symbol id="i-pace" viewBox="0 0 24 24"><circle class="f" cx="12" cy="13.5" r="7.5"/><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 2.8h4M12 2.8V6M18.3 6.4l1.3-1.3"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 6.5v11M15.5 6.5v11" style="stroke-width:4.6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path class="f" d="M8 5.5v13l10.5-6.5z"/><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path class="f" d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9.3a4 4 0 0 1 0 5.4M18.2 6.6a7.8 7.8 0 0 1 0 10.8"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path class="f" d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9.5l5 5M20.5 9.5l-5 5"/></symbol>
+    <symbol id="i-camoff" viewBox="0 0 24 24"><path class="f" d="M3 8.5h4l1.6-2.5h6.8L17 8.5h4V19H3z"/><path d="M3 8.5h4l1.6-2.5h6.8L17 8.5h4V19H3z"/><circle cx="12" cy="13.3" r="3.3"/><path d="M3.5 4l17 17"/></symbol>
+    <symbol id="i-door" viewBox="0 0 24 24"><path class="f" d="M5 20V4h9v16z"/><path d="M5 20V4h9v16M3 20h11"/><circle class="d" cx="11.3" cy="12.3" r="1.1"/><path d="M17 8.8l3.2 3.2-3.2 3.2M13 12h7"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+    <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></symbol>
     <symbol id="i-left" viewBox="0 0 24 24"><path class="f" d="M15 5 8 12l7 7z"/><path d="M15 5 8 12l7 7z"/></symbol>
     <symbol id="i-right" viewBox="0 0 24 24"><path class="f" d="M9 5l7 7-7 7z"/><path d="M9 5l7 7-7 7z"/></symbol>
   </defs>
@@ -155,18 +165,18 @@
   <button id="menu" class="small">Change players</button>
 </section>
 
+<button id="btnStart" class="arcade hidden" title="Start with who is here (Enter)"><svg class="ic"><use href="#i-play"/></svg>Start now</button>
 <div id="hudButtons" class="hidden">
-  <button id="btnStart" title="Start with who is here (Enter)">Start now</button>
-  <button id="btnPause" class="hidden" title="Pause (P)">❚❚ Pause</button>
-  <button id="btnCam" title="Camera view (V)">Camera</button>
-  <button id="btnMute" title="Sound (M)">Sound</button>
-  <button id="btnStop" title="End workout (Esc)">End</button>
+  <button id="btnPause" class="arcade hidden" title="Pause (P)" aria-label="Pause"><svg class="ic"><use href="#i-pause"/></svg></button>
+  <button id="btnCam" class="arcade" title="Camera view (V)" aria-label="Camera view"><svg class="ic"><use href="#i-camera"/></svg></button>
+  <button id="btnMute" class="arcade" title="Sound (M)" aria-label="Sound"><svg class="ic"><use href="#i-sound"/></svg></button>
+  <button id="btnStop" class="arcade end" title="End workout (Esc)" aria-label="End workout"><svg class="ic"><use href="#i-door"/></svg></button>
 </div>
 
-<div id="pauseBox" class="hidden"><div class="pauseTitle">Paused</div><p id="pauseWho"></p><button id="pauseGo" class="big">▶ Resume</button></div>
+<div id="pauseBox" class="hidden"><div class="pauseTitle">Paused</div><p id="pauseWho"></p><button id="pauseGo" class="big"><svg class="ic"><use href="#i-play"/></svg>Resume</button></div>
 
 <button id="fsNudge" class="nudge hidden">⛶ Tap for full screen</button>
-<button id="fsFab" class="hidden" aria-label="Full screen" title="Full screen">⛶</button>
+<button id="fsFab" class="hidden" aria-label="Full screen" title="Full screen"><svg class="ic"><use href="#i-expand"/></svg></button>
 <div id="fsTip" class="hidden"><b>Full screen on iPhone</b><p>iPhone Safari can't make a web page full screen. To play with no browser bars, tap <b>Share</b> <span class="shareIco">⇪</span> then <b>Add to Home Screen</b>, and open Bitzigo from its new icon.</p><button class="small">OK</button></div>
 
 <div id="rotate" role="status">

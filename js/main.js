@@ -1,6 +1,6 @@
 import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
-import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
+import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, SAFE, laneHudBottom, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
 import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity, holdAudio } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
@@ -11,7 +11,10 @@ import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, s
 const $ = s => document.querySelector(s);
 const canvas = $('#stage');
 const ctx = canvas.getContext('2d');
-const low = document.createElement('canvas'); // chunky pixel world
+// The chunky pixel world has its own small canvas, scaled up by the browser
+// with no smoothing (see style.css), so every world pixel is the same crisp
+// block on every screen. Text, HUD and the camera view draw on #stage above it.
+const low = $('#world');
 const lctx = low.getContext('2d');
 const video = $('#cam');
 
@@ -396,7 +399,7 @@ document.addEventListener('webkitfullscreenchange', updateFsNudge);
 $('#fsNudge').onclick = () => { enterFullscreen(); setTimeout(updateFsNudge, 500); };
 function updateFsNudge() {
   const full = !!fsEl();
-  $('#fsFab').textContent = full ? '🗗' : '⛶';
+  $('#fsFab use').setAttribute('href', full ? '#i-shrink' : '#i-expand');
   $('#fsFab').title = $('#fsFab').ariaLabel = full ? 'Leave full screen' : 'Full screen';
   $('#fsNudge').classList.toggle('hidden', state !== 'lobby' || !canFs || standalone || !!fsEl());
 }
@@ -843,7 +846,7 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   keys.add(e.code);
   if (e.code.startsWith('Arrow') && state !== 'setup') e.preventDefault();
-  if (e.code === 'KeyV') showCam = !showCam;
+  if (e.code === 'KeyV') toggleCam();
   if (e.code === 'Backquote') debug = !debug;
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyP' && ['ready', 'tutorial', 'play'].includes(state)) setPaused(!pausedAt);
@@ -856,7 +859,9 @@ addEventListener('keyup', e => keys.delete(e.code));
 // again after 10 seconds of waiting, it starts without them.
 const startNow = () => state === 'lobby' && (lobby.waiting && now() - lobby.waiting > 10 ? startReady() : lobbyDone());
 $('#btnStart').onclick = startNow;
-$('#btnCam').onclick = () => { showCam = !showCam; };
+const setIcon = (btn, id, label) => { $(btn + ' use').setAttribute('href', id); $(btn).ariaLabel = label; };
+function toggleCam() { showCam = !showCam; setIcon('#btnCam', showCam ? '#i-camera' : '#i-camoff', showCam ? 'Hide camera view' : 'Show camera view'); }
+$('#btnCam').onclick = toggleCam;
 $('#btnMute').onclick = toggleMute;
 $('#btnStop').onclick = () => endRound(true);
 
@@ -868,7 +873,7 @@ function setPaused(on, fromFriend = false) {
   else { pausedFor += realNow() - pausedAt; pausedAt = 0; last = realNow() - pausedFor; }
   holdAudio(on);
   document.body.classList.toggle('gamePaused', on);
-  $('#btnPause').textContent = on ? '▶ Resume' : '❚❚ Pause';
+  setIcon('#btnPause', on ? '#i-play' : '#i-pause', on ? 'Resume' : 'Pause');
   $('#pauseBox').classList.toggle('hidden', !on);
   $('#pauseWho').textContent = fromFriend ? 'A friend paused the game.' : '';
   if (!fromFriend && room.status === 'connected') sendRoom({ type: 'pause', on });
@@ -879,7 +884,7 @@ $('#pauseGo').onclick = () => setPaused(false);
 function toggleMute() {
   muted = !muted;
   setMuted(muted);
-  $('#btnMute').textContent = muted ? 'Sound off' : 'Sound';
+  setIcon('#btnMute', muted ? '#i-mute' : '#i-sound', muted ? 'Sound on' : 'Sound off');
 }
 
 function recalibrate() {
@@ -1070,14 +1075,24 @@ const realNow = () => performance.now() / 1000;
 const now = () => (pausedAt || realNow()) - pausedFor;
 let last = now();
 
+// Notch / Dynamic Island insets in canvas pixels, read from CSS env().
+const safeProbe = $('#safeProbe');
 function resize() {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  W = Math.round((canvas.clientWidth || innerWidth) * dpr);
-  H = Math.round((canvas.clientHeight || innerHeight) * dpr);
+  const real = window.devicePixelRatio || 1, dpr = Math.min(2, real); // HUD canvas: 2x is plenty for text
+  const cw = canvas.clientWidth || innerWidth, chh = canvas.clientHeight || innerHeight;
+  W = Math.round(cw * dpr);
+  H = Math.round(chh * dpr);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
-  PX = Math.max(2, Math.round(H / 270));
-  const lw = Math.ceil(W / PX), lh = Math.ceil(H / PX);
-  if (low.width !== lw || low.height !== lh) { low.width = lw; low.height = lh; }
+  // A whole number of real screen pixels per world pixel, about 270 rows tall.
+  PX = Math.max(2, Math.round(chh * real / 270));
+  const lw = Math.ceil(cw * real / PX), lh = Math.ceil(chh * real / PX);
+  if (low.width !== lw || low.height !== lh) {
+    low.width = lw; low.height = lh;
+    low.style.width = `${lw * PX / real}px`; low.style.height = `${lh * PX / real}px`;
+  }
+  const cs = getComputedStyle(safeProbe);
+  SAFE.l = (parseFloat(cs.paddingLeft) || 0) * dpr;
+  SAFE.r = (parseFloat(cs.paddingRight) || 0) * dpr;
 }
 
 function loop() {
@@ -1377,7 +1392,8 @@ function updateGame(t, dt) {
 // ---------------- Drawing ----------------
 
 function draw(t) {
-  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, W, H);
+  lctx.imageSmoothingEnabled = false;
   if (state === 'setup' || state === 'end') {
     drawAttract(t);
     return;
@@ -1392,8 +1408,7 @@ function draw(t) {
   lctx.clearRect(0, 0, low.width, low.height);
   for (const p of players) drawLaneWorld(lctx, laneBox(p.index, n, low.width, low.height), p, t, p.character || CHARACTERS[0], theme);
   for (const q of fl) drawLaneWorld(lctx, laneBox(q.index, n, low.width, low.height), q, t, q.character, theme);
-  ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
-  for (const p of players) drawLaneHud(ctx, laneBox(p.index, n, W, H), p, p.character, { debug });
+    for (const p of players) drawLaneHud(ctx, laneBox(p.index, n, W, H), p, p.character, { debug });
   for (const q of fl) drawLaneHud(ctx, laneBox(q.index, n, W, H), q, q.character, {});
 
   // Timer.
@@ -1409,7 +1424,8 @@ function draw(t) {
     // Upright phones get a taller box, or the upright picture ends up tiny.
     const cw = W * (H > W ? 0.3 : 0.18), ch = H > W ? cw * 1.5 : cw * 0.6;
     const L0 = laneBox(0, n, W, H);
-    const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12;
+    // Odd lane counts: on the right, clear of the notch and the button column.
+    const x = n % 2 === 0 ? W / 2 - cw / 2 : W - cw - 12 - SAFE.r - 56 * W / (innerWidth || W);
     const y = hudBottom(n) + (settings.seconds && state === 'play' ? H * 0.075 : H * 0.01) + friendsH;
     const people = players.filter(p => p.pts).map(p => ({ pts: p.pts, color: p.color, label: String(p.index + 1) }));
     drawCamera(ctx, video, frame.aspect, x, y, cw, ch, people);
@@ -1467,9 +1483,7 @@ function drawSquadScores(y) {
 
 // Bottom edge of the name plates at the top of each lane.
 function hudBottom(n) {
-  const L = laneBox(0, n, W, H);
-  const pad = Math.max(8, Math.min(20, L.w * 0.03)), fs = Math.max(16, Math.min(40, L.w * 0.07));
-  return pad + fs * 2.7;
+  return laneHudBottom(laneBox(0, n, W, H));
 }
 
 function drawBanner(t) {
@@ -1498,8 +1512,7 @@ function drawAttract(t) {
     fake.clock = t;
     drawLaneWorld(lctx, laneBox(i, n, low.width, low.height), fake, t, CHARACTERS[slotChar[i] ?? i], theme);
   }
-  ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
-  ctx.fillStyle = 'rgba(10,14,30,0.35)';
+    ctx.fillStyle = 'rgba(10,14,30,0.35)';
   ctx.fillRect(0, 0, W, H);
 }
 const attractPlayers = [0, 1, 2, 3].map(i => ({
@@ -1537,8 +1550,7 @@ function drawLobby(t) {
     drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, q.character, false, q.gear);
     lctx.globalAlpha = 1;
   });
-  ctx.drawImage(low, 0, 0, low.width * PX, low.height * PX);
-
+  
   // Camera view on top.
   const top = H * 0.155;
   if (cam && frame) {
@@ -1624,6 +1636,8 @@ function friendLine() {
   return '🤝 Your friends are playing';
 }
 
+// The canvas only uses the display font once it has loaded.
+document.fonts?.load('40px "Lilita One"').catch(() => { });
 requestAnimationFrame(loop);
 
 // Test hook: open with ?debug to inspect tracking from the console.

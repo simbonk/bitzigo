@@ -8,8 +8,12 @@ import { posesFor, wyrImage, askLeft } from './wyr.js';
 // How high (in lane heights) the sky view pans when a kid flies all the way up.
 const SKY_PAN = 0.38;
 
+// Notch / Dynamic Island insets in HUD canvas pixels (main.js keeps them up to date).
+export const SAFE = { l: 0, r: 0 };
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const FONT = '"Trebuchet MS", "Avenir Next", system-ui, sans-serif';
+// The same chunky rounded display font as the menus (loaded in index.html).
+const FONT = '"Lilita One", "Trebuchet MS", "Avenir Next", system-ui, sans-serif';
 
 export const CHARACTERS = [
   { id: 'fox', name: 'Fox', body: '#ff8a2a', limb: '#e0661a', head: '#ff8a2a', belly: '#fff3e0' },
@@ -85,6 +89,47 @@ function block(ctx, x, y, w, h, color, top = 0.28) {
   rect(ctx, x, y + h - Math.max(1, h * 0.1), w, Math.max(1, h * 0.1), shade(color, -0.18));
 }
 
+// A soft oval shadow on the ground, built from pixel rows so it stays on the grid.
+function shadow(ctx, cx, y, w, h, alpha = 0.2) {
+  const rows = Math.max(1, R(h));
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  for (let i = 0; i < rows; i++) {
+    const k = (i + 0.5) / rows * 2 - 1;
+    const hw = R(w / 2 * Math.sqrt(1 - k * k));
+    if (hw > 0) ctx.fillRect(R(cx) - hw, R(y - h / 2) + i, hw * 2, 1);
+  }
+}
+
+// A filled polygon (convex), one pixel row at a time: no blurred edges.
+function fillPoly(ctx, pts, color) {
+  ctx.fillStyle = color;
+  const ys = pts.map(p => p[1]);
+  const y0 = R(Math.min(...ys)), y1 = R(Math.max(...ys));
+  for (let y = y0; y < y1; y++) {
+    const yc = y + 0.5;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+      if ((yc < ay) === (yc < by)) continue;
+      const x = ax + (yc - ay) / (by - ay) * (bx - ax);
+      lo = Math.min(lo, x); hi = Math.max(hi, x);
+    }
+    if (hi > lo) ctx.fillRect(R(lo), y, Math.max(1, R(hi) - R(lo)), 1);
+  }
+}
+
+// A thick straight line stamped out of square blocks that snap to the grid,
+// so rotated arms and legs stay crisp pixel art.
+function pixLine(ctx, x0, y0, x1, y1, w, color) {
+  ctx.fillStyle = color;
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+  const s = Math.max(1, R(w)), h = s / 2;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n;
+    ctx.fillRect(R(x - h), R(y - h), s, s);
+  }
+}
+
 // ---------------- World (low-res canvas) ----------------
 
 export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest) {
@@ -151,11 +196,34 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     }
   }
   if (theme.sea) {
-    const sh = L.horizon * 0.12;
-    rect(ctx, L.x, L.horizon - sh, L.w, sh + 1, '#1f8fd6');
+    const sh = L.horizon * 0.12, top = L.horizon - sh;
+    // Far-off islands and a little sailboat break up the flat horizon line.
+    const isl = (fx, w, h, col) => {
+      const cx = L.x + fx * L.w, rows = Math.max(2, R(h));
+      for (let i = 0; i < rows; i++) {
+        const k = 1 - (i + 1) / rows, hw = R(w / 2 * Math.sqrt(1 - k * k) * (0.55 + 0.45 * (i + 1) / rows));
+        rect(ctx, cx - hw, top - rows + i + 1, hw * 2, 1, col);
+      }
+    };
+    isl(0.18 + p.index * 0.07, L.S * 2.4, sh * 0.55, '#6fa9c4');
+    isl(0.3 + p.index * 0.07, L.S * 1.2, sh * 0.35, '#86bcd2');
+    isl(0.82 - p.index * 0.05, L.S * 1.8, sh * 0.4, '#79b2cb');
+    rect(ctx, L.x, top, L.w, sh + 1, '#1f8fd6');
+    rect(ctx, L.x, top, L.w, Math.max(1, sh * 0.14), '#3aa6e6');
+    const bx = L.x + ((0.62 + time * 0.006 + p.index * 0.21) % 1.2 - 0.1) * L.w, bu = Math.max(1, L.S * 0.12);
+    rect(ctx, bx - bu * 2, top - bu * 0.5, bu * 4, bu, '#8a5a2e');
+    fillPoly(ctx, [[bx, top - bu * 5], [bx, top - bu * 0.6], [bx + bu * 2.6, top - bu * 0.6]], '#ffffff');
+    fillPoly(ctx, [[bx - bu * 0.4, top - bu * 3.6], [bx - bu * 0.4, top - bu * 0.6], [bx - bu * 1.8, top - bu * 0.6]], '#ffe14d');
     for (let k = 0; k < 6; k++) {
       const wx = L.x + (((k * 0.19 + time * 0.03) % 1.1) - 0.05) * L.w;
-      rect(ctx, wx, L.horizon - sh * (0.35 + 0.3 * (k % 2)), L.S * 0.5, Math.max(1, sh * 0.12), '#bfe8ff');
+      rect(ctx, wx, top + sh * (0.3 + 0.3 * (k % 2)), L.S * (0.4 + 0.2 * (k % 3)), Math.max(1, sh * 0.1), '#bfe8ff');
+    }
+    // Cream foam where the sea meets the sand, washing gently in and out.
+    const fh = Math.max(1, R(sh * 0.16)), seg = Math.max(2, R(L.S * 0.5));
+    rect(ctx, L.x, L.horizon - fh, L.w, fh + 1, '#fff6dc');
+    for (let x = L.x - seg * 2, i = 0; x < L.x + L.w; x += seg, i++) {
+      const up = Math.sin(time * 1.6 + i * 0.9) > 0.2 ? fh : 0;
+      if (up) rect(ctx, x + ((time * 6) % seg), L.horizon - fh - up, seg * 0.6, up, '#fffaf0');
     }
   }
   // Blocky clouds drifting.
@@ -181,22 +249,21 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     const a = project(L, Math.min(z1, 1)), b = project(L, Math.max(z0, -0.17));
     const odd = ((r + baseRow) & 1) === 0;
     rect(ctx, L.x, a.y, L.w, b.y - a.y + 1, theme.grass[odd ? 0 : 1]);
-    // Road tiles: two tones.
-    const ha = roadHalf(L, a.y), hb = roadHalf(L, b.y);
+    // Road tiles: two tones, one pixel row at a time so the edges step
+    // like the sprites instead of blurring.
     ctx.fillStyle = theme.road[odd ? 0 : 1];
-    ctx.beginPath();
-    ctx.moveTo(L.cx - ha, R(a.y)); ctx.lineTo(L.cx + ha, R(a.y));
-    ctx.lineTo(L.cx + hb, R(b.y) + 1); ctx.lineTo(L.cx - hb, R(b.y) + 1);
-    ctx.fill();
+    for (let y = R(a.y); y <= R(b.y); y++) {
+      const h = R(roadHalf(L, y + 0.5));
+      ctx.fillRect(R(L.cx) - h, y, h * 2, 1);
+    }
   }
-  // Road edges.
-  ctx.strokeStyle = theme.edge;
-  ctx.lineWidth = Math.max(1, L.S * 0.08);
-  for (const sgn of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(L.cx + sgn * roadHalf(L, L.horizon), L.horizon);
-    ctx.lineTo(L.cx + sgn * roadHalf(L, L.h), L.h);
-    ctx.stroke();
+  // Road edges: a stepped kerb, darker on the outside.
+  const ew = Math.max(1, R(L.S * 0.08));
+  ctx.fillStyle = theme.edge;
+  for (let y = R(L.horizon); y < L.h; y++) {
+    const h = R(roadHalf(L, y + 0.5)), w = Math.max(1, R(ew * (0.6 + 0.6 * (y - L.horizon) / L.depth)));
+    ctx.fillRect(R(L.cx) - h - w, y, w, 1);
+    ctx.fillRect(R(L.cx) + h, y, w, 1);
   }
 
   // Things in depth order: trees, obstacles, the avatar.
@@ -253,6 +320,7 @@ function drawTree(ctx, L, z, side, prop) {
   const { y, s } = project(L, z);
   const u = L.S * s;
   const x = L.cx + side * (roadHalf(L, y) + u * 0.9);
+  shadow(ctx, x + side * u * 0.15, y, u * (prop === 'palm' || prop === 'pine' || prop === 'snowpine' ? 1.9 : 1.5), Math.max(1, u * 0.32));
   if (prop === 'cactus') {
     block(ctx, x - u * 0.25, y - u * 2.2, u * 0.5, u * 2.2, '#3f9e4a', 0.08);
     block(ctx, x - u * 0.75, y - u * 1.6, u * 0.3, u * 0.7, '#3f9e4a', 0.15);
@@ -326,6 +394,7 @@ function drawObstacle(ctx, L, o, z) {
     // A low brick wall to jump over.
     const w = roadHalf(L, y) * 2.1, hh = u * 0.8;
     const x0 = L.cx - w / 2;
+    shadow(ctx, L.cx, y + u * 0.05, w * 1.08, Math.max(1, u * 0.3));
     block(ctx, x0, y - hh, w, hh, '#e0662f', 0.25);
     const bw = w / 5;
     for (let k = 1; k < 5; k++) rect(ctx, x0 + bw * k, y - hh * 0.7, Math.max(1, u * 0.06), hh * 0.65, '#a8431a');
@@ -336,6 +405,7 @@ function drawObstacle(ctx, L, o, z) {
     const flap = Math.floor((o.arrive - z * o.travel) * 8 + z * 40) % 2;
     const bx = L.cx + dir * u * 0.55 + Math.sin(z * 30) * u * 0.15, by = y - u * 3.35;
     const b = u * 0.95;
+    shadow(ctx, bx, y, b * 1.1, Math.max(1, u * 0.22), 0.14);
     block(ctx, bx - b / 2, by - b / 2, b, b * 0.85, '#ff5d73', 0.2);        // body
     rect(ctx, bx - b * 0.15, by + b * 0.05, b * 0.3, b * 0.25, '#ffd0d8');    // belly
     rect(ctx, bx - b * 0.75, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, '#c9304a'); // wings
@@ -366,6 +436,7 @@ function drawObstacle(ctx, L, o, z) {
     // A floating prize, bobbing and sparkling at head height.
     const hu = u * 1.3 / 8, bob = Math.sin(z * 25) * u * 0.2;
     const cx = L.cx, cy = y - u * 3.1 + bob;
+    shadow(ctx, cx, y, u * 1.2, Math.max(1, u * 0.22), 0.14);
     ctx.globalAlpha *= 0.35;
     rect(ctx, cx - u * 0.9, cy - u * 0.9, u * 1.8, u * 1.8, '#ffffff');
     ctx.globalAlpha = 1;
@@ -376,6 +447,7 @@ function drawObstacle(ctx, L, o, z) {
     const off = o.side === 'left' ? -1.2 : o.side === 'right' ? 1.2 : 0;
     const size = u * 1.1;
     const cx = L.cx + off * u, cy = y - u * 2.55;
+    shadow(ctx, cx, y, size * 1.1, Math.max(1, u * 0.25), 0.16);
     block(ctx, cx - size / 2, cy - size / 2, size, size, '#d08a3a', 0.22);
     const b = Math.max(1, size * 0.1);
     rect(ctx, cx - size / 2, cy - size * 0.28, b, size * 0.78, '#8a5220');
@@ -751,12 +823,7 @@ function drawAvatar(ctx, L, p, time, ch) {
     dx = Math.sin(k * Math.PI * 2) * S * 0.6;
     if (!(p.pts && p.base)) P = cartoonPose({ reach: true, jump: true });
     const handY = L.ground - 1.65 * S - lift - 2.2 * S;
-    ctx.strokeStyle = '#d9b16a';
-    ctx.lineWidth = Math.max(2, S * 0.16);
-    ctx.beginPath();
-    ctx.moveTo(L.cx, 0);
-    ctx.lineTo(L.cx + dx, handY);
-    ctx.stroke();
+    pixLine(ctx, L.cx, 0, L.cx + dx, handY, Math.max(2, S * 0.16), '#d9b16a');
   }
   const T = p.throwing;
   if (T?.type === 'bubbles') {
@@ -774,10 +841,33 @@ function drawAvatar(ctx, L, p, time, ch) {
   }
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
-  const sw = S * (1.3 - p.lift * 0.4);
-  rect(ctx, L.cx - sw / 2, L.ground - S * 0.12, sw, S * 0.24, 'rgba(0,0,0,0.25)');
+  const sw = S * (1.5 - p.lift * 0.5);
+  shadow(ctx, L.cx + dx, L.ground + S * 0.02, sw, S * (0.34 - p.lift * 0.1), 0.22);
   const flash = p.bonk > 0 && Math.floor(time * 12) % 2 === 0;
   const ox = L.cx + shake + dx, oy = L.ground - 1.65 * S - lift;
+  const runT = p.run ?? p.clock ?? time, steps = runT * STEP_RATE;
+  const grounded = p.lift < 0.08 && !(p.swing > 0) && !T;
+  if (grounded) drawDust(ctx, L.cx + dx, L.ground, S, steps);
+
+  // Squash and stretch: long in the air, squashed for a moment on landing,
+  // and a little bounce on every step.
+  if (p.lift > 0.3) p.airAt = time;
+  let sy = 1;
+  if (p.lift > 0.08) sy = 1 + 0.08 * Math.min(1, p.lift * 1.5);
+  else if (p.airAt && time - p.airAt < 0.22) sy = 1 - 0.13 * Math.sin((time - p.airAt) / 0.22 * Math.PI);
+  else if (grounded && !p.pts) sy = 0.975 + 0.04 * Math.abs(Math.sin(Math.PI * steps));
+  const sx = 1 + (1 - sy) * 0.7;
+  if (sy !== 1) {
+    const FEET = 1.68;
+    P = Object.fromEntries(Object.entries(P).map(([k, v]) => [k, [v[0] * sx, FEET + (v[1] - FEET) * sy]]));
+  }
+  // Wide eyes and an "O" mouth when something is about to arrive.
+  const wow = p.obstacles?.some(o => {
+    if (o.result || o.kind === 'gear') return false;
+    const z = (o.arrive - p.clock) / o.travel;
+    return z > -0.03 && z < (o.kind === 'bird' ? 0.45 : 0.22);
+  });
+  const look = { sx, sy, wow };
   if (p.charged) drawSparks(ctx, ox, oy, S, time, true);
   if (p.spin > 0) {
     // Super spin: the character twirls round twice.
@@ -785,10 +875,28 @@ function drawAvatar(ctx, L, p, time, ch) {
     ctx.translate(ox, 0);
     ctx.scale(Math.cos((1 - p.spin / 0.8) * Math.PI * 4) || 0.05, 1);
     ctx.translate(-ox, 0);
-    drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear);
+    drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear, look);
     ctx.restore();
-  } else drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear);
+  } else drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear, look);
   if (p.charged) drawSparks(ctx, ox, oy, S, time, false);
+}
+
+// Little dust puffs kicked up behind each footstep.
+const STEP_RATE = 2.6;
+function drawDust(ctx, cx, ground, S, steps) {
+  const life = 0.5 * STEP_RATE; // in steps
+  for (let j = 0; j < 2; j++) {
+    const step = Math.floor(steps) - j, age = (steps - step) / life;
+    if (age >= 1 || step < 0) continue;
+    const side = step % 2 ? -1 : 1;
+    const x = cx + side * S * (0.3 + age * 0.7), y = ground - S * (0.05 + age * 0.45);
+    const r = S * (0.14 + 0.22 * age);
+    ctx.globalAlpha = 0.6 * (1 - age);
+    rect(ctx, x - r, y - r * 0.5, r * 2, r, '#fffaf0');
+    rect(ctx, x - r * 0.5, y - r, r, r * 2, '#fffaf0');
+    rect(ctx, x + side * r * 1.1, y - r * 1.2, r * 0.6, r * 0.6, '#fffaf0');
+    ctx.globalAlpha = 1;
+  }
 }
 
 // Super charged: a crackling glow behind and lightning zigzags in front.
@@ -816,43 +924,24 @@ function drawSparks(ctx, ox, oy, S, time, behind) {
 }
 
 // Draws a blocky character with hip centre at (ox, oy).
-export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}) {
+export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}, look = {}) {
   const X = v => ox + v[0] * S, Y = v => oy + v[1] * S;
   if (gear?.back === 'cape') {
     // Cape flowing behind, from the shoulders to the knees.
-    ctx.fillStyle = '#e63946';
-    ctx.beginPath();
-    ctx.moveTo(X(P.ls) - S * 0.1, Y(P.ls));
-    ctx.lineTo(X(P.rs) + S * 0.1, Y(P.rs));
-    ctx.lineTo(X(P.rk) + S * 0.5, Y(P.rk));
-    ctx.lineTo(X(P.lk) - S * 0.5, Y(P.lk));
-    ctx.closePath();
-    ctx.fill();
+    fillPoly(ctx, [[X(P.ls) - S * 0.1, Y(P.ls)], [X(P.rs) + S * 0.1, Y(P.rs)], [X(P.rk) + S * 0.5, Y(P.rk)], [X(P.lk) - S * 0.5, Y(P.lk)]], '#e63946');
   }
   const body = flash ? '#ffffff' : ch.body;
   const limbCol = flash ? '#ffffff' : ch.limb;
   const limb = (a, b, c, w, col) => {
-    ctx.strokeStyle = col;
-    ctx.lineWidth = Math.max(2, w);
-    ctx.lineCap = 'square';
-    ctx.lineJoin = 'miter';
-    ctx.beginPath();
-    ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); ctx.lineTo(X(c), Y(c));
-    ctx.stroke();
+    pixLine(ctx, X(a), Y(a), X(b), Y(b), Math.max(2, w), col);
+    pixLine(ctx, X(b), Y(b), X(c), Y(c), Math.max(2, w), col);
   };
   limb(P.lh, P.lk, P.la, S * 0.34, limbCol);
   limb(P.rh, P.rk, P.ra, S * 0.34, limbCol);
   for (const a of [P.la, P.ra]) rect(ctx, X(a) - S * 0.24, Y(a) - S * 0.08, S * 0.48, S * 0.2, '#2b2b33');
 
   // Torso as a quad between shoulders and hips.
-  ctx.fillStyle = body;
-  ctx.beginPath();
-  ctx.moveTo(X(P.ls) - S * 0.08, Y(P.ls));
-  ctx.lineTo(X(P.rs) + S * 0.08, Y(P.rs));
-  ctx.lineTo(X(P.rh) + S * 0.1, Y(P.rh) + S * 0.12);
-  ctx.lineTo(X(P.lh) - S * 0.1, Y(P.lh) + S * 0.12);
-  ctx.closePath();
-  ctx.fill();
+  fillPoly(ctx, [[X(P.ls) - S * 0.08, Y(P.ls)], [X(P.rs) + S * 0.08, Y(P.rs)], [X(P.rh) + S * 0.1, Y(P.rh) + S * 0.12], [X(P.lh) - S * 0.1, Y(P.lh) + S * 0.12]], body);
   const cx = (X(P.ls) + X(P.rs) + X(P.lh) + X(P.rh)) / 4, cy = (Y(P.ls) + Y(P.rs) + Y(P.lh) + Y(P.rh)) / 4;
   rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
   if (ch.stripes && !flash) {
@@ -880,15 +969,16 @@ export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}) {
   const neck = [(P.ls[0] + P.rs[0]) / 2, (P.ls[1] + P.rs[1]) / 2];
   const hcx = X([neck[0] * 0.4 + P.nose[0] * 0.6, 0]);
   const hcy = Math.min(Y(P.nose), Y(neck) - S * 0.45);
-  drawHead(ctx, hcx, hcy, S, ch, flash, gear || {});
+  drawHead(ctx, hcx, hcy, S, ch, flash, gear || {}, look);
 }
 
-function drawHead(ctx, x, y, S, ch, flash, gear = {}) {
+function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   const hs = S * 1.0; // head size
-  const left = x - hs / 2, top = y - hs / 2;
+  const hw = hs * (look.sx || 1), hh = hs * (look.sy || 1);
+  const left = x - hw / 2, top = y - hh / 2;
   const head = flash ? '#ffffff' : ch.head;
-  const u = hs / 8; // head "pixel"
-  const px = (i, j, w, h, c) => rect(ctx, left + i * u, top + j * u, w * u, h * u, c);
+  const u = hw / 8, uy = hh / 8; // head "pixel"
+  const px = (i, j, w, h, c) => rect(ctx, left + i * u, top + j * uy, w * u, h * uy, c);
 
   // Things behind/above the head.
   if (ch.id === 'fox') { px(0, -2, 2, 2, ch.body); px(6, -2, 2, 2, ch.body); px(0, -2, 1, 1, '#3a2a20'); px(7, -2, 1, 1, '#3a2a20'); }
@@ -915,10 +1005,12 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}) {
   if (ch.id === 'ninja') { px(8, 1, 2, 0.8, '#e63946'); px(8.6, 1.8, 1.6, 0.7, '#e63946'); }
   if (ch.id === 'firefighter' && !gear.hat) px(-1.6, 0.3, 11.2, 1.3, '#a81a26'); // helmet's long brim
 
-  block(ctx, left, top, hs, hs, head, 0.18);
+  block(ctx, left, top, hw, hh, head, 0.18);
 
   // Faces.
-  const eye = (i, j) => { px(i, j, 1.4, 1.6, '#1b1b22'); px(i + 0.2, j + 0.2, 0.6, 0.6, '#ffffff'); };
+  const eye = look.wow
+    ? (i, j) => { px(i - 0.3, j - 0.4, 2, 2.2, '#ffffff'); px(i + 0.1, j, 1.2, 1.4, '#1b1b22'); px(i + 0.2, j + 0.1, 0.5, 0.5, '#ffffff'); }
+    : (i, j) => { px(i, j, 1.4, 1.6, '#1b1b22'); px(i + 0.2, j + 0.2, 0.6, 0.6, '#ffffff'); };
   switch (ch.id) {
     case 'fox':
       px(1, 4.5, 6, 3.5, '#fff3e0'); eye(1.5, 3); eye(5.1, 3); px(3.5, 5, 1, 0.8, '#1b1b22');
@@ -978,6 +1070,11 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}) {
       px(1, 5, 6, 3, '#ffb3c7'); px(2.2, 6, 1, 1, '#c25a7a'); px(4.8, 6, 1, 1, '#c25a7a');
       break;
   }
+  if (look.wow && !flash && ch.id !== 'none') {
+    // Surprised "O" mouth.
+    const my = { frog: 4.6, fox: 6.0, cow: 6.4, robot: 5.4, hedgehog: 6.0, panda: 6.4 }[ch.id] ?? 5.9;
+    px(3.1, my, 1.8, 1.6, '#3a1020'); px(3.5, my + 0.6, 1, 0.7, '#ff6b81');
+  }
   if (gear.face) drawGearItem(ctx, gear.face, left, top, u);
   if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
 }
@@ -1034,7 +1131,7 @@ export function drawGearItem(ctx, id, left, top, u) {
 export function text(ctx, str, x, y, size, color, align = 'center') {
   // Too wide for the screen (a phone held upright): split into two lines, or shrink.
   const maxW = ctx.canvas.width * 0.94;
-  ctx.font = `bold ${R(size)}px ${FONT}`;
+  ctx.font = `${R(size)}px ${FONT}`;
   const w = ctx.measureText(str).width;
   if (w > maxW / 0.75 && align === 'center') {
     const mid = str.length / 2;
@@ -1042,44 +1139,104 @@ export function text(ctx, str, x, y, size, color, align = 'center') {
     for (let i = 0; i < str.length; i++) if (str[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i;
     if (cut > 0) {
       const a = str.slice(0, cut), b = str.slice(cut + 1), s2 = size * 0.9;
-      ctx.font = `bold ${R(s2)}px ${FONT}`;
+      ctx.font = `${R(s2)}px ${FONT}`;
       const fit = Math.min(1, maxW / Math.max(ctx.measureText(a).width, ctx.measureText(b).width));
       text(ctx, a, x, y - s2 * fit * 0.55, s2 * fit, color, align);
       text(ctx, b, x, y + s2 * fit * 0.55, s2 * fit, color, align);
       return;
     }
   }
-  if (w > maxW) { size *= maxW / w; ctx.font = `bold ${R(size)}px ${FONT}`; }
+  if (w > maxW) { size *= maxW / w; ctx.font = `${R(size)}px ${FONT}`; }
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.lineWidth = Math.max(3, size * 0.2);
-  ctx.strokeStyle = 'rgba(10,14,30,0.85)';
   ctx.lineJoin = 'round';
+  // A solid drop shadow under the outline, so words pop over sky, sea and clouds.
+  const d = Math.max(2, size * 0.09);
+  ctx.strokeStyle = ctx.fillStyle = 'rgba(10,14,30,0.9)';
+  ctx.strokeText(str, x, y + d);
+  ctx.fillText(str, x, y + d);
+  ctx.strokeStyle = 'rgba(10,14,30,0.95)';
   ctx.strokeText(str, x, y);
   ctx.fillStyle = color;
   ctx.fillText(str, x, y);
 }
 
+// Path helpers for the HUD (full-res canvas, so smooth curves are fine here).
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Sizes of the floating level badge at the top of a lane.
+function hudSize(L) {
+  const fs = clamp(L.w * 0.06, 14, 34);
+  return { fs, pad: clamp(L.w * 0.025, 8, 18), rb: fs * 1.25 };
+}
+// Bottom edge of the badge, for things placed under it.
+export function laneHudBottom(L) {
+  const { pad, rb } = hudSize(L);
+  return pad + rb * 2 + pad * 0.5;
+}
+
 export function drawLaneHud(ctx, L, p, ch, opts) {
-  const pad = clamp(L.w * 0.03, 8, 20);
-  const fs = clamp(L.w * 0.07, 16, 40);
+  const { fs, pad, rb } = hudSize(L);
+  const cw = ctx.canvas.width, scale = cw / (innerWidth || cw);
+  // Clear of the notch on the left, and of the button column on the right.
+  const x0 = L.x + pad + (L.x < 1 ? SAFE.l : 0);
+  const rightEdge = L.x + L.w - pad - (L.x + L.w > cw - 2 ? SAFE.r + 52 * scale : 0);
 
-  // Name + score plate.
-  ctx.fillStyle = 'rgba(10,14,30,0.55)';
-  ctx.fillRect(L.x + pad, pad, L.w - pad * 2, fs * 2.7);
-  ctx.fillStyle = p.color;
-  ctx.fillRect(L.x + pad, pad, fs * 0.3, fs * 2.7);
-  text(ctx, p.name, L.x + pad * 2 + fs * 0.3, pad + fs * 0.8, fs, '#ffffff', 'left');
-
-  // Level bar (fills as they improve within the level).
-  const by = pad + fs * 1.55, bh = fs * 0.75;
-  const bx = L.x + pad * 2 + fs * 0.3, bw = (L.w - pad * 4) * 0.55;
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillRect(bx, by, bw, bh);
+  // Floating level badge: a round LV medal with a glossy yellow bar coming out of it.
+  const bcx = x0 + rb, bcy = pad + rb;
+  const barX = bcx, barW = Math.max(rb * 2, Math.min(fs * 10, rightEdge - barX));
+  const bh = fs * 0.85, by = bcy + rb * 0.12;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowOffsetY = fs * 0.12; ctx.shadowBlur = fs * 0.3;
+  roundRect(ctx, barX, by, barW, bh, bh / 2);
+  ctx.fillStyle = 'rgba(26,42,64,0.8)';
+  ctx.fill();
+  ctx.restore();
+  const fillW = rb + (barW - rb) * clamp(p.skill % 1, 0.04, 1);
+  ctx.save();
+  roundRect(ctx, barX, by, barW, bh, bh / 2);
+  ctx.clip();
+  ctx.fillStyle = '#ffc61a';
+  ctx.fillRect(barX, by, fillW, bh);
   ctx.fillStyle = '#ffe14d';
-  ctx.fillRect(bx, by, Math.max(bh * 0.4, bw * (p.skill % 1)), bh);
-  text(ctx, `LV ${p.level}`, bx + bh * 0.3, by + bh / 2, fs * 0.6, '#ffffff', 'left');
-  if (p.streak >= 3) text(ctx, `x${p.streak}`, L.x + L.w - pad * 2, by + bh / 2, fs * 0.7, '#ffb02e', 'right');
+  ctx.fillRect(barX, by, fillW, bh * 0.62);
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  roundRect(ctx, barX + rb, by + bh * 0.14, Math.max(0, fillW - rb - bh * 0.4), bh * 0.18, bh * 0.09);
+  ctx.fill();
+  ctx.restore();
+  roundRect(ctx, barX, by, barW, bh, bh / 2);
+  ctx.lineWidth = Math.max(2, fs * 0.14);
+  ctx.strokeStyle = '#1a2a40';
+  ctx.stroke();
+  // The medal itself: gold rim, the kid's colour in the middle.
+  ctx.beginPath(); ctx.arc(bcx, bcy, rb, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffd23f'; ctx.fill();
+  ctx.lineWidth = Math.max(2, fs * 0.16); ctx.strokeStyle = '#1a2a40'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(bcx, bcy, rb * 0.76, 0, Math.PI * 2);
+  ctx.fillStyle = p.color; ctx.fill();
+  ctx.beginPath(); ctx.arc(bcx, bcy, rb * 0.76, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.lineWidth = Math.max(1.5, rb * 0.1); ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.stroke();
+  text(ctx, 'LV', bcx, bcy - rb * 0.36, rb * 0.36, '#ffffff');
+  text(ctx, String(p.level), bcx, bcy + rb * 0.18, rb * (p.level > 9 ? 0.7 : 0.85), '#ffffff');
+  // Name above the bar.
+  ctx.save();
+  const nameW = barW - rb * 1.3;
+  ctx.font = `${R(fs)}px ${FONT}`;
+  const nw = ctx.measureText(p.name).width;
+  text(ctx, p.name, bcx + rb * 1.15, pad + fs * 0.62, nw > nameW ? fs * nameW / nw : fs, '#ffffff', 'left');
+  ctx.restore();
+  const bx = barX, bw = barW;
+  if (p.streak >= 3) text(ctx, `x${p.streak}`, barX + barW - bh * 0.4, by + bh / 2, fs * 0.72, '#ff8a1a', 'right');
 
   // Picture cue for the next obstacle, so non-readers know what to do.
   const next = p.obstacles
@@ -1155,10 +1312,12 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
       continue;
     }
     if (e.type === 'points') {
+      // "+70" pops in, drifts up and fades away.
       ctx.save();
-      ctx.globalAlpha = 0.85 * (1 - k * k);
-      const hue = (e.t * 900) % 360;
-      text(ctx, e.text, L.cx + L.w * 0.22, L.horizon + L.depth * 0.42 - k * L.h * 0.1, clamp(L.w * 0.11, 20, 60) * (1.3 - 0.3 * k), `hsl(${hue},100%,60%)`);
+      ctx.globalAlpha = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45;
+      const pop = k < 0.12 ? 0.6 + k / 0.12 * 0.7 : k < 0.25 ? 1.3 - (k - 0.12) / 0.13 * 0.3 : 1;
+      const ease = 1 - (1 - k) * (1 - k);
+      text(ctx, e.text, L.cx + L.w * 0.22 + Math.sin(k * 6) * L.w * 0.01, L.horizon + L.depth * 0.45 - ease * L.h * 0.2, clamp(L.w * 0.11, 20, 60) * pop, '#ffe14d');
       ctx.restore();
       continue;
     }
@@ -1234,6 +1393,11 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     text(ctx, p.throwing ? '⚡ SUPER ⚡' : '⚡ SPIN AROUND = MEGA BONUS ⚡', L.cx, L.horizon * 0.66 + clamp(L.w * 0.1, 22, 64) * 1.6, clamp(L.w * 0.05, 13, 28), '#7df9ff');
   }
 
+  // Speed lines rush in from the lane edges on a lean or a big moment.
+  const rush = Math.max(p.act?.leanL || p.act?.leanR ? 0.7 : 0, p.spin > 0 ? 1 : 0,
+    ...p.fx.filter(e => ['fire', 'levelup', 'super'].includes(e.type)).map(e => 1 - e.t / e.life));
+  if (rush > 0.05 && !p.paused) drawSpeedLines(ctx, L, rush, p.act?.leanL ? -1 : p.act?.leanR ? 1 : 0);
+
   drawBubble(ctx, L, p);
 
   if (p.paused) text(ctx, p.paused, L.cx, L.h * 0.5, clamp(L.w * 0.075, 18, 44), '#ffffff');
@@ -1247,6 +1411,28 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     ctx.fillText(`skill ${p.skill.toFixed(2)}  ${on}`, L.x + pad * 2, by + bh + fs * 0.6);
     ctx.fillText(`hit ${p.hits}  miss ${p.misses}`, L.x + pad * 2, by + bh + fs * 1.2);
   }
+}
+
+function drawSpeedLines(ctx, L, k, lean) {
+  const t = performance.now() / 1000, vx = L.cx, vy = L.horizon * 1.1;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(L.x, 0, L.w, L.h); ctx.clip();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 14; i++) {
+    const side = i % 2 ? 1 : -1;
+    // Leaning left, the lines come from the right (the wind rushes past).
+    if (lean && side === lean && i % 4 < 2) continue;
+    const f = (i * 0.137 + t * (1.6 + (i % 3) * 0.4)) % 1;
+    const sx = side > 0 ? L.x + L.w : L.x, sy = L.h * ((i * 0.29) % 1) * 0.95 + L.h * 0.03;
+    const dx = vx - sx, dy = vy - sy, m = Math.hypot(dx, dy);
+    const a = 0.06 + f * 0.22, len = L.w * (0.08 + 0.1 * ((i * 7) % 3) / 2);
+    const x0 = sx + dx / m * a * L.w, y0 = sy + dy / m * a * L.w;
+    ctx.globalAlpha = 0.65 * k * Math.sin(f * Math.PI);
+    ctx.lineWidth = Math.max(2, L.w * (0.006 + 0.004 * (i % 2)));
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + dx / m * len, y0 + dy / m * len); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // Face bubble in the lane's bottom corner: score as a notification badge,
@@ -1278,7 +1464,7 @@ function drawBubble(ctx, L, p) {
   // Notification badge with the score.
   const label = p.score >= 10000 ? `${Math.round(p.score / 1000)}k` : p.score.toLocaleString();
   const bf = r * 0.48;
-  ctx.font = `bold ${R(bf)}px ${FONT}`;
+  ctx.font = `${R(bf)}px ${FONT}`;
   const bw = Math.max(bf * 1.6, ctx.measureText(label).width + bf * 0.9), bh = bf * 1.45;
   const bx = x + r * 0.55, by = y - r * 1.05;
   ctx.save();
@@ -1350,33 +1536,84 @@ export function drawCamera(ctx, video, aspect, x, y, w, h, people) {
   let dw = w, dh = w / aspect;
   if (dh > h) { dh = h; dw = h * aspect; }
   const dx = x + (w - dw) / 2, dy = y + (h - dh) / 2;
+  const scale = ctx.canvas.width / (innerWidth || ctx.canvas.width);
+  const r = 16 * scale, bw = Math.max(3, 5 * scale);
+  // A chunky game frame: soft shadow, dark outline, thick yellow border.
   ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 10 * scale; ctx.shadowOffsetY = 4 * scale;
+  roundRect(ctx, dx - bw, dy - bw, dw + bw * 2, dh + bw * 2, r + bw);
+  ctx.fillStyle = '#1a2a40';
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  roundRect(ctx, dx, dy, dw, dh, r);
+  ctx.clip();
   ctx.translate(dx + dw, dy);
   ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, dw, dh);
   ctx.restore();
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(dx, dy, dw, dh);
+  roundRect(ctx, dx - bw * 0.45, dy - bw * 0.45, dw + bw * 0.9, dh + bw * 0.9, r + bw * 0.45);
+  ctx.lineWidth = bw * 0.9;
+  ctx.strokeStyle = '#ffd23f';
+  ctx.stroke();
+
+  ctx.save();
+  roundRect(ctx, dx, dy, dw, dh, r);
+  ctx.clip();
+  const P = (pts, i) => [dx + pts[i].x * dh, dy + pts[i].y * dh];
+  const lw = Math.max(3, dh * 0.016);
+  ctx.lineCap = ctx.lineJoin = 'round';
   for (const person of people) {
-    const pts = person.pts;
-    ctx.strokeStyle = person.color;
-    ctx.lineWidth = Math.max(3, dh * 0.012);
-    ctx.lineCap = 'round';
+    const pts = person.pts, ok = i => pts[i] && pts[i].v >= 0.3;
+    // Thick neon bones in the kid's colour with a bright core.
+    ctx.shadowColor = person.color; ctx.shadowBlur = lw * 2.5;
+    ctx.strokeStyle = person.color; ctx.lineWidth = lw * 2.2;
+    ctx.beginPath();
     for (const [a, b] of BONES) {
-      if (pts[a].v < 0.3 || pts[b].v < 0.3) continue;
-      ctx.beginPath();
-      ctx.moveTo(dx + pts[a].x * dh, dy + pts[a].y * dh);
-      ctx.lineTo(dx + pts[b].x * dh, dy + pts[b].y * dh);
+      if (!ok(a) || !ok(b)) continue;
+      ctx.moveTo(...P(pts, a)); ctx.lineTo(...P(pts, b));
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = lw * 0.6;
+    ctx.stroke();
+    // Glowing dots on the joints.
+    ctx.shadowColor = '#7df9ff'; ctx.shadowBlur = lw * 2;
+    for (const i of JOINTS) {
+      if (!ok(i)) continue;
+      const [jx, jy] = P(pts, i), big = i === 15 || i === 16;
+      ctx.beginPath(); ctx.arc(jx, jy, lw * (big ? 1.5 : 1.1), 0, Math.PI * 2);
+      ctx.fillStyle = big ? '#7df9ff' : '#ffe14d'; ctx.fill();
+      ctx.beginPath(); ctx.arc(jx, jy, lw * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    // A sporty headband across the forehead, in the kid's colour.
+    if (ok(7) && ok(8) && ok(2) && ok(5)) {
+      const [ax, ay] = P(pts, 7), [bx, by] = P(pts, 8), [ex1, ey1] = P(pts, 2), [ex2, ey2] = P(pts, 5);
+      const span = Math.hypot(bx - ax, by - ay), up = span * 0.32;
+      const mx = (ex1 + ex2) / 2, my = (ey1 + ey2) / 2 - up;
+      const ux = (bx - ax) / (span || 1), uy = (by - ay) / (span || 1), half = span * 0.62;
+      ctx.lineWidth = Math.max(lw * 1.6, span * 0.24);
+      ctx.strokeStyle = '#1a2a40';
+      ctx.beginPath(); ctx.moveTo(mx - ux * half, my - uy * half); ctx.lineTo(mx + ux * half, my + uy * half); ctx.stroke();
+      ctx.lineWidth = Math.max(lw * 1.1, span * 0.17);
+      ctx.strokeStyle = person.color;
       ctx.stroke();
+      ctx.lineWidth = Math.max(1.5, span * 0.04);
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.moveTo(mx - ux * half * 0.85, my - uy * half * 0.85 - span * 0.04); ctx.lineTo(mx + ux * half * 0.85, my + uy * half * 0.85 - span * 0.04); ctx.stroke();
     }
-    if (person.label) {
-      const n = pts[0];
-      text(ctx, person.label, dx + n.x * dh, dy + Math.max(n.y * dh - dh * 0.1, dh * 0.05), Math.max(16, dh * 0.06), person.color);
-    }
+  }
+  ctx.restore();
+  for (const person of people) {
+    if (!person.label) continue;
+    const n = person.pts[0];
+    text(ctx, person.label, dx + n.x * dh, dy + Math.max(n.y * dh - dh * 0.14, dh * 0.07), Math.max(16, dh * 0.07), person.color);
   }
   return { dx, dy, dw, dh };
 }
+const JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
 // ---------------- Hand-zone break games ----------------
 
@@ -1657,7 +1894,7 @@ export function drawWyrBoard(ctx, S, players, W, H) {
   const fs = clamp(cw * 0.15, 14, 44);
   const votes = q.c.map((_, k) => players.filter(p => S.picks[p.index] === k));
   const most = Math.max(...votes.map(v => v.length));
-  ctx.font = `bold ${R(fs)}px ${FONT}`;
+  ctx.font = `${R(fs)}px ${FONT}`;
   const labels = q.c.map(c => wrapLines(ctx, c[0], cw * 0.92, 2));
   const ch = cw * 0.88 + fs * 2.5;
   const r = Math.min(gap * 0.4, cw * 0.11);
@@ -1681,7 +1918,7 @@ export function drawWyrBoard(ctx, S, players, W, H) {
       ctx.textBaseline = 'middle';
       ctx.fillText(q.c[k][1], x + cw / 2, top + cw * 0.46);
     }
-    ctx.font = `bold ${R(fs)}px ${FONT}`;
+    ctx.font = `${R(fs)}px ${FONT}`;
     ctx.fillStyle = '#1b2340';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1715,7 +1952,7 @@ export function drawWyrQuestion(ctx, S, W, y, H) {
   if (!S || (S.phase !== 'ask' && S.phase !== 'reveal')) return;
   const q = S.qs[S.i];
   const size = H * 0.042;
-  ctx.font = `bold ${R(size)}px ${FONT}`;
+  ctx.font = `${R(size)}px ${FONT}`;
   const lines = wrapLines(ctx, q.q, W * 0.9, 2);
   const h = size * (1.2 * lines.length + 0.9);
   const bottom = H * WYR_TOP - H * 0.01;

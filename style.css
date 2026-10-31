@@ -10,6 +10,10 @@ html, body {
 }
 /* Below the status bar / Dynamic Island when held upright (0 in landscape). */
 #stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); width: 100%; height: calc(100% - env(safe-area-inset-top)); display: block; }
+/* The pixel world: a small canvas blown up with hard edges, never blurred. */
+#world { position: fixed; left: 0; top: env(safe-area-inset-top); display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
+#stage { background: transparent; }
+#safeProbe { position: fixed; visibility: hidden; pointer-events: none; width: 0; height: 0; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 #cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .panel {
@@ -24,7 +28,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; flex-wrap: wrap; }
 .label { width: 76px; font-weight: bold; opacity: .8; }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }
-.seg button, .small, #hudButtons button {
+.seg button, .small {
   font: inherit; font-weight: bold; color: #fff; background: #26335c;
   border: 2px solid #3d4f86; border-radius: 12px; padding: 8px 14px; cursor: pointer;
 }
@@ -58,9 +62,31 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .result .award { color: #ffd23f; }
 .result .score { font-size: 26px; font-weight: bold; }
 
-#hudButtons { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; opacity: .55; }
-#hudButtons:hover { opacity: 1; }
-#hudButtons button { padding: 6px 12px; font-size: 18px; }
+/* In-game controls: chunky arcade buttons stacked in the top-right corner,
+   under the full screen button, clear of the notch. */
+#hudButtons { position: fixed; z-index: 15; top: calc(max(6px, env(safe-area-inset-top)) + 46px); right: calc(6px + var(--safeX)); display: flex; flex-direction: column; gap: 8px; opacity: .9; }
+body:has(#fsFab.hidden) #hudButtons { top: max(6px, env(safe-area-inset-top)); }
+.arcade {
+  --face: #3d7be0; --ink: #fff;
+  display: inline-flex; align-items: center; justify-content: center; gap: .35em;
+  min-width: 40px; height: 40px; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  font: 20px/1 "Lilita One", "Trebuchet MS", system-ui, sans-serif; letter-spacing: .5px; color: var(--ink);
+  background: var(--face); border: 3px solid #1a2a40; border-bottom-width: 6px; border-radius: 12px;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.35), 0 3px 8px rgba(0,0,0,.3);
+}
+.arcade .ic { width: 22px; height: 22px; margin: 0; stroke-width: 2.8; }
+.arcade:active { transform: translateY(3px); border-bottom-width: 3px; }
+#btnPause { --face: #ffd23f; --ink: #1a2a40; }
+#btnPause .ic .f { opacity: .45; }
+.arcade.end { --face: #ff5d73; }
+#btnStart { position: fixed; z-index: 15; right: calc(12px + var(--safeX)); bottom: calc(12px + env(safe-area-inset-bottom)); height: 48px; padding: 0 18px; --face: #3ddc84; --ink: #10301e; font-size: 22px; }
+#btnStart .ic { width: 20px; height: 20px; }
+@media (max-height: 500px) {
+  .arcade { min-width: 36px; height: 36px; border-radius: 11px; }
+  .arcade .ic { width: 20px; height: 20px; }
+  #hudButtons { gap: 6px; top: calc(max(6px, env(safe-area-inset-top)) + 42px); }
+  #btnStart { height: 42px; font-size: 18px; padding: 0 14px; }
+}
 
 .tip { font-size: 15px; text-align: center; color: #ffd23f; margin: 8px 0 0; }
 
@@ -118,7 +144,6 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 @keyframes tipFade { 0% { opacity: 0; } 6%, 85% { opacity: 1; } 100% { opacity: 0; } }
 }
 @media (max-height: 500px) {
-  #hudButtons button { padding: 3px 8px; font-size: 12px; border-radius: 8px; }
   h1 { font-size: 30px; }
 }
 
@@ -280,8 +305,10 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #friendResults .fk .n { flex: 1; }
 #friendResults .fk .s { font-weight: bold; }
 .seg button:disabled { opacity: .35; cursor: default; }
-#fsFab { position: fixed; z-index: 30; top: max(6px, env(safe-area-inset-top)); right: calc(6px + var(--safeX)); width: 34px; height: 34px; border-radius: 10px; border: 2px solid #3a4a80; background: rgba(16, 24, 48, .7); color: #fff; font: bold 18px/1 system-ui, sans-serif; cursor: pointer; opacity: .7; -webkit-tap-highlight-color: transparent; }
+#fsFab { position: fixed; z-index: 30; top: max(6px, env(safe-area-inset-top)); right: calc(6px + var(--safeX)); width: 40px; height: 38px; border-radius: 12px; border: 3px solid #1a2a40; border-bottom-width: 6px; background: #26335c; box-shadow: inset 0 3px 0 rgba(255,255,255,.2); color: #fff; font: bold 18px/1 system-ui, sans-serif; cursor: pointer; opacity: .85; -webkit-tap-highlight-color: transparent; }
+@media (max-height: 500px) { #fsFab { width: 36px; height: 34px; } }
 #fsFab:hover { opacity: 1; }
+#fsFab .ic { margin: 0; width: 20px; height: 20px; stroke-width: 2.8; vertical-align: middle; }
 #fsTip { position: fixed; z-index: 31; top: calc(max(6px, env(safe-area-inset-top)) + 42px); right: calc(6px + var(--safeX)); width: min(320px, calc(100vw - 24px - 2 * var(--safeX))); background: #101830; border: 2px solid #ffd23f; border-radius: 14px; padding: 10px 12px; color: #fff; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
 #fsTip p { margin: 6px 0 8px; line-height: 1.35; }
 #fsTip .shareIco { display: inline-block; border: 1px solid #fff8; border-radius: 4px; padding: 0 4px; }
@@ -493,3 +520,4 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 #pauseBox p { margin: 0; color: #fff; opacity: .85; min-height: 1.2em; }
 #pauseBox .big { width: min(320px, 70vw); }
 body.gamePaused #hudButtons { opacity: 1; z-index: 21; }
+#pauseGo .ic { margin-right: .3em; }
