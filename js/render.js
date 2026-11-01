@@ -325,6 +325,10 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   }
   const T = p.throwing;
   if (C?.type === 'climb') items.push({ z: 0.02, draw: () => drawVine(ctx, L, C, pan) });
+  // Silly cameos: in the sky on the way up, or flying past during the run.
+  if (C) items.push({ z: 0.9, draw: () => drawSkyGags(ctx, L, p, C.pan, time) });
+  else if (B) items.push({ z: 0.9, draw: () => drawBubbleGag(ctx, L, p, B, time) });
+  else if (!T && !p.paused) items.push({ z: 1.1, draw: () => drawFlyby(ctx, L, p, time) });
   // Water over the swimmer's legs.
   if (T?.type === 'swim') items.push({ z: -0.2, draw: () => {
     const wy = L.ground - L.S * 1.1 + Math.sin(time * 4) * L.S * 0.05;
@@ -366,6 +370,196 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   if (ctx !== back) { back.restore(); ctx = back; }
   // Lane divider (above the runners).
   rect(front || ctx, L.x + L.w - 1, 0, 2, L.h, '#1b2340');
+}
+
+// ---------------- Silly cameos ----------------
+// Little characters who react to the kids: a bird on a cloud, geese, a cat in
+// a hot-air balloon, a grumpy cloud, an alien in a UFO, a floating cow and a
+// pilot. They hang in the sky on Fly high, Beanstalk and Bubble time, fly past
+// during the run (and do a double take when a kid jumps), and a bird sits on
+// the rope's branch. Everything is worked out from the game state, so nothing
+// needs saving and friends' lanes show the same thing.
+//
+// d says where the kid is compared with the cameo, in about torso units:
+// below it (d < -1: it peers down at them), level with it (|d| < 1: shocked,
+// eyes wide, "!") or past it (d > 1: it cranes up after them, squinting, "?").
+const GAG_KINDS = ['bird', 'geese', 'balloon', 'cloud', 'ufo', 'cow', 'plane'];
+const GLYPH = {
+  '?': ['###', '..#', '.##', '...', '.#.'],
+  '!': ['.#.', '.#.', '.#.', '...', '.#.'],
+};
+
+// A little speech bubble with "?" or "!" in it.
+function bubbleGlyph(ctx, ch, x, y, px) {
+  // Whole pixels, so the little letter stays crisp.
+  px = Math.max(1, R(px)); x = R(x); y = R(y);
+  rect(ctx, x - px * 2.5, y - px * 3.5, px * 5, px * 7, '#1b1b22');
+  rect(ctx, x - px * 2, y - px * 3, px * 4, px * 6, '#ffffff');
+  rect(ctx, x - px * 1.5, y + px * 3, px, px * 1.2, '#1b1b22');
+  GLYPH[ch].forEach((row, j) => [...row].forEach((c, i) => {
+    if (c === '#') rect(ctx, x + (i - 1.5) * px, y + (j - 2.5) * px, px, px, ch === '!' ? '#e8344a' : '#1b1b22');
+  }));
+}
+
+// A cartoon eye: white square, pupil pushed toward (lx, ly).
+// mood 'wide' = bigger and rounder, 'squint' = a lid half down.
+function gagEye(ctx, x, y, r, lx, ly, mood) {
+  const w = mood === 'wide' ? r * 1.35 : r;
+  rect(ctx, x - w / 2, y - w / 2, w, w, '#ffffff');
+  const pr = Math.max(1, r * (mood === 'wide' ? 0.32 : 0.45));
+  rect(ctx, x - pr / 2 + lx * (w - pr) * 0.45, y - pr / 2 + ly * (w - pr) * 0.45, pr, pr, '#1b1b22');
+  if (mood === 'squint') rect(ctx, x - w / 2, y - w / 2, w, w * 0.45, '#1b1b22');
+}
+
+// Draws one cameo centred on (x, y). dir: which side of the kid it is on
+// (-1 left, +1 right), so it looks back toward them. u: its pixel unit.
+function drawGag(ctx, kind, x, y, u, d, time, dir) {
+  const shock = Math.abs(d) < 1;
+  const mood = shock ? 'wide' : d > 1 ? 'squint' : null;
+  const lx = -dir, ly = shock ? 0 : d > 1 ? -1 : 1;
+  // A double take: a quick shake when the kid is right there.
+  if (shock) x += Math.sin(time * 50) * u * 0.12;
+  const flap = Math.floor(time * 6 + x) % 2;
+  let tip = y - u * 2.2; // where the "?" or "!" goes
+  if (kind === 'bird' || kind === 'perch') {
+    // A round blue bird sitting on a cloud (or, perched, on the rope's branch).
+    if (kind === 'bird') {
+      rect(ctx, x - u * 2, y + u * 0.5, u * 4, u, '#ffffff');
+      rect(ctx, x - u * 1.4, y + u * 0.1, u * 2.8, u * 0.6, '#ffffff');
+    }
+    block(ctx, x - u * 0.8, y - u * 1.1, u * 1.6, u * 1.4, '#5ab4ff', 0.2);
+    rect(ctx, x - u * 0.4, y - u * 0.3, u * 0.8, u * 0.5, '#d6efff');
+    gagEye(ctx, x - u * 0.32, y - u * 0.65, u * 0.42, lx, ly, mood);
+    gagEye(ctx, x + u * 0.32, y - u * 0.65, u * 0.42, lx, ly, mood);
+    rect(ctx, x + lx * u * 0.75 - u * 0.2, y - u * 0.4, u * 0.4, u * 0.25, '#ffb02e');
+    rect(ctx, x - u * 0.95, y - u * (flap && shock ? 0.9 : 0.6), u * 0.3, u * 0.6, '#3f86d6');
+    rect(ctx, x + u * 0.65, y - u * (flap && shock ? 0.9 : 0.6), u * 0.3, u * 0.6, '#3f86d6');
+    tip = y - u * 2;
+  } else if (kind === 'geese') {
+    // Three geese in a V; only the leader turns to look.
+    for (let i = 2; i >= 0; i--) {
+      const gx = x - dir * i * u * 1.1, gy = y + i * u * 0.55, s = i ? 0.75 : 1;
+      const f = (flap + i) % 2;
+      rect(ctx, gx - u * 0.8 * s, gy - u * 0.3 * s, u * 1.6 * s, u * 0.6 * s, '#f4f4f4');
+      rect(ctx, gx - u * 0.5 * s, gy - u * (f ? 0.8 : 0.1) * s, u * 0.9 * s, u * 0.5 * s, '#d8d8d8');
+      const nx = gx - dir * u * 0.85 * s;
+      rect(ctx, nx - u * 0.13 * s, gy - u * 0.8 * s, u * 0.26 * s, u * 0.6 * s, '#1b1b22');          // neck
+      rect(ctx, nx - u * 0.13 * s - (dir > 0 ? u * 0.3 * s : 0), gy - u * 1.1 * s, u * 0.56 * s, u * 0.4 * s, '#1b1b22'); // head
+      if (!i) {
+        gagEye(ctx, nx - dir * u * 0.15, gy - u * 0.9, u * 0.3, lx, ly, mood);
+        rect(ctx, nx - dir * u * 0.45 - u * 0.17, gy - u * 0.95, u * 0.35, u * 0.16, '#ffb02e');
+      }
+    }
+    tip = y - u * 2.7;
+  } else if (kind === 'balloon') {
+    // A striped hot-air balloon with a ginger cat in the basket, waving.
+    for (let i = 0; i < 4; i++) rect(ctx, x - u * 1.6 + i * u * 0.8, y - u * 4.2, u * 0.8, u * 3, i % 2 ? '#ffe14d' : '#ff5d73');
+    rect(ctx, x - u * 1.2, y - u * 4.6, u * 2.4, u * 0.4, '#ff5d73');
+    rect(ctx, x - u * 1.0, y - u * 1.2, u * 2, u * 0.4, '#ffe14d');
+    rect(ctx, x - u * 0.7, y - u * 0.8, Math.max(1, u * 0.08), u * 0.9, '#7a4a24');
+    rect(ctx, x + u * 0.62, y - u * 0.8, Math.max(1, u * 0.08), u * 0.9, '#7a4a24');
+    rect(ctx, x - u * 0.55, y - u * 0.55, u * 1.1, u * 0.8, '#ff9f43');       // cat head
+    rect(ctx, x - u * 0.55, y - u * 0.8, u * 0.3, u * 0.3, '#ff9f43');        // ears
+    rect(ctx, x + u * 0.25, y - u * 0.8, u * 0.3, u * 0.3, '#ff9f43');
+    gagEye(ctx, x - u * 0.25, y - u * 0.25, u * 0.3, lx, ly, mood);
+    gagEye(ctx, x + u * 0.25, y - u * 0.25, u * 0.3, lx, ly, mood);
+    if (shock) rect(ctx, x - u * 0.1, y + u * 0.0, u * 0.2, u * 0.2, '#7a1020'); // gasp
+    const wave = shock || d > 1 ? (flap ? 0.5 : 0.2) : 0;
+    rect(ctx, x + lx * u * 0.75 - u * 0.15, y - u * (0.3 + wave * 1.6), u * 0.3, u * 0.5, '#ff9f43');
+    block(ctx, x - u * 0.8, y + u * 0.2, u * 1.6, u * 0.9, '#a5682a', 0.2);
+    tip = y - u * 5.4;
+  } else if (kind === 'cloud') {
+    // A grumpy rain cloud that puffs out its cheeks and blows at them.
+    rect(ctx, x - u * 2.2, y - u * 0.9, u * 4.4, u * 1.8, '#e9eef7');
+    rect(ctx, x - u * 1.4, y - u * 1.6, u * 2.2, u * 0.8, '#e9eef7');
+    rect(ctx, x + u * 0.3, y - u * 1.3, u * 1.3, u * 0.5, '#e9eef7');
+    gagEye(ctx, x - u * 0.6, y - u * 0.4, u * 0.45, lx, ly, mood);
+    gagEye(ctx, x + u * 0.6, y - u * 0.4, u * 0.45, lx, ly, mood);
+    rect(ctx, x - u * 0.95, y - u * 0.85, u * 0.6, u * 0.12, '#1b1b22');        // cross brows
+    rect(ctx, x + u * 0.35, y - u * 0.85, u * 0.6, u * 0.12, '#1b1b22');
+    if (d > 1) {
+      // Blowing a raspberry after them: an O mouth and gusts.
+      rect(ctx, x - u * 0.2, y + u * 0.15, u * 0.4, u * 0.4, '#7a1020');
+      for (let i = 0; i < 3; i++) rect(ctx, x + lx * u * (1.6 + ((time * 3 + i * 0.33) % 1) * 1.6), y + (i - 1) * u * 0.4, u * 0.8, Math.max(1, u * 0.12), '#ffffff');
+    } else rect(ctx, x - u * 0.45, y + u * 0.3, u * 0.9, u * 0.14, '#1b1b22');
+    tip = y - u * 2.4;
+  } else if (kind === 'ufo') {
+    // A flying saucer with a little green alien gawping out of the dome.
+    rect(ctx, x - u * 0.9, y - u * 1.5, u * 1.8, u * 1.2, '#9ef0ff');
+    rect(ctx, x - u * 0.45, y - u * 1.25, u * 0.9, u * 0.9, '#5ce65c');
+    gagEye(ctx, x - u * 0.2, y - u * 0.9, u * 0.32, lx, ly, mood === 'squint' ? null : 'wide');
+    gagEye(ctx, x + u * 0.2, y - u * 0.9, u * 0.32, lx, ly, mood === 'squint' ? null : 'wide');
+    rect(ctx, x - u * 0.05, y - u * 1.6, Math.max(1, u * 0.1), u * 0.3, '#5ce65c');
+    block(ctx, x - u * 2, y - u * 0.4, u * 4, u * 0.8, '#9aa3b5', 0.3);
+    for (let i = 0; i < 4; i++) rect(ctx, x - u * 1.5 + i * u, y - u * 0.05, u * 0.3, u * 0.2, (Math.floor(time * 6) + i) % 2 ? '#ffe14d' : '#ff5d73');
+    if (shock && flap) { ctx.save(); ctx.globalAlpha *= 0.3; rect(ctx, x - u * 0.8, y + u * 0.4, u * 1.6, u * 2.5, '#fffaa0'); ctx.restore(); }
+    tip = y - u * 2.5;
+  } else if (kind === 'cow') {
+    // A cow floating about the sky for no reason, chewing.
+    const bob = Math.sin(time * 2 + x) * u * 0.2;
+    y += bob;
+    block(ctx, x - u * 1.3, y - u * 0.8, u * 2.6, u * 1.4, '#ffffff', 0.15);
+    rect(ctx, x - u * 0.8, y - u * 0.6, u * 0.6, u * 0.5, '#1b1b22');
+    rect(ctx, x + u * 0.3, y - u * 0.2, u * 0.7, u * 0.5, '#1b1b22');
+    for (let i = 0; i < 4; i++) rect(ctx, x - u * 1.1 + i * u * 0.7, y + u * 0.6, u * 0.3, u * (0.5 + 0.15 * Math.sin(time * 5 + i)), '#ffffff');
+    const hx = x + lx * u * 1.5;
+    rect(ctx, hx - u * 0.6, y - u * 1.3, u * 1.2, u * 1.2, '#ffffff');
+    rect(ctx, hx - u * 0.75, y - u * 1.45, u * 0.25, u * 0.3, '#e0d0b0');    // horns
+    rect(ctx, hx + u * 0.5, y - u * 1.45, u * 0.25, u * 0.3, '#e0d0b0');
+    gagEye(ctx, hx - u * 0.25, y - u * 0.95, u * 0.3, lx, ly, mood);
+    gagEye(ctx, hx + u * 0.25, y - u * 0.95, u * 0.3, lx, ly, mood);
+    rect(ctx, hx - u * 0.5, y - u * 0.55, u * 1.0, u * (Math.floor(time * 4) % 2 ? 0.45 : 0.35), '#ffb0c0');
+    tip = y - u * 2.3;
+  } else if (kind === 'plane') {
+    // A little red plane; the pilot in goggles leans out for a look.
+    block(ctx, x - u * 2, y - u * 0.4, u * 4, u * 0.9, '#e8344a', 0.25);
+    rect(ctx, x - u * 0.6, y + u * 0.1, u * 1.6, u * 0.3, '#b01e30');
+    rect(ctx, x + dir * u * 1.6, y - u * 1.0, u * 0.5, u * 0.7, '#e8344a');   // tail
+    rect(ctx, x - dir * u * 2.1, y - u * (flap ? 0.7 : 0.2), Math.max(1, u * 0.15), u * 0.9, '#cfd6e0'); // propeller
+    rect(ctx, x - u * 0.4, y - u * 1.1, u * 0.8, u * 0.75, '#ffd1a8');
+    rect(ctx, x - u * 0.45, y - u * 1.2, u * 0.9, u * 0.25, '#7a4a24');
+    gagEye(ctx, x - u * 0.2, y - u * 0.8, u * 0.3, lx, ly, mood);
+    gagEye(ctx, x + u * 0.2, y - u * 0.8, u * 0.3, lx, ly, mood);
+    tip = y - u * 2.1;
+  }
+  if (shock || d > 1) bubbleGlyph(ctx, shock ? '!' : '?', x - dir * u * 1.2, tip, Math.max(1, u * 0.22));
+}
+
+// Fly high and Beanstalk: cameos parked at heights the kid climbs past.
+// h is how high the kid is, in the game's pan units (one is ~0.9 torso).
+function drawSkyGags(ctx, L, p, h, time) {
+  const S = L.S, step = 6, u = S * 0.8;
+  const side = Math.min(L.w * 0.3, S * 2.6);
+  for (let n = Math.max(0, Math.floor((h - 9) / step)); n * step < h + 12; n++) {
+    const H = 3 + n * step;
+    const d = (h - H) * 0.9;
+    const dir = (n + p.index) % 2 ? 1 : -1;
+    const kind = GAG_KINDS[(n + p.index * 3) % GAG_KINDS.length];
+    drawGag(ctx, kind, L.cx + dir * side, L.ground - S * 3.2 - H * S * 0.9, u, d, time, dir);
+  }
+}
+
+// Bubble time: a bird on a cloud partway up, watching them flap past.
+function drawBubbleGag(ctx, L, p, B, time) {
+  const S = L.S, span = L.h * SKY_PAN + S * 2.2, at = 0.55;
+  const dir = p.index % 2 ? 1 : -1;
+  const d = (B.alt - at) * span / S;
+  drawGag(ctx, 'bird', L.cx + dir * Math.min(L.w * 0.3, S * 2.6), L.ground - S * 3.2 - at * span, S * 0.8, d, time, dir);
+}
+
+// The run: now and then something flies across the sky and peers down at the
+// kid. If they jump while it's passing, it does a double take.
+const FLYBY_EVERY = 17, FLYBY_SECS = 5;
+function drawFlyby(ctx, L, p, time) {
+  const t = time + p.index * 5.3, k = (t % FLYBY_EVERY) / FLYBY_SECS;
+  if (k >= 1) return;
+  const n = Math.floor(t / FLYBY_EVERY);
+  const kind = ['geese', 'plane', 'balloon', 'ufo', 'cow', 'bird'][n % 6];
+  const go = n % 2 ? 1 : -1;
+  const x = L.cx - go * (L.w * 0.65) + go * k * L.w * 1.3;
+  const jumped = p.airAt != null && time - p.airAt < 1.4;
+  const dir = x < L.cx ? -1 : 1;
+  drawGag(ctx, kind, x, L.horizon * 0.5, L.S * 0.6, jumped ? 0 : -3, time, dir);
 }
 
 function mix(a, b, k) {
@@ -547,6 +741,12 @@ function drawObstacle(ctx, L, o, z) {
     rect(ctx, L.cx + w * 0.1, y - d * 0.3, w * 0.18, Math.max(1, d * 0.15), '#bfe3ff');
     const top = y - u * 5.6, hang = y - u * 3.7;
     block(ctx, L.cx - w * 0.6, top - u * 0.35, w * 1.2, u * 0.4, '#7a4a24', 0.25);   // branch
+    // A bird perched on the branch watches them come. When they grab the
+    // rope the branch jolts and it hops up in shock.
+    const hop = o.result === 'hit' ? clamp(-z * 6, 0, 1) : 0;
+    const pdir = (o.arrive * 7) % 2 < 1 ? -1 : 1;
+    drawGag(ctx, 'perch', L.cx + pdir * w * 0.42, top - u * 0.75 - Math.sin(hop * Math.PI) * u * 1.6, u * 0.65,
+      hop > 0 ? 0 : o.result === 'miss' ? 3 : -3, performance.now() / 1000, pdir);
     if (o.result !== 'hit') {
       rect(ctx, L.cx - Math.max(1, u * 0.08), top, Math.max(2, u * 0.16), hang - top, '#d9b16a');
       rect(ctx, L.cx - u * 0.16, hang - u * 0.1, u * 0.32, u * 0.3, '#b88a3e');       // knot
