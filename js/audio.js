@@ -494,7 +494,7 @@ const VOICE_LINES = [
   'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
   'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time', 'wyr_time', 'swim_time',
   'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_duck', 'lesson_rope',
-  'got_it', 'lobby', 'heart', 'champions', 'boss_time', 'boss_win', 'eagle_time', 'feed_time', 'eagle_level',
+  'got_it', 'lobby', 'thump', 'champions', 'boss_time', 'boss_win', 'eagle_time', 'feed_time', 'eagle_level',
 ];
 const clips = {};
 let current = null;
@@ -546,6 +546,7 @@ const SPOKEN = {
   eagle_time: "Look! It's Super Eagle, the crazy bird's arch enemy!",
   feed_time: 'Feed Super Eagle! Throw your points into his beak!',
   eagle_level: 'Super Eagle leveled up!',
+  thump: 'Thump-o-meter time! Lie down on your back, and stay still.',
 };
 function speak(text) {
   try {

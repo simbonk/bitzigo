@@ -61,7 +61,9 @@
   </header>
 
   <div class="tabs" id="modeTabs" role="tablist">
-    <button data-mode="here" class="on" role="tab"><svg class="ic"><use href="#i-home"/></svg>Play here</button><button data-mode="friends" role="tab"><svg class="ic"><use href="#i-friends"/></svg><span class="tabLong">Play with friends</span><span class="tabShort">Friends</span></button><button data-mode="extras" role="tab"><svg class="ic"><use href="#i-gear"/></svg>Extras</button>
+    <button data-mode="here" class="on" role="tab"><svg class="ic"><use href="#i-home"/></svg>Play here</button><!-- Play with friends is hidden for now (MULTIPLAYER in js/main.js). Put this back to turn it on:
+    <button data-mode="friends" role="tab"><svg class="ic"><use href="#i-friends"/></svg><span class="tabLong">Play with friends</span><span class="tabShort">Friends</span></button>
+    --><button data-mode="extras" role="tab"><svg class="ic"><use href="#i-gear"/></svg>Extras</button>
   </div>
 
   <div class="friendRow">
@@ -151,8 +153,10 @@
     <li>Move it back until everyone can be seen from the knees up.</li>
     <li>Kids spread out in a row. Point an arm sideways to change character, both hands up when ready.</li>
     <li>On iPhone or iPad, use Screen Mirroring to put it on the TV.</li>
+    <li>The Thump-o-meter is just for fun. This is not a medical device.</li>
   </ul>
-  <p class="privacy">🔒 Nothing is saved on a server. Names, stats and saved kids stay in this browser on this device, and the camera picture never leaves it. Friend games link the devices directly.</p>
+  <p class="privacy">🔒 Nothing is saved on a server. Names, stats and saved kids stay in this browser on this device, and the camera picture never leaves it.<!-- Friend games link the devices directly. --></p>
+  <p class="privacy">✉️ Questions or privacy requests: <a href="mailto:play.bitzigo@gmail.com">play.bitzigo@gmail.com</a></p>
   <button id="helpClose" class="big">Got it</button>
 </section>
 
@@ -162,7 +166,8 @@
   <div id="results"></div>
   <div id="friendResults"></div>
   <div id="nextRound" class="hidden"><span></span> <button id="nextGo" class="small">Go now</button> <button id="nextStop" class="small">Stop</button></div>
-  <button id="heart" class="big heartBtn">♥ Heart check</button>
+  <button id="heart" class="big heartBtn">♥ Thump-o-meter</button>
+  <p class="thumpNote">The Thump-o-meter is just for fun. This is not a medical device.</p>
   <button id="again" class="big">Play again</button>
   <button id="menu" class="small">Change players</button>
 </section>

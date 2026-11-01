@@ -40,6 +40,11 @@ if (!testing && settings.mode === 'keys') settings.mode = 'camera';
 const MAX_KIDS = 2;
 settings.count = Math.min(MAX_KIDS, settings.count);
 settings.theme = 'random'; // every visit starts on Surprise me
+// Play with friends (room codes, shared pause, friend results) is hidden
+// while it gets more testing. The code is all still here: set this to true
+// and put the Friends tab back in index.html to turn it on again.
+const MULTIPLAYER = false;
+if (!MULTIPLAYER) settings.tab = 'here';
 
 let state = 'setup';   // setup | loading | lobby | ready | tutorial | play | end | heart
 let players = [];
@@ -290,6 +295,7 @@ onRoom(msg => {
 let showExtras = false;
 function setTab(t) {
   showExtras = t === 'extras';
+  if (!MULTIPLAYER && t === 'friends') t = 'here';
   if (!showExtras) settings.tab = t === 'friends' ? 'friends' : 'here';
   document.body.classList.toggle('tabFriends', !showExtras && settings.tab === 'friends');
   document.body.classList.toggle('tabExtras', showExtras);
@@ -370,7 +376,7 @@ $('#roomShare').onclick = () => {
   navigator.share?.({ title: 'Bitzigo', text: roomInvite() }).catch(() => { });
 };
 // A shared link (…?room=FROG-42) joins straight away.
-{
+if (MULTIPLAYER) {
   const code = new URLSearchParams(location.search).get('room');
   if (code) { $('#roomCode').value = code; joinRoom(code).catch(e => console.error(e)); }
 }
@@ -913,7 +919,7 @@ function showResults(beatBoss = false, fedNow = 0) {
       <div class="sub">Level ${Math.floor(p.peakSkill) + 1} · ${p.hits} moves · best streak ${p.bestStreak} · 🔥 about ${p.kcal} cal</div></div>
       <div class="nums"><div class="score">${total(p).toLocaleString()}</div>
       ${multi ? `<div class="sub">+${p.score.toLocaleString()} this round</div>` : ''}
-      <div class="hr">♥ ${p.heartRate ? `${p.heartRate} bpm` : '--'}</div></div>`;
+      <div class="hr">♥ ${p.heartRate ? `${p.heartRate} thumps` : '--'}</div></div>`;
     div.querySelector('.name').textContent = `${p.name} the ${p.character?.name || 'Mover'}`;
     div.querySelector('.award').textContent = awards.get(p);
     box.appendChild(div);
@@ -925,7 +931,7 @@ function showResults(beatBoss = false, fedNow = 0) {
     box.prepend(note);
   }
   const hasHR = players.some(p => p.heartRate);
-  $('#heart').textContent = hasHR ? '♥ Redo heart check' : '♥ Heart check';
+  $('#heart').textContent = hasHR ? '♥ Redo the Thump-o-meter' : '♥ Thump-o-meter';
   $('#splash').innerHTML = splashHtml();
   renderFriendResults();
   $('#end').classList.remove('hidden');
@@ -953,7 +959,7 @@ function shortScore(n) {
   return n >= 10000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-// The champions banner: top score and (after the heart check) biggest heartbeat.
+// The champions banner: top score and (after the Thump-o-meter) the most thumps.
 function splashHtml() {
   if (!players.length) return '';
   const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -965,7 +971,7 @@ function splashHtml() {
   if (hrs.length) {
     const h = hrs.reduce((a, b) => (b.heartRate > a.heartRate ? b : a));
     html += `<div class="champ"><div class="bubble lg" style="border-color:${h.color}">${face(h)}</div>
-      <div><div class="label">Hardest working heart</div><div class="champName">${esc(h.name)}</div><div class="champVal">♥ ${h.heartRate} bpm</div></div></div>`;
+      <div><div class="label">Top of the Thump-o-meter</div><div class="champName">${esc(h.name)}</div><div class="champVal">♥ ${h.heartRate} thumps</div></div></div>`;
   }
   return html;
 }

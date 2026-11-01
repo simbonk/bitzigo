@@ -21,7 +21,7 @@ lesson_duck|Crazy bird! Duck under it!
 lesson_rope|Muddy puddle! Grab the rope and swing!
 got_it|You've got it! Let's go!
 lobby|Spread out! Point your arm to pick a character. Both hands up when you're ready!
-heart|Heart check time! Lie down on your back, and stay still.
+thump|Thump-o-meter time! Lie down on your back, and stay still.
 champions|Here are your champions!
 bubble_time|Bubble time! Flap your arms to fly up, and pop the bubbles!
 fire_time|Fire time! Point your arm to spray the water, and put out the fire!

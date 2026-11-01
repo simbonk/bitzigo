@@ -139,6 +139,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 .hc-bar div { height: 100%; width: 0; background: #ff5d73; }
 .hc-big { font-size: 30px; font-weight: bold; color: #ff6b81; }
 .hc-note { font-size: 13px; opacity: .65; margin-top: 14px; }
+.thumpNote { font-size: 12px; opacity: .6; margin: 2px 0 8px; }
 @keyframes beat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.18); } 30% { transform: scale(1); } }
 
 /* Upright phone with two players or friends: a short tip, never a blocker. */
@@ -196,7 +197,7 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
 #nextRound { margin: 14px 0 4px; text-align: center; font-size: 22px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
 #nextRound.hidden { display: none; }
 #nextRound .small { display: inline-block; margin: 0; }
-body.between #heart, body.between .result .hr { display: none; }
+body.between #heart, body.between .thumpNote, body.between .result .hr { display: none; }
 
 /* Setup help link, under the input row. */
 .link { background: none; border: none; color: #ffd23f; font: inherit; font-size: 0.9em; padding: 0 0 4px; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
@@ -489,6 +490,7 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 .tabShort { display: none; }
 @media (max-width: 520px) { .tabLong { display: none; } .tabShort { display: inline; } }
 #help .privacy { font-size: .9em; opacity: .85; margin: 4px 0 10px; line-height: 1.35; }
+#help .privacy a { color: #ffd23f; }
 /* Friend room on a landscape phone: code, devices, buttons and Leave on one line. */
 @media (max-height: 500px) {
   .friendRow .roomBox { flex-wrap: wrap; column-gap: 6px; }

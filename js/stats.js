@@ -2,7 +2,7 @@ import { PALETTE } from './game.js';
 // Fallback colours in an order that keeps neighbours easy to tell apart.
 const SPREAD = ['#3fa7ff', '#3ddc84', '#ffd23f', '#b57bff', '#ff9f1c', '#ff4fa3', '#8fd3ff', ...PALETTE];
 // Game history, kept only in this browser's storage on this device.
-// Each finished round is one game; a heart check adds to the latest one.
+// Each finished round is one game; a Thump-o-meter reading adds to the latest one.
 
 const KEY = 'bitzigo-stats';
 const MAX_GAMES = 300;
@@ -208,18 +208,18 @@ export function statsHtml() {
     kidBars('Hit rate', k => avg(k.acc), v => `${v}%`, 100),
     kidBars('Perfect timing', k => avg(k.timing), v => `${v}%`, 100),
   ].join('') + '</div>';
-  html += `<table class="stats"><tr><th>Player</th><th>Games</th><th>Minutes</th><th>Calories*</th><th>Best score</th><th>Hit rate</th><th>Perfect timing</th><th>Heart</th></tr>`;
+  html += `<table class="stats"><tr><th>Player</th><th>Games</th><th>Minutes</th><th>Calories*</th><th>Best score</th><th>Hit rate</th><th>Perfect timing</th><th>Thump-o-meter</th></tr>`;
   for (const s of summarize(games).values()) {
     html += `<tr><td><button class="kidLink" data-kid="${esc(s.name)}">${dot(s.name)}${esc(s.name)}</button> <span class="age">(${s.age === 12 ? '12+' : s.age})</span></td><td>${s.games}</td><td>${Math.round(s.secs / 60)}</td><td>${s.kcal}</td><td>${s.best.toLocaleString()}</td><td>${pct(avg(s.acc))}</td><td>${pct(avg(s.timing))}</td><td>${s.hr.length ? `♥ ${s.hr[s.hr.length - 1]}` : '–'}</td></tr>`;
   }
-  html += '</table><h3>Recent games</h3><table class="stats"><tr><th>When</th><th>World</th><th>Player</th><th>Score</th><th>Cal*</th><th>Hit rate</th><th>Perfect</th><th>Heart</th></tr>';
+  html += '</table><h3>Recent games</h3><table class="stats"><tr><th>When</th><th>World</th><th>Player</th><th>Score</th><th>Cal*</th><th>Hit rate</th><th>Perfect</th><th>Thumps</th></tr>';
   for (const g of games.slice(-25).reverse()) {
     const when = new Date(g.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     g.players.forEach((r, i) => {
       html += `<tr${i === 0 ? ' class="first"' : ''}><td>${i === 0 ? when : ''}</td><td>${i === 0 ? esc(g.theme) : ''}</td><td>${dot(r.name)}${esc(r.name)}</td><td>${r.score.toLocaleString()}</td><td>${r.kcal ?? '–'}</td><td>${pct(r.accuracy)}</td><td>${pct(r.timing)}</td><td>${r.heartRate ? `♥ ${r.heartRate}` : '–'}</td></tr>`;
     });
   }
-  return html + '</table><p class="note">* Calories are a rough guess from minutes of movement and age, not a measurement.</p>';
+  return html + '</table><p class="note">* Calories are a rough guess from minutes of movement and age, not a measurement. The Thump-o-meter is just for fun. This is not a medical device.</p>';
 }
 
 // Draws the stats into el and handles the period buttons, kid chips and bar taps.

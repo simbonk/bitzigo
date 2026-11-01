@@ -1,4 +1,4 @@
-// Post-workout heart check. Each kid lies down with the phone flat on their
+// Post-workout Thump-o-meter (just for fun, not a medical device). Each kid lies down with the phone flat on their
 // chest; the phone's motion sensors pick up each heartbeat. The signal
 // processing is Sternum's (vendor/sternum/analysis.js, loaded as global DSP).
 
@@ -113,23 +113,23 @@ function button(el, sel) {
 export async function runHeartCheck(players, { cue, sfx }) {
   const el = panel();
   const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  cue('heart');
+  cue('thump');
 
   for (let i = 0; i < players.length; i++) {
     const p = players[i];
     let done = false;
     while (!done) {
       el.innerHTML = `
-        <div class="hc-who">${faceImg(p, 'face xl')}<div><div class="hc-name" style="color:${p.color}">${esc(p.name)}'s heart check</div>
+        <div class="hc-who">${faceImg(p, 'face xl')}<div><div class="hc-name" style="color:${p.color}">${esc(p.name)}'s Thump-o-meter</div>
         <div class="hc-sub">${i + 1} of ${players.length}</div></div></div>
         <ol class="hc-steps">
           <li>Lie down flat on your back.</li>
           <li>A grown-up puts the phone <b>flat on the middle of your chest</b>, screen up.</li>
           <li>Stay <b>still as a statue</b> for 15 seconds. No talking!</li>
         </ol>
-        <button class="big" data-v="go">Start ${esc(p.name)}'s heart check</button>
+        <button class="big" data-v="go">Start ${esc(p.name)}'s Thump-o-meter</button>
         <button class="small" data-v="skip">Skip ${esc(p.name)}</button>
-        <p class="hc-note">Just for fun: the phone feels each heartbeat through the chest. It is not a medical device.</p>`;
+        <p class="hc-note">Just for fun. This is not a medical device. The phone feels the thumps through the chest.</p>`;
       const choice = await button(el, 'button');
       if (choice === 'skip') { done = true; break; }
 
@@ -141,7 +141,7 @@ export async function runHeartCheck(players, { cue, sfx }) {
       if (!rec.seen) {
         rec.stop();
         el.innerHTML = `<p class="hc-big">No motion sensors found</p>
-          <p>${permResult === 'denied' ? 'Motion access was turned off. Reload the page and choose Allow when asked.' : 'Run the game on the phone itself (Safari on iPhone) to do the heart check.'}</p>
+          <p>${permResult === 'denied' ? 'Motion access was turned off. Reload the page and choose Allow when asked.' : 'Run the game on the phone itself (Safari on iPhone) to use the Thump-o-meter.'}</p>
           <button class="big" data-v="ok">OK</button>`;
         await button(el, 'button');
         el.classList.add('hidden');
@@ -170,7 +170,7 @@ export async function runHeartCheck(players, { cue, sfx }) {
           count.textContent = Math.max(1, Math.ceil(left));
           if (left <= 0) {
             started = true; t0 = tn; rec.start(); sfx.ready();
-            phase.textContent = 'Listening to your heart. Stay still!';
+            phase.textContent = 'Listening for thumps. Stay still!';
           }
         } else {
           const el2 = tn - t0;
@@ -181,7 +181,7 @@ export async function runHeartCheck(players, { cue, sfx }) {
         if (tn - lastLive > 2) {
           lastLive = tn;
           const q = rec.live();
-          live.textContent = q ? `${Math.round(q.hr)} beats a minute` : 'finding the heartbeat…';
+          live.textContent = q ? `${Math.round(q.hr)} thumps a minute` : 'finding the thumps…';
           if (q) heart.style.animationDuration = `${60 / q.hr}s`;
         }
       }
@@ -192,18 +192,18 @@ export async function runHeartCheck(players, { cue, sfx }) {
       const good = Number.isFinite(hr) && res.quality.grade !== 'poor';
       if (good) {
         p.heartRate = Math.round(hr);
-        cue('heart_done');
+        cue('thump_done');
         el.innerHTML = `
           <div class="hc-who">${faceImg(p, 'face xl')}<div class="hc-name" style="color:${p.color}">${esc(p.name)}</div></div>
           <div class="hc-heart"><span class="heartIcon" style="animation-duration:${60 / p.heartRate}s">♥</span><span class="hc-count">${p.heartRate}</span></div>
-          <p class="hc-live">beats a minute${res.quality.grade === 'fair' ? ' (a bit wobbly, but close)' : ''}</p>
+          <p class="hc-live">thumps a minute${res.quality.grade === 'fair' ? ' (a bit wobbly, but close)' : ''}</p>
           <button class="big" data-v="next">${i + 1 < players.length ? `Next: ${esc(players[i + 1].name)}` : 'See the results!'}</button>
           <button class="small" data-v="again">Try again</button>`;
         const c = await button(el, 'button');
         done = c !== 'again';
       } else {
         cue('oops');
-        el.innerHTML = `<p class="hc-big">Couldn't feel the heartbeat</p>
+        el.innerHTML = `<p class="hc-big">Couldn't feel the thumps</p>
           <p>Make sure the phone is flat on the middle of the chest, and that nobody moves or talks.</p>
           <button class="big" data-v="again">Try again</button><button class="small" data-v="skip">Skip ${esc(p.name)}</button>`;
         const c = await button(el, 'button');
