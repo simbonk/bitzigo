@@ -331,11 +331,14 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   else if (B) items.push({ z: 0.9, draw: () => drawBubbleGag(ctx, L, p, B, time) });
   else if (!T && !p.paused) items.push({ z: 1.1, draw: () => drawFlyby(ctx, L, p, time) });
   // Water over the swimmer's legs.
-  if (T?.type === 'swim') items.push({ z: -0.2, draw: () => {
-    const wy = L.ground - L.S * 1.1 + Math.sin(time * 4) * L.S * 0.05;
-    rect(ctx, L.x, wy, L.w, L.h - wy, 'rgba(47,134,214,0.92)');
-    rect(ctx, L.x, wy, L.w, Math.max(1, L.S * 0.08), '#bfe3ff');
-    if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, L.cx + (i - 2.5) * L.S * 0.35, wy - L.S * (0.2 + 0.5 * T.splash) - (i % 2) * L.S * 0.2, L.S * 0.15, L.S * 0.15, '#e6f4ff');
+  if (T?.type === 'swim' && !(T.party > 0)) items.push({ z: -0.2, draw: () => {
+    // Only round the swimmer, who gets smaller the further out they are.
+    const W = swimLane(L, T), S2 = W.S;
+    const wy = W.ground - S2 * 1.1 + Math.sin(time * 4) * S2 * 0.05;
+    const x0 = W.cx - S2 * 2.2, ww = S2 * 4.4;
+    rect(ctx, x0, wy, ww, Math.min(L.h, W.ground + S2 * 2) - wy, '#2f86d6');
+    rect(ctx, x0, wy, ww, Math.max(1, S2 * 0.1), '#bfe3ff');
+    if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, W.cx + (i - 2.5) * S2 * 0.35, wy - S2 * (0.2 + 0.5 * T.splash) - (i % 2) * S2 * 0.2, S2 * 0.15, S2 * 0.15, '#e6f4ff');
   } });
   // The pond sits under everything; other break props draw over the kid.
   if (T?.type === 'chops') items.push({ z: FRONT_Z, draw: () => drawLog(ctx, L, T, time) });
@@ -1480,7 +1483,26 @@ function oneEuro(state, key, x, t) {
   return s.x;
 }
 
+// Swim: the island sits out on the lake, and the swimmer's spot on the
+// water (how far out, and so how small) follows their strokes.
+const ISLAND_Z = 0.42;
+function islandGeom(L) {
+  const { y, s } = project(L, ISLAND_Z);
+  const u = L.S * s * 1.15;
+  return { y, u, top: y - u * 0.9, s };
+}
+function swimLane(L, T) {
+  if (T.party > 0) {
+    // Standing on the island, dancing.
+    const I = islandGeom(L);
+    return { ...L, ground: I.top, S: L.S * I.s * 1.3 };
+  }
+  const k = clamp(T.shown, 0, 1), { y, s } = project(L, ISLAND_Z * 0.97 * k);
+  return { ...L, ground: y, S: L.S * s };
+}
+
 function drawAvatar(ctx, L, p, time, ch) {
+  if (p.throwing?.type === 'swim') L = swimLane(L, p.throwing);
   let P;
   if (p.pts && p.base) {
     // Smooth out camera jitter so the character doesn't twitch.
@@ -1518,10 +1540,15 @@ function drawAvatar(ctx, L, p, time, ch) {
     if (a) { P.lw = [a.x, a.y]; P.le = [(P.ls[0] + a.x) / 2 - 0.15, (P.ls[1] + a.y) / 2]; }
     if (b) { P.rw = [b.x, b.y]; P.re = [(P.rs[0] + b.x) / 2 + 0.15, (P.rs[1] + b.y) / 2]; }
   }
+  if (T?.type === 'swim' && T.party > 0) {
+    // A little victory dance on the island.
+    const beat = Math.floor(time * 4) % 4;
+    P = cartoonPose([{ discoL: true }, { clap: true }, { discoR: true }, { reach: true, jump: true }][beat]);
+  }
   const shake = p.bonk > 0 ? Math.sin(time * 60) * S * 0.1 * (p.bonk / 0.5) : 0;
   // Shadow stays on the ground.
   const sw = S * (1.5 - p.lift * 0.5);
-  shadow(ctx, L.cx + dx, L.ground + S * 0.02, sw, S * (0.34 - p.lift * 0.1), 0.22);
+  if (T?.type !== 'swim') shadow(ctx, L.cx + dx, L.ground + S * 0.02, sw, S * (0.34 - p.lift * 0.1), 0.22);
   const flash = p.bonk > 0 && Math.floor(time * 12) % 2 === 0;
   const ox = L.cx + shake + dx, oy = L.ground - 1.65 * S - lift;
   const runT = p.run ?? p.clock ?? time, steps = runT * STEP_RATE;
@@ -1544,11 +1571,12 @@ function drawAvatar(ctx, L, p, time, ch) {
     const FEET = 1.68;
     P = Object.fromEntries(Object.entries(P).map(([k, v]) => [k, [v[0] * sx, FEET + (v[1] - FEET) * sy]]));
   }
-  // Wide eyes and an "O" mouth when something is about to arrive.
-  const wow = p.obstacles?.some(o => {
-    if (o.result || o.kind === 'gear') return false;
+  // Scared when the crazy bird is about to arrive (or the boss swoops).
+  const bm = T?.type === 'boss' ? T.boss?.mode : null;
+  const scared = bm === 'warn' || bm === 'dive' || p.obstacles?.some(o => {
+    if (o.result || o.kind !== 'bird') return false;
     const z = (o.arrive - p.clock) / o.travel;
-    return z > -0.03 && z < (o.kind === 'bird' ? 0.45 : 0.22);
+    return z > -0.03 && z < 0.45;
   });
   // ...and glows brighter the lower they go.
   if (coil > 0.05) {
@@ -1566,11 +1594,15 @@ function drawAvatar(ctx, L, p, time, ch) {
   // round to face the camera, with what they chop or knock over between them
   // and the camera. For the fire and the boss, both down the road and up in
   // the sky, they keep facing away.
+  // Each head turn pulls a face: angry when bonked, scared when the bird is
+  // coming, happy after a move or on a streak.
   const onFire = p.fx?.some(e => e.type === 'fire');
-  const body = (T ? T.type !== 'boss' && T.type !== 'fire' : !(p.run > 0.3)) || p.paused;
-  const glance = body || p.bonk > 0 || p.bump > 0.15 || onFire;
-  p.turn = glance ? 1 : 0; // a quick, cheesy snap round: no spinning
-  const look = { sx, sy, wow, turn: p.turn, back: !body };
+  const party = T?.type === 'swim' && T.party > 0;
+  const away = T ? ['boss', 'fire', 'swim'].includes(T.type) && !party : p.run > 0.3;
+  const body = !away || p.paused;
+  const mood = p.bonk > 0 ? 'angry' : scared ? 'scared' : party || p.bump > 0.15 || onFire ? 'happy' : null;
+  p.turn = body || mood ? 1 : 0; // a quick, cheesy snap round: no spinning
+  const look = { sx, sy, wow: mood === 'scared', mood, turn: p.turn, back: !body };
   queueCharacter(ctx, { x: L.x, w: L.w, h: L.h }, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
@@ -1848,10 +1880,29 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
       px(1, 5, 6, 3, '#ffb3c7'); px(2.2, 6, 1, 1, '#c25a7a'); px(4.8, 6, 1, 1, '#c25a7a');
       break;
   }
-  if (look.wow && !flash && ch.id !== 'none') {
-    // Surprised "O" mouth.
-    const my = { frog: 4.6, fox: 6.0, cow: 6.4, cat: 5.8, berner: 6.0, robot: 5.4, hedgehog: 6.0, panda: 6.4 }[ch.id] ?? 5.9;
+  const mood = flash || ch.id === 'none' ? null : look.mood;
+  // Lines that show up on a dark face too.
+  const hc = parseInt(head.slice(1, 7), 16), dark = head.length >= 7 && ((hc >> 16) * 0.3 + ((hc >> 8) & 255) * 0.59 + (hc & 255) * 0.11) < 90;
+  const line = dark ? '#ffffff' : '#1b1b22';
+  const my = { frog: 4.6, fox: 6.0, cow: 6.4, cat: 5.8, berner: 6.0, robot: 5.4, hedgehog: 6.0, panda: 6.4 }[ch.id] ?? 5.9;
+  const ey = { frog: -0.7, robot: 3.1, panda: 3.2, axolotl: 3, dino: 2.8, ninja: 2.8, hedgehog: 2.4, cow: 2.6, berner: 2.8, cat: 2.9, firefighter: 3.2 }[ch.id] ?? 3;
+  if (mood === 'scared') {
+    // Surprised "O" mouth and a bead of sweat.
     px(3.1, my, 1.8, 1.6, '#3a1020'); px(3.5, my + 0.6, 1, 0.7, '#ff6b81');
+    px(7.2, ey - 1.2, 0.7, 1, '#7cc4ff'); px(7.4, ey - 1.6, 0.35, 0.5, '#7cc4ff');
+  } else if (mood === 'happy') {
+    // Eyes squeezed into happy arcs, and a big open grin.
+    for (const ex of [1.4, 5.0]) {
+      px(ex - 0.2, ey - 0.1, 2, 2, head === '#ffffff' ? '#f0f0f0' : head);
+      px(ex - 0.1, ey + 0.8, 0.5, 0.6, line); px(ex + 0.3, ey + 0.3, 0.9, 0.55, line); px(ex + 1.1, ey + 0.8, 0.5, 0.6, line);
+    }
+    px(2.4, my - 0.1, 3.2, 0.6, '#1b1b22'); px(2.7, my + 0.5, 2.6, 0.9, '#3a1020'); px(3.2, my + 0.9, 1.6, 0.6, '#ff6b81');
+  } else if (mood === 'angry') {
+    // Brows slammed down in a V, a cross frown and red cheeks.
+    px(0.9, ey - 1.1, 1.1, 0.6, line); px(1.9, ey - 0.65, 1.1, 0.6, line);
+    px(5.0, ey - 0.65, 1.1, 0.6, line); px(6.0, ey - 1.1, 1.1, 0.6, line);
+    px(3.0, my + 0.3, 2.0, 0.5, '#1b1b22'); px(2.6, my + 0.7, 0.5, 0.5, '#1b1b22'); px(4.9, my + 0.7, 0.5, 0.5, '#1b1b22');
+    px(0.2, my - 1.1, 1.6, 0.9, '#ff4d5e'); px(6.2, my - 1.1, 1.6, 0.9, '#ff4d5e');
   }
   for (const mode of VEC ? ['outline', 'fill'] : ['fill']) {
     RMODE = mode;
@@ -1989,7 +2040,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     const ducking = bm === 'warn' || bm === 'dive';
     const kind = ducking ? 'bird' : { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop', swim: 'rope' }[type] || 'throw';
     const B = p.throwing;
-    const word = type === 'boss' ? (ducking ? 'DUCK!' : bm === 'dead' || bm === 'done' ? 'HOORAY!' : 'THROW BOMBS!') : type === 'swim' ? `SWIM! ${B.goal - B.dist} to go` : type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
+    const word = type === 'boss' ? (ducking ? 'DUCK!' : bm === 'dead' || bm === 'done' ? 'HOORAY!' : 'THROW BOMBS!') : type === 'swim' ? (B.party > 0 ? 'YOU MADE IT!' : `SWIM! ${B.goal - B.dist} to go`) : type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
     if (kind === 'dance' && B.move) {
       // Picture card of the move to copy, with a shrinking timer bar.
       const m = B.move, k = Math.min(1, m.t / m.dur);
@@ -2469,23 +2520,27 @@ function drawMini(ctx, L, p, T, time) {
       ctx.restore();
     }
   } else if (T.type === 'swim') {
-    // A pond across the lane; the far shore comes closer with every stroke.
-    const k = clamp(T.shown, 0, 1);
-    const shoreY = L.horizon + (L.ground - S * 2.2 - L.horizon) * k;
+    // A lake all the way to the horizon, with a little island out in the
+    // middle. The swimmer heads out to it, getting smaller as they go.
     rect(ctx, L.x, L.horizon, L.w, L.h - L.horizon, '#2f86d6');
-    rect(ctx, L.x, shoreY - S * 0.5, L.w, S * 0.5, '#e8cf8a');
-    rect(ctx, L.x, shoreY - S * 0.5, L.w, Math.max(1, S * 0.08), '#5fb83b');
-    // Finish flag on the far shore.
-    rect(ctx, L.cx - S * 0.03, shoreY - S * 1.5, S * 0.08, S * 1.0, '#ffffff');
-    rect(ctx, L.cx + S * 0.05, shoreY - S * 1.5, S * 0.5, S * 0.3, '#ff5d73');
-    for (let r = 0; r < 7; r++) {
-      const yy = shoreY + ((r + 0.5) / 7) * (L.h - shoreY), wx = L.x + (((r * 0.37 + time * 0.08) % 1)) * L.w;
-      rect(ctx, wx, yy, S * 0.7, Math.max(1, S * 0.07), '#7cc4ff');
+    for (let r = 0; r < 12; r++) {
+      const q = (r + 0.5) / 12, yy = L.horizon + q * q * (L.h - L.horizon);
+      const wx = L.x + (((r * 0.37 + time * 0.05) % 1)) * L.w;
+      rect(ctx, wx, yy, S * (0.2 + q * 0.8), Math.max(1, S * 0.07 * (0.4 + q)), '#7cc4ff');
     }
-    for (let k2 = 0; k2 < 3; k2++) {
-      const lx = L.x + ((k2 * 0.31 + 0.12 + p.index * 0.17) % 1) * L.w, ly = shoreY + (L.ground - shoreY) * (0.25 + k2 * 0.22);
-      rect(ctx, lx, ly, S * 0.6, S * 0.18, '#3f9e4a');
-    }
+    const I = islandGeom(L), u = I.u;
+    rect(ctx, L.cx - u * 3.4, I.y - u * 0.15, u * 6.8, u * 0.5, '#7cc4ff');          // foam
+    block(ctx, L.cx - u * 3, I.top, u * 6, I.y - I.top + u * 0.1, '#e8cf8a', 0.2);   // sand
+    rect(ctx, L.cx - u * 2.2, I.top - u * 0.25, u * 4.4, u * 0.3, '#e8cf8a');
+    // A palm tree, swaying.
+    const sway = Math.sin(time * 1.5) * u * 0.3;
+    for (let i = 0; i < 4; i++) rect(ctx, L.cx + u * 1.6 + sway * i / 4, I.top - u * (0.6 + i * 0.6), u * 0.45, u * 0.65, i % 2 ? '#8a5220' : '#a8672c');
+    const tx = L.cx + u * 1.8 + sway, ty = I.top - u * 2.8;
+    for (const [dx, dy, w] of [[-2.2, 0.2, 2.2], [0.2, 0.2, 2.2], [-1.4, -0.5, 1.6], [0.1, -0.5, 1.6], [-0.5, -0.8, 1]]) rect(ctx, tx + dx * u, ty + dy * u, w * u, u * 0.5, '#3f9e4a');
+    rect(ctx, tx - u * 0.1, ty + u * 0.5, u * 0.45, u * 0.45, '#6b3e18');
+    // Finish flag.
+    rect(ctx, L.cx - u * 1.9, I.top - u * 2.4, u * 0.18, u * 2.4, '#ffffff');
+    rect(ctx, L.cx - u * 1.72, I.top - u * 2.4, u * 1.1, u * 0.7, '#ff5d73');
   } else if (T.type === 'rain') {
     // Rainstorm: dark streaks, a roof over the hands, and two buckets.
     const top = L.horizon * 0.2;

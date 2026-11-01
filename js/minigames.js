@@ -89,7 +89,7 @@ export function startMini(p, B) {
     case 'goalie': Object.assign(B, { shots: [], shotT: 1.0 }); break;
     case 'fly': Object.assign(B, { flaps: 0, pan: 0, flapAt: -9, st: [] }); break;
     case 'chops': Object.assign(B, { chops: 0, flash: 0, st: [] }); break;
-    case 'swim': Object.assign(B, { dist: 0, goal: Math.round(clamp(10 + p.skill * 0.6, 10, 16)), shown: 0, crossed: 0, splash: 0, st: [] }); break;
+    case 'swim': Object.assign(B, { party: 0, dist: 0, goal: Math.round(clamp(10 + p.skill * 0.6, 10, 16)), shown: 0, crossed: 0, splash: 0, st: [] }); break;
     case 'climb': Object.assign(B, { height: 0, pan: 0, reachAt: -9, st: [] }); break;
     case 'tray': Object.assign(B, { x: 0, items: [], stack: [], dropT: 1.0, wobble: 0 }); break;
     case 'wyr': Object.assign(B, { cand: -1, since: 0, hold: 0 }); break; // the question itself is shared: see wyr.js
@@ -179,15 +179,16 @@ export function handsMini(p, B, hands, now) {
     trackSwings(B.st, hands).forEach(s => {
       if (!upSwing(s, -0.6)) return;
       s.used = true;
+      if (B.party > 0) return; // dancing on the island
       B.dist++;
       B.splash = 0.3;
       p.counts.swim++;
       p.addPoints(20 * p.breakMult, false);
       p.onEvent?.('splat');
       if (B.dist >= B.goal) {
+        // Made it to the island: a little dance, then back in for another go.
         B.crossed++;
-        B.dist = 0;
-        B.shown = -0.3;
+        B.party = 2.2;
         p.addPoints(250 * p.breakMult, pick(['MADE IT!', 'SPLASH DOWN!', 'SUPER SWIMMER!']));
         p.onEvent?.('save');
       }
@@ -342,6 +343,7 @@ export function updateMini(p, B, dt) {
       B.flash = Math.max(0, B.flash - dt);
       break;
     case 'swim':
+      if (B.party > 0 && (B.party -= dt) <= 0) { B.party = 0; B.dist = 0; B.shown = 0; }
       B.shown += (B.dist / B.goal - B.shown) * Math.min(1, dt * 5);
       B.splash = Math.max(0, B.splash - dt);
       break;
