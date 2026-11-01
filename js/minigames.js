@@ -10,8 +10,9 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (h, x, y) => Math.hypot(h.x - x, h.y - y);
 
-// (The dance-off and rainstorm are still here but out of the rotation: kids found them confusing.)
-export const MINI = ['kaiju', 'bugs', 'goalie', 'climb', 'tray', 'fly', 'chops', 'wyr', 'swim'];
+// (The dance-off, rainstorm and city smash are still here but out of the rotation: kids found
+// the first two confusing, and the city smash didn't pick up their moves well enough.)
+export const MINI = ['bugs', 'goalie', 'climb', 'tray', 'fly', 'chops', 'wyr', 'swim'];
 
 // Keyboard stand-in for hands: [up, left, down, right] held.
 export function keyHands(u, l, d, r) {
