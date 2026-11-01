@@ -20,7 +20,8 @@ export const LM = {
 // Obstacles and the move that beats each one.
 //   log   - brick wall on the ground: JUMP
 //   crate - flying crate on one side: PUNCH that side (any arm in the middle)
-//   bird  - crazy bird flying at your head from one side: LEAN the other way
+//   bird  - crazy bird swooping at your head: DUCK under it. It gets mad when
+//           you duck it, and laughs at you when it bonks you.
 //   rope  - puddle with a rope over it: BOTH HANDS UP to grab and swing
 export const KINDS = ['log', 'crate', 'bird', 'rope'];
 
@@ -63,7 +64,7 @@ export function tuning(skill) {
     gap: lerp(3.6, 1.05, t),     // seconds between obstacles
     window: lerp(0.65, 0.3, t),  // timing forgiveness, seconds either side
     sides: skill >= 2.5,         // crates come left or right (not just middle)
-    birds: skill >= 1.5,         // head-dodging birds
+    birds: skill >= 1.5,         // swooping birds to duck under
     ropes: skill >= 3,           // rope swings
     combos: skill >= 6.5,        // quick pairs
   };
@@ -102,7 +103,7 @@ export function handsOf(pts, f) {
   });
 }
 
-const ACTS = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'throw'];
+const ACTS = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'duck', 'throw'];
 
 export class Player {
   constructor(index, { name, age, color }) {
@@ -168,11 +169,15 @@ export class Player {
     const B = this.base;
     const t = B.torso;
     const lean = f.nose.x - B.noseX;
+    // How far the hips and the head have dropped below standing, in torsos.
+    const dropH = (f.hip.y - B.hipY) / t, dropN = (f.nose.y - B.noseY) / t;
     const raw = {
       jump: B.hipY - f.hip.y > 0.13 * t && B.noseY - f.nose.y > 0.1 * t,
       left: false, right: false, reach: false,
       leanL: lean < -0.3 * t,
       leanR: lean > 0.3 * t,
+      // A duck: both the hips and the head clearly lower than standing.
+      duck: Math.min(dropH, dropN) > 0.35,
       throw: false,
     };
     let up = 0;
@@ -203,7 +208,6 @@ export class Player {
     // up to 0.5 torso). Only a real duck counts: both the hips and the head
     // have to drop clearly, so leaning in, bouncing on the spot or a wobbly
     // hip reading leaves the character standing tall.
-    const dropH = (f.hip.y - B.hipY) / t, dropN = (f.nose.y - B.noseY) / t;
     const duck = clamp(Math.min(dropH, dropN) - 0.3, 0, 0.5);
     this.crouch = (this.crouch || 0) + (duck - (this.crouch || 0)) * 0.25;
     if (MINI.includes(brk)) handsMini(this, this.throwing, this.hands, now);
@@ -333,8 +337,7 @@ export class Player {
     switch (o.kind) {
       case 'log': return this.fresh('jump');
       case 'rope': return this.fresh('reach');
-      // A bird on the left means lean right, and the other way round.
-      case 'bird': return this.fresh(o.side === 'left' ? 'leanR' : 'leanL');
+      case 'bird': return this.fresh('duck');
       case 'crate':
         if (o.side === 'mid') return this.fresh('left') || this.fresh('right');
         return this.fresh(o.side);
@@ -673,6 +676,8 @@ export class Player {
       this.onEvent?.('streak');
     }
     if (o.kind === 'crate') this.burst(o);
+    // Ducked the bird: it flaps about above them, fuming.
+    if (o.kind === 'bird') this.birdMood(o, 'mad');
     this.onEvent?.('hit', o);
   }
 
@@ -685,7 +690,9 @@ export class Player {
     this.missRun++;
     this.bonk = 0.5;
     if (!o.tutorial) this.setSkill(this.skill - 0.8);
-    this.pop(o.tutorial ? 'Try again!' : o.kind === 'rope' ? 'SPLASH!' : o.kind === 'bird' ? 'Squawk!' : 'Oops!', '#ffd0d0');
+    this.pop(o.tutorial ? 'Try again!' : o.kind === 'rope' ? 'SPLASH!' : o.kind === 'bird' ? 'HA HA HA!' : 'Oops!', '#ffd0d0');
+    // Bonked by the bird: it hovers there laughing at them.
+    if (o.kind === 'bird') this.birdMood(o, 'laugh');
     if (o.kind === 'rope') this.fx.push({ type: 'splash', parts: sprinkle(16), t: 0, life: 0.8 });
     this.onEvent?.('miss', o);
   }
@@ -702,6 +709,12 @@ export class Player {
   get level() { return Math.floor(this.skill) + 1; }
 
   pop(text, color) { this.fx.push({ type: 'text', text, color, t: 0, life: 1.1 }); }
+
+  // The crazy bird's reaction after it passes: 'mad' (ducked) or 'laugh' (bonk).
+  birdMood(o, mood) {
+    this.fx = this.fx.filter(e => e.type !== 'bird');
+    this.fx.push({ type: 'bird', mood, side: o.side || 'left', t: 0, life: 1.8 });
+  }
 
   burst(o) {
     this.fx.push({ type: 'burst', kind: o.kind, side: o.side, parts: sprinkle(14), t: 0, life: 0.7 });
@@ -777,7 +790,7 @@ const BIG_WORDS = ['KAPOW!', 'BOOM!', 'WHAM!', 'ZOINKS!', 'BAM!', 'YEEHAW!', 'WO
 const WORDS = {
   crate: ['SMASH!', 'KAPOW!', 'CRUNCH!'],
   log: ['BOING!', 'SPROING!', 'HOP!'],
-  bird: ['DODGED!', 'NOPE!', 'SWOOSH!'],
+  bird: ['DUCKED!', 'MISSED ME!', 'SWOOSH!'],
   rope: ['AAAH-AH-AAAH!', 'WHEEE!', 'SWING!'],
 };
 const CONFETTI = ['#ff5d73', '#ffe14d', '#3ddc84', '#3fa7ff', '#b57bff', '#ff9f1c', '#ffffff'];
@@ -809,7 +822,7 @@ function tower() {
 
 // Keyboard test controls: [up, left, down, right] for players 1..4.
 // Up jumps (or throws in throw time), left/right punch, both = hands up,
-// and down plus left/right leans.
+// down ducks, and down plus left/right leans.
 export const KEYMAP = [
   ['KeyW', 'KeyA', 'KeyS', 'KeyD'],
   ['KeyT', 'KeyF', 'KeyG', 'KeyH'],
@@ -825,5 +838,6 @@ export function keyActions(keys, i) {
     jump: keys.has(u),
     left: L && !R && !D, right: R && !L && !D, reach: L && R && !D,
     leanL: D && L, leanR: D && R,
+    duck: D && !L && !R,
   };
 }

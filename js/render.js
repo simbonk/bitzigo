@@ -44,7 +44,7 @@ export const THEMES = {
 const KIND_INFO = {
   log: { word: 'JUMP!', color: '#ffb02e' },
   crate: { word: 'PUNCH!', color: '#ffe14d' },
-  bird: { word: 'LEAN!', color: '#ff5d73' },
+  bird: { word: 'DUCK!', color: '#ff5d73' },
   rope: { word: 'HANDS UP!', color: '#7df9ff' },
 };
 
@@ -440,6 +440,78 @@ function drawTree(ctx, L, z, side, prop) {
   }
 }
 
+// The crazy bird, centred on (bx, by), b pixels across. mood: null (on its way,
+// cross), 'mad' (red in the face, steaming) or 'laugh' (eyes shut, beak open).
+function drawBird(ctx, bx, by, b, flap, mood) {
+  const body = mood === 'mad' ? '#ff2a3d' : '#ff5d73', wing = mood === 'mad' ? '#a8102a' : '#c9304a';
+  block(ctx, bx - b / 2, by - b / 2, b, b * 0.85, body, 0.2);                 // body
+  rect(ctx, bx - b * 0.15, by + b * 0.05, b * 0.3, b * 0.25, '#ffd0d8');      // belly
+  rect(ctx, bx - b * 0.75, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, wing); // wings
+  rect(ctx, bx + b * 0.45, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, wing);
+  if (mood === 'laugh') {
+    // Squeezed-shut eyes, a wide open beak, and happy tears.
+    rect(ctx, bx - b * 0.32, by - b * 0.2, b * 0.24, b * 0.07, '#1b1b22');
+    rect(ctx, bx + b * 0.08, by - b * 0.2, b * 0.24, b * 0.07, '#1b1b22');
+    rect(ctx, bx - b * 0.36, by - b * 0.08, b * 0.08, b * 0.14, '#7df9ff');
+    rect(ctx, bx + b * 0.28, by - b * 0.08, b * 0.08, b * 0.14, '#7df9ff');
+    rect(ctx, bx - b * 0.14, by - b * 0.06, b * 0.28, b * 0.1, '#ffb02e');    // top beak
+    rect(ctx, bx - b * 0.1, by + b * 0.04, b * 0.2, b * 0.12, '#7a1020');     // open mouth
+    rect(ctx, bx - b * 0.12, by + b * 0.16, b * 0.24, b * 0.08, '#ffb02e');   // bottom beak
+  } else {
+    rect(ctx, bx - b * 0.3, by - b * 0.25, b * 0.2, b * 0.22, '#ffffff');    // eyes
+    rect(ctx, bx + b * 0.1, by - b * 0.25, b * 0.2, b * 0.22, '#ffffff');
+    rect(ctx, bx - b * 0.24, by - b * 0.19, b * 0.1, b * 0.12, '#1b1b22');
+    rect(ctx, bx + b * 0.16, by - b * 0.19, b * 0.1, b * 0.12, '#1b1b22');
+    // Angry brows, steeper when it's mad.
+    const tilt = mood === 'mad' ? 0.1 : 0;
+    rect(ctx, bx - b * 0.35, by - b * (0.36 + tilt), b * 0.14, b * 0.07, '#1b1b22');
+    rect(ctx, bx - b * 0.21, by - b * 0.36, b * 0.14, b * 0.07, '#1b1b22');
+    rect(ctx, bx + b * 0.07, by - b * 0.36, b * 0.14, b * 0.07, '#1b1b22');
+    rect(ctx, bx + b * 0.21, by - b * (0.36 + tilt), b * 0.14, b * 0.07, '#1b1b22');
+    rect(ctx, bx - b * 0.1, by - b * 0.02, b * 0.2, b * 0.18, '#ffb02e');    // beak
+  }
+  rect(ctx, bx - b * 0.1, by - b * 0.6, b * 0.08, b * 0.18, wing);           // tuft
+  rect(ctx, bx + b * 0.04, by - b * 0.66, b * 0.08, b * 0.24, wing);
+}
+
+// After a bird passes it hangs about over the kid's head for a moment: hopping
+// mad and steaming if they ducked it, rocking with laughter if it bonked them.
+// Then it flaps off up and out of the lane.
+function drawBirdMood(ctx, L, e) {
+  const k = e.t / e.life, dir = e.side === 'left' ? -1 : 1, S = L.S;
+  const leave = clamp((k - 0.7) / 0.3, 0, 1);
+  const flap = Math.floor(e.t * (e.mood === 'mad' ? 16 : 10)) % 2;
+  let bx = L.cx + dir * S * 1.1 + dir * leave * S * 3;
+  let by = L.ground - S * 4.1 - leave * S * 3;
+  if (e.mood === 'mad') bx += Math.sin(e.t * 60) * S * 0.07;                 // shaking with rage
+  else by += Math.abs(Math.sin(e.t * 14)) * -S * 0.18;                       // bouncing with laughter
+  const b = S * 1.0;
+  drawBird(ctx, bx, by, b, flap, e.mood);
+  if (e.mood === 'mad') {
+    // Puffs of steam out of its head.
+    for (let i = 0; i < 3; i++) {
+      const q = (e.t * 1.6 + i / 3) % 1, sz = Math.max(1, b * (0.12 + q * 0.14));
+      ctx.save();
+      ctx.globalAlpha *= 0.85 * (1 - q);
+      rect(ctx, bx + (i - 1) * b * 0.35 - sz / 2, by - b * (0.7 + q * 0.9), sz, sz, '#ffffff');
+      ctx.restore();
+    }
+  } else {
+    // Little "ha" notes bubbling up.
+    for (let i = 0; i < 3; i++) {
+      const q = (e.t * 1.3 + i / 3) % 1, sz = Math.max(1, b * 0.14);
+      ctx.save();
+      ctx.globalAlpha *= 1 - q;
+      const hx = bx - dir * b * (0.6 + q * 0.6) + (i - 1) * b * 0.2, hy = by - b * (0.5 + q * 1.1);
+      // A tiny pixel "H".
+      rect(ctx, hx, hy, sz * 0.5, sz * 1.6, '#ffe14d');
+      rect(ctx, hx + sz, hy, sz * 0.5, sz * 1.6, '#ffe14d');
+      rect(ctx, hx, hy + sz * 0.55, sz * 1.5, sz * 0.5, '#ffe14d');
+      ctx.restore();
+    }
+  }
+}
+
 function drawObstacle(ctx, L, o, z) {
   const { y, s } = project(L, z);
   const u = L.S * s;
@@ -457,25 +529,15 @@ function drawObstacle(ctx, L, o, z) {
     for (let k = 1; k < 5; k++) rect(ctx, x0 + bw * k, y - hh * 0.7, Math.max(1, u * 0.06), hh * 0.65, '#a8431a');
     rect(ctx, x0, y - hh * 0.4, w, Math.max(1, u * 0.06), '#a8431a');
   } else if (o.kind === 'bird') {
-    // A crazy bird flying at head height on one side: lean the other way.
-    const dir = o.side === 'left' ? -1 : 1;
-    const flap = Math.floor((o.arrive - z * o.travel) * 8 + z * 40) % 2;
-    const bx = L.cx + dir * u * 0.55 + Math.sin(z * 30) * u * 0.15, by = y - u * 3.35;
-    const b = u * 0.95;
-    shadow(ctx, bx, y, b * 1.1, Math.max(1, u * 0.22), 0.14);
-    block(ctx, bx - b / 2, by - b / 2, b, b * 0.85, '#ff5d73', 0.2);        // body
-    rect(ctx, bx - b * 0.15, by + b * 0.05, b * 0.3, b * 0.25, '#ffd0d8');    // belly
-    rect(ctx, bx - b * 0.75, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, '#c9304a'); // wings
-    rect(ctx, bx + b * 0.45, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, '#c9304a');
-    rect(ctx, bx - b * 0.3, by - b * 0.25, b * 0.2, b * 0.22, '#ffffff');    // eyes
-    rect(ctx, bx + b * 0.1, by - b * 0.25, b * 0.2, b * 0.22, '#ffffff');
-    rect(ctx, bx - b * 0.24, by - b * 0.19, b * 0.1, b * 0.12, '#1b1b22');
-    rect(ctx, bx + b * 0.16, by - b * 0.19, b * 0.1, b * 0.12, '#1b1b22');
-    rect(ctx, bx - b * 0.35, by - b * 0.36, b * 0.28, b * 0.07, '#1b1b22');  // angry brows
-    rect(ctx, bx + b * 0.07, by - b * 0.36, b * 0.28, b * 0.07, '#1b1b22');
-    rect(ctx, bx - b * 0.1, by - b * 0.02, b * 0.2, b * 0.18, '#ffb02e');    // beak
-    rect(ctx, bx - b * 0.1, by - b * 0.6, b * 0.08, b * 0.18, '#c9304a');    // tuft
-    rect(ctx, bx + b * 0.04, by - b * 0.66, b * 0.08, b * 0.24, '#c9304a');
+    // A crazy bird swooping in from one side at head height: duck under it.
+    // Once it has passed, its reaction (mad or laughing) is drawn as an effect.
+    if (!o.result) {
+      const dir = o.side === 'left' ? -1 : 1;
+      const flap = Math.floor((o.arrive - z * o.travel) * 8 + z * 40) % 2;
+      const bx = L.cx + dir * u * (0.15 + clamp(z * 3, 0, 1) * 0.6) + Math.sin(z * 30) * u * 0.15, by = y - u * 3.35;
+      shadow(ctx, bx, y, u * 1.05, Math.max(1, u * 0.22), 0.14);
+      drawBird(ctx, bx, by, u * 0.95, flap, null);
+    }
   } else if (o.kind === 'rope') {
     // A muddy puddle with a rope hanging over it: grab it with both hands.
     const w = roadHalf(L, y) * 1.9, d = Math.max(2, u * 0.45);
@@ -746,6 +808,8 @@ function drawBursts(ctx, L, p) {
         const sz = Math.max(1, q.r * L.S * 1.4);
         rect(ctx, x, y, sz, sz * (Math.floor(e.t * 12 + q.x * 10) % 2 ? 1 : 0.5), q.c);
       }
+    } else if (e.type === 'bird') {
+      drawBirdMood(ctx, L, e);
     } else if (e.type === 'splash') {
       for (const q of e.parts) {
         const d = q.sp * k * L.S * 1.8;
@@ -1497,7 +1561,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
 
   if (opts.debug) {
     const a = p.act;
-    const on = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'throw'].filter(k => a[k]).join(' ') || '-';
+    const on = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'duck', 'throw'].filter(k => a[k]).join(' ') || '-';
     ctx.font = `${R(fs * 0.5)}px monospace`;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#fff';
@@ -1603,6 +1667,7 @@ function cueIcon(ctx, o, x, y, size) {
     ctx.restore();
   };
   const UP = ['..#..', '.###.', '#####', '.###.', '.###.'];
+  const DOWN = UP.slice().reverse();
   const LEFT = ['..#..', '.##..', '#####', '.##..', '..#..'];
   const RIGHT = LEFT.map(r => [...r].reverse().join(''));
   const BOTH = ['.#.#.', '##.##', '#####', '##.##', '.#.#.'];
@@ -1619,7 +1684,7 @@ function cueIcon(ctx, o, x, y, size) {
   else if (o.kind === 'log') rows = UP;
   else if (o.kind === 'rope') rows = HANDS;
   else if (o.kind === 'throw') rows = BALL;
-  else if (o.kind === 'bird') rows = o.side === 'left' ? RIGHT : LEFT; // lean away from the bird
+  else if (o.kind === 'bird') rows = DOWN; // duck under the bird
   else rows = o.side === 'left' ? LEFT : o.side === 'right' ? RIGHT : BOTH;
   outline(rows);
   draw(rows, color);

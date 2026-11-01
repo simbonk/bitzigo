@@ -2,8 +2,7 @@ jump|Jump!
 punch|Punch!
 punch_left|Punch left!
 punch_right|Punch right!
-lean_left|Lean left!
-lean_right|Lean right!
+duck|Duck!
 rope|Grab the rope!
 go|Ready, set, go!
 three|Three!
@@ -18,7 +17,7 @@ great|Great moving, squad!
 ready|Arms down, and stand tall!
 lesson_log|Brick wall! Jump over it!
 lesson_crate|Crate! Punch it!
-lesson_bird|Crazy bird! Lean the other way!
+lesson_duck|Crazy bird! Duck under it!
 lesson_rope|Muddy puddle! Grab the rope and swing!
 got_it|You've got it! Let's go!
 lobby|Spread out! Point your arm to pick a character. Both hands up when you're ready!

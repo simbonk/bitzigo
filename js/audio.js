@@ -82,6 +82,10 @@ export const sfx = {
   // Rope swing: a rising-falling slide whistle.
   swing() { tone(400, 0.35, { type: 'sine', vol: 0.3, slide: 3 }); tone(1200, 0.35, { type: 'sine', vol: 0.25, slide: 0.4, delay: 0.35 }); },
   splash() { tone(150, 0.2, { type: 'sine', vol: 0.4, slide: 0.4 }); noise(0.6, { vol: 0.7, from: 1800, to: 200, q: 0.7 }); [0.2, 0.32, 0.45].forEach(d => tone(900 + d * 1000, 0.05, { type: 'sine', vol: 0.15, slide: 1.6, delay: d })); },
+  // Bird ducked: a furious sputtering squawk.
+  fume() { [0, 0.09, 0.18, 0.27, 0.36].forEach((d, i) => tone(700 - i * 40, 0.08, { type: 'sawtooth', vol: 0.16, slide: 0.55, delay: 0.3 + d })); noise(0.3, { vol: 0.2, from: 300, to: 900, q: 1, delay: 0.75 }); },
+  // Bird bonked them: a cackling "ha ha ha ha" running downhill.
+  cackle() { [0, 0.13, 0.26, 0.39, 0.52].forEach((d, i) => { tone(1500 - i * 110, 0.09, { type: 'square', vol: 0.13, slide: 0.75, delay: 0.2 + d }); noise(0.05, { vol: 0.12, from: 2500, to: 1500, q: 2, delay: 0.2 + d }); }); },
   squawk() { tone(900, 0.12, { type: 'sawtooth', vol: 0.2, slide: 1.4 }); tone(800, 0.18, { type: 'sawtooth', vol: 0.2, slide: 0.6, delay: 0.12 }); noise(0.25, { vol: 0.3, from: 1200, to: 3000, q: 2, delay: 0.05 }); [0, 0.07, 0.14].forEach(d => noise(0.04, { vol: 0.25, from: 600, to: 400, q: 1, delay: 0.3 + d })); },
   throw() { noise(0.18, { vol: 0.35, from: 900, to: 2600, q: 3 }); },
   knock() { noise(0.2, { vol: 0.5, from: 4000, to: 900, q: 2 }); tone(520, 0.06, { vol: 0.12 }); tone(390, 0.08, { vol: 0.12, delay: 0.07 }); },
@@ -131,13 +135,13 @@ export function approachSound(kind, side) {
 export function hitSound(kind) {
   if (kind === 'crate') sfx.smash();
   else if (kind === 'log') sfx.jump();
-  else if (kind === 'bird') sfx.dodge();
+  else if (kind === 'bird') { sfx.dodge(); sfx.fume(); }
   else if (kind === 'rope') sfx.swing();
 }
 
 export function missSound(kind) {
   if (kind === 'rope') sfx.splash();
-  else if (kind === 'bird') sfx.squawk();
+  else if (kind === 'bird') { sfx.squawk(); sfx.cackle(); }
   else sfx.miss();
 }
 
@@ -252,8 +256,8 @@ const CUES = {
   jump() { tone(330, 0.12, { type: 'triangle', vol: 0.35, slide: 2 }); tone(440, 0.14, { type: 'triangle', vol: 0.35, slide: 2.2, delay: 0.13 }); },
   // Punch: a double "pow", from the side to punch.
   punch(pan = 0) { panned(pan, () => { tone(160, 0.09, { vol: 0.35, slide: 0.5 }); noise(0.07, { vol: 0.4, from: 1800, to: 500 }); tone(200, 0.09, { vol: 0.35, slide: 0.5, delay: 0.12 }); noise(0.07, { vol: 0.4, from: 1800, to: 500, delay: 0.12 }); }); },
-  // Bird: angry tweets from the side the bird comes from.
-  bird(pan = 0) { panned(pan, () => [0, 0.1, 0.2].forEach(d => tone(2200, 0.06, { type: 'sine', vol: 0.25, slide: 1.4, delay: d }))); },
+  // Duck: angry tweets, then a slide whistle dropping down.
+  duck() { [0, 0.1, 0.2].forEach(d => tone(2200, 0.06, { type: 'sine', vol: 0.25, slide: 1.4, delay: d })); tone(900, 0.4, { type: 'sine', vol: 0.3, slide: 0.35, delay: 0.3 }); },
   // Rope: a slide whistle up and down, Tarzan style.
   rope() { tone(300, 0.25, { type: 'sine', vol: 0.3, slide: 3 }); tone(900, 0.25, { type: 'sine', vol: 0.3, slide: 0.5, delay: 0.25 }); tone(450, 0.3, { type: 'sine', vol: 0.3, slide: 2.5, delay: 0.5 }); },
   // Break games: a fanfare, plus something that sounds like the game.
@@ -267,8 +271,7 @@ const CUE_FOR = {
   jump: () => CUES.jump(), lesson_log: () => CUES.jump(),
   punch: () => CUES.punch(0), lesson_crate: () => CUES.punch(0),
   punch_left: () => CUES.punch(-0.8), punch_right: () => CUES.punch(0.8),
-  // lean_right means the bird is on the left.
-  lean_right: () => CUES.bird(-0.8), lean_left: () => CUES.bird(0.8), lesson_bird: () => CUES.bird(-0.8),
+  duck: () => CUES.duck(), lesson_duck: () => CUES.duck(),
   rope: () => CUES.rope(), lesson_rope: () => CUES.rope(),
   throw_time: () => CUES.fanfare(), snowball_time: () => CUES.fanfare(),
   karate_time: () => { CUES.fanfare(); setTimeout(CUES.gong, 450); },
@@ -283,10 +286,10 @@ const CUE_FOR = {
 // ---------- Announcer clips, decoded once and played on the audio clock ----------
 
 const VOICE_LINES = [
-  'jump', 'punch', 'punch_left', 'punch_right', 'lean_left', 'lean_right', 'rope',
+  'jump', 'punch', 'punch_left', 'punch_right', 'duck', 'rope',
   'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
   'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time', 'wyr_time', 'swim_time',
-  'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_bird', 'lesson_rope',
+  'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_duck', 'lesson_rope',
   'got_it', 'lobby', 'heart', 'champions',
 ];
 const clips = {};
