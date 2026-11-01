@@ -108,10 +108,10 @@ export function handsOf(pts, f) {
 export const beatSync = { snap: null };
 const onBeat = (clock, arrive, after) => {
   if (!beatSync.snap) return arrive;
-  let t = beatSync.snap(clock, arrive);
-  // Never squeeze it closer to the one before than the gap allows.
-  while (t < after) t = beatSync.snap(clock, t + 0.2);
-  return t;
+  // The nearest beat, but never closer to the one before than the gap allows
+  // (then the first beat after that). Any odd answer: keep the plain time.
+  const t = beatSync.snap(clock, arrive, after);
+  return Number.isFinite(t) && t >= after - 0.001 && t < arrive + 2 ? t : arrive;
 };
 
 const ACTS = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'duck', 'throw'];
