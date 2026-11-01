@@ -186,9 +186,9 @@ export function handsMini(p, B, hands, now) {
       p.addPoints(20 * p.breakMult, false);
       p.onEvent?.('splat');
       if (B.dist >= B.goal) {
-        // Made it to the island: a little dance, then back in for another go.
+        // Made it to the island: a little dance, and that's the swim done.
         B.crossed++;
-        B.party = 2.2;
+        B.party = 0.001; // counts up from here: one crossing and done
         p.addPoints(250 * p.breakMult, pick(['MADE IT!', 'SPLASH DOWN!', 'SUPER SWIMMER!']));
         p.onEvent?.('save');
       }
@@ -343,7 +343,7 @@ export function updateMini(p, B, dt) {
       B.flash = Math.max(0, B.flash - dt);
       break;
     case 'swim':
-      if (B.party > 0 && (B.party -= dt) <= 0) { B.party = 0; B.dist = 0; B.shown = 0; }
+      if (B.party > 0) B.party += dt;
       B.shown += (B.dist / B.goal - B.shown) * Math.min(1, dt * 5);
       B.splash = Math.max(0, B.splash - dt);
       break;

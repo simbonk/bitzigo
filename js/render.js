@@ -1555,13 +1555,33 @@ function drawAvatar(ctx, L, p, time, ch) {
   const grounded = p.lift < 0.08 && !(p.swing > 0) && !T;
   if (grounded) drawDust(ctx, L.cx + dx, L.ground, S, steps);
 
+  // Always on the move: a running cycle on the road (feet lifting in turn,
+  // arms pumping) and jogging on the spot in the break games, on top of
+  // whatever the camera sees. Not while jumping, ducking, swinging,
+  // swimming or dancing.
+  const jog = !p.paused && !(p.swing > 0) && p.lift < 0.3 && !(p.crouch > 0.2) && !p.act?.duck && T?.type !== 'swim' && T?.type !== 'bubbles'
+    ? (T ? 0.5 : p.run > 0.3 ? 1 : 0) : 0;
+  if (jog) {
+    const a = Math.sin((T ? time * 2.2 : steps) * Math.PI);
+    P = Object.fromEntries(Object.entries(P).map(([k, v]) => [k, [...v]]));
+    for (const [k, ank, up] of [['lk', 'la', Math.max(0, a)], ['rk', 'ra', Math.max(0, -a)]]) {
+      P[k][1] -= 0.3 * up * jog; P[ank][1] -= 0.55 * up * jog;
+    }
+    // Arms pump opposite the legs, but only while they hang down: a punch or
+    // a reach from the camera stays exactly where it is.
+    for (const [s, e, w, k] of [['ls', 'le', 'lw', -a], ['rs', 're', 'rw', a]]) {
+      if (P[w][1] < P[s][1] + 0.3) continue;
+      P[e][1] -= 0.12 * k * jog; P[w][1] -= 0.35 * k * jog; P[w][0] *= 1 - 0.15 * Math.abs(k) * jog;
+    }
+  }
   // Squash and stretch: long in the air, squashed for a moment on landing,
   // and a little bounce on every step.
   if (p.lift > 0.3) p.airAt = time;
   let sy = 1;
   if (p.lift > 0.08) sy = 1 + 0.08 * Math.min(1, p.lift * 1.5);
   else if (p.airAt && time - p.airAt < 0.22) sy = 1 - 0.13 * Math.sin((time - p.airAt) / 0.22 * Math.PI);
-  else if (grounded && !p.pts) sy = 0.975 + 0.04 * Math.abs(Math.sin(Math.PI * steps));
+  else if (grounded) sy = 0.975 + 0.04 * Math.abs(Math.sin(Math.PI * steps));
+  else if (jog) sy = 0.98 + 0.03 * Math.abs(Math.sin(Math.PI * time * 2.2));
   // Crouching: the character squishes down like a coiled spring, the lower the more.
   const coilTo = clamp((p.pts && p.base ? p.crouch || 0 : p.act?.duck ? 0.5 : 0) / 0.5, 0, 1);
   const coil = p.coil = (p.coil || 0) + (coilTo - (p.coil || 0)) * 0.35;

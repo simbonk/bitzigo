@@ -80,4 +80,6 @@ The MediaPipe runtime (Apache-2.0) and pose model are vendored in `vendor/` and 
 **The heart check is for fun, not a medical device.**
 
 
-**Swim time:** a lake with a little island and a palm tree out in the middle. Every big arm stroke moves the swimmer out towards it, and they get smaller the further they go. On the island they turn round and do a little victory dance, then swim out again.
+**Swim time:** a lake with a little island and a palm tree out in the middle. Every big arm stroke moves the swimmer out towards it, and they get smaller the further they go. On the island they turn round and do a little victory dance; one crossing each, and once everyone has danced for a moment it's back to running.
+
+Characters never stand still: on the road they run (feet lifting in turn, arms pumping while they hang down, a bounce on every step) on top of what the camera sees, and in the break games they jog on the spot.

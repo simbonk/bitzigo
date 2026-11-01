@@ -1537,6 +1537,9 @@ function updateGame(t, dt) {
     } else if (throwPlan.length && dur && roundT >= throwPlan[0] && !throwEnd) {
       throwPlan.shift();
     }
+    // Swim: one crossing each. Once everyone has danced on the island a bit, run on.
+    const swimmers = players.filter(p => p.throwing?.type === 'swim' && !p.absent);
+    if (throwEnd && swimmers.length && swimmers.every(p => p.throwing.party > 2.6)) throwEnd = Math.min(throwEnd, roundT);
     if (wyr) {
       updateWyr(wyr, players, dt);
       if (wyr.done) throwEnd = Math.min(throwEnd, roundT);
