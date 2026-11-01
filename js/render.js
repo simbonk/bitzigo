@@ -485,7 +485,7 @@ function drawBirdMood(ctx, L, e) {
   let by = L.ground - S * 4.1 - leave * S * 3;
   if (e.mood === 'mad') bx += Math.sin(e.t * 60) * S * 0.07;                 // shaking with rage
   else by += Math.abs(Math.sin(e.t * 14)) * -S * 0.18;                       // bouncing with laughter
-  const b = S * 1.0;
+  const b = S * 1.25;
   drawBird(ctx, bx, by, b, flap, e.mood);
   if (e.mood === 'mad') {
     // Puffs of steam out of its head.
