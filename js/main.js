@@ -615,7 +615,7 @@ function startReady() {
 
 function startTutorial() {
   setState('tutorial');
-  startMusic(songTurn);
+  startMusic(roundTheme); // each world has its own track
   players.forEach(p => { p.tutorial = true; });
   tut = { step: -1, next: players[0].clock + 0.3 };
 }
@@ -694,7 +694,7 @@ function nextBreak() {
 function startPlay() {
   boss = null;
   setState('play');
-  startMusic(songTurn);
+  startMusic(roundTheme); // each world has its own track
   roundT = 0;
   throwPlan = planThrows(settings.seconds);
   throwEnd = 0;
@@ -765,6 +765,7 @@ function startBoss() {
   const max = BOSS.hpPerKid * players.length;
   boss = { t: 0, mode: 'enter', modeT: 0, hp: max, max, dmg: 1, swoop: null, swoopId: 0, hitAt: -9, dir: 1, hoverFor: 4, fed: 0, level: eagleLevel(eagle.fed), levelAt: -9, gulpAt: -9 };
   players.forEach(p => { p.rush = false; p.feedLeft = null; p.startBreak('boss', boss); });
+  stopMusic(); startMusic('boss');
   showBanner('BOSS TIME!', 'Throw bombs at Captain Squawk! Duck when he swoops!', 3.5);
   cue('boss_time');
   setIntensity(1);
