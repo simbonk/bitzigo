@@ -481,12 +481,14 @@ $('#go').onclick = async () => {
 // Everything on the road lands on a beat of the music: an arrival time on
 // the game clock is moved to the nearest beat on the audio clock. Over the
 // few seconds an obstacle travels, the two clocks keep step closely enough.
-beatSync.snap = (clock, arrive) => {
+beatSync.snap = (clock, arrive, after = -Infinity) => {
   const b = state === 'play' ? beatInfo() : null;
-  if (!b) return arrive;
-  const at = b.now + (arrive - clock);
-  const snapped = b.t0 + Math.round((at - b.t0) / b.period) * b.period;
-  return clock + (snapped - b.now);
+  if (!b || !(b.period > 0.1)) return arrive;
+  const toAudio = t => b.now + (t - clock), toGame = t => clock + (t - b.now);
+  let n = Math.round((toAudio(arrive) - b.t0) / b.period);
+  const first = Math.ceil((toAudio(after) - b.t0) / b.period - 1e-6);
+  if (n < first) n = first;
+  return toGame(b.t0 + n * b.period);
 };
 
 // Hit-stop: the whole game freezes for a split second on a big hit, so it lands.
@@ -1251,31 +1253,6 @@ function captureFace(p) {
   p.faceImg = img;
 }
 
-// The kid's own face, live from the camera, peeking out of their character
-// like a kid in a dog suit. A tight crop around the face, smoothed so it
-// doesn't jitter, mirrored to match what they see. If the camera loses them
-// for a moment it holds the last picture, then falls back to the lobby photo.
-const FACE_PX = 96;
-function liveFace(p) {
-  const pts = p.pts, f = pts && video.videoWidth && frame ? features(pts) : null;
-  if (f && pts[0].v > 0.5) {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    const size = Math.min(vh, f.torso * 0.62 * vh);
-    const cx = (1 - pts[0].x / frame.aspect) * vw, cy = pts[0].y * vh - f.torso * 0.05 * vh;
-    const s = p.faceCrop ||= { cx, cy, size };
-    if (Math.hypot(cx - s.cx, cy - s.cy) > size) Object.assign(s, { cx, cy, size }); // jumped to someone else: snap
-    s.cx += (cx - s.cx) * 0.45; s.cy += (cy - s.cy) * 0.45; s.size += (size - s.size) * 0.2;
-    const c = p.faceCan ||= Object.assign(document.createElement('canvas'), { width: FACE_PX, height: FACE_PX });
-    const g = c.getContext('2d');
-    g.setTransform(-1, 0, 0, 1, FACE_PX, 0);
-    g.drawImage(video, s.cx - s.size / 2, s.cy - s.size / 2, s.size, s.size, 0, 0, FACE_PX, FACE_PX);
-    p.faceAt = performance.now();
-    return c;
-  }
-  if (p.faceCan && performance.now() - p.faceAt < 800) return p.faceCan;
-  return p.faceImg?.complete && p.faceImg.naturalWidth ? p.faceImg : null;
-}
-
 // ---------------- Main loop ----------------
 
 // The game clock stands still while the game is paused.
@@ -1624,7 +1601,6 @@ function draw(t) {
   cctx.clearRect(0, 0, W, H);
   fctx.clearRect(0, 0, lowFront.width, lowFront.height);
   LAYERS.queue = [];
-  for (const p of players) p.faceSrc = settings.mode === 'camera' ? liveFace(p) : p.faceTest || null;
   try { drawScene(t); } finally { flushCharacters(cctx, charK); }
 }
 
@@ -1775,7 +1751,7 @@ function drawLobby(t) {
     const act = st.ready ? { reach: Math.floor(t * 3) % 2 === 0 } : {};
     const P = cartoonPose(act, Math.sin(t * 6 + i) * 0.05);
     lctx.globalAlpha = st.found ? 1 : 0.35;
-    queueLobbyCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear, { face: p.faceSrc });
+    queueLobbyCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
     lctx.globalAlpha = 1;
   });
   fl.forEach((q, i) => {

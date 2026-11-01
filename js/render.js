@@ -1526,13 +1526,14 @@ function drawAvatar(ctx, L, p, time, ch) {
     ctx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
   }
   // Running, the character faces away down the road (you see the back of
-  // their head). They turn round to the camera, showing the kid's face, when
-  // something is about to hit them, when they get bonked or are on a streak,
-  // in the break games, and before the run starts.
+  // their head) and does a quick head turn to the camera as a reaction:
+  // after a move, when bonked, or on a streak. In the break games, the boss
+  // fight and before the run starts they face the camera.
   const onFire = p.fx?.some(e => e.type === 'fire');
-  const front = !!T || wow || p.bonk > 0 || onFire || !(p.run > 0.3) || p.paused;
-  p.turn = (p.turn ?? 1) + ((front ? 1 : 0) - (p.turn ?? 1)) * 0.22;
-  const look = { sx, sy, wow, face: p.faceSrc, turn: p.turn };
+  const body = !!T || !(p.run > 0.3) || p.paused;
+  const glance = body || p.bonk > 0 || p.bump > 0.15 || onFire;
+  p.turn = glance ? 1 : 0; // a quick, cheesy snap round: no spinning
+  const look = { sx, sy, wow, turn: p.turn, back: !body };
   queueCharacter(ctx, { x: L.x, w: L.w, h: L.h }, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
@@ -1625,7 +1626,7 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   stroke(S * 0.06 + ol * 2, INK);
   ctx.fillStyle = g; ctx.fill(); stroke(S * 0.06, g);
   const cx = (X(P.ls) + X(P.rs) + X(P.lh) + X(P.rh)) / 4, cy = (Y(P.ls) + Y(P.rs) + Y(P.lh) + Y(P.rh)) / 4;
-  if (!(look.turn < 0.5)) rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
+  if (!look.back) rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
   if (ch.stripes && !flash) {
     // Reflective bands across the coat and on the cuffs, like a real turnout coat.
     ctx.save();
@@ -1660,9 +1661,8 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
 
 function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   const hs = S * 1.0; // head size
-  // Turning round: the head narrows to a sliver as it spins, back to front.
-  const turn = look.turn ?? 1, back = turn < 0.5;
-  const hw = hs * (look.sx || 1) * Math.max(0.15, Math.abs(1 - 2 * turn)), hh = hs * (look.sy || 1);
+  const back = (look.turn ?? 1) < 0.5;
+  const hw = hs * (look.sx || 1), hh = hs * (look.sy || 1);
   const left = x - hw / 2, top = y - hh / 2;
   const head = flash ? '#ffffff' : ch.head;
   const u = hw / 8, uy = hh / 8; // head "pixel"
@@ -1721,31 +1721,6 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
     if (ch.id === 'frog') { px(0, -1.6, 3, 2.4, head); px(5, -1.6, 3, 2.4, head); }
     for (const mode of VEC ? ['outline', 'fill'] : ['fill']) {
       RMODE = mode;
-      if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
-    }
-    RMODE = 'fill';
-    return;
-  }
-
-  // The kid's own face, peeking out of the character like a kid in a dog suit.
-  const face = look.face;
-  if (face && VEC && ch.id !== 'none') {
-    const fx = left + hw * 0.14, fy = top + hh * 0.2, fw = hw * 0.72, fh = hh * 0.72, fr = fw * 0.32;
-    ctx.save();
-    roundRect(ctx, fx, fy, fw, fh, fr);
-    ctx.lineWidth = Math.max(1, hs * 0.07); ctx.strokeStyle = shade(head, -0.28); ctx.stroke();
-    ctx.clip();
-    ctx.fillStyle = '#e8c4a0'; ctx.fillRect(fx, fy, fw, fh);
-    try { ctx.drawImage(face, fx, fy, fw, fh); } catch { }
-    if (flash) { ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(fx, fy, fw, fh); }
-    ctx.restore();
-    // A few costume bits that sit on the forehead.
-    if (ch.id === 'ninja') px(0, 0.6, 8, 1, '#e63946');
-    if (ch.id === 'frog') { px(0, -1.6, 3, 2.4, head); px(5, -1.6, 3, 2.4, head); px(0.6, -1.2, 1.8, 1.8, '#ffffff'); px(5.6, -1.2, 1.8, 1.8, '#ffffff'); px(1.1, -0.7, 0.9, 0.9, '#1b1b22'); px(6.1, -0.7, 0.9, 0.9, '#1b1b22'); }
-    if (ch.id === 'firefighter' && !gear.hat) { px(-0.2, -2.6, 8.4, 4.2, '#e63946'); px(2.5, -2.4, 3, 3, '#ffd23f'); px(3.4, -1.8, 1.2, 1.8, '#e63946'); px(-0.2, 1.1, 8.4, 0.5, '#a81a26'); }
-    for (const mode of ['outline', 'fill']) {
-      RMODE = mode;
-      if (gear.face) drawGearItem(ctx, gear.face, left, top, u);
       if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
     }
     RMODE = 'fill';
