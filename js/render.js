@@ -84,7 +84,7 @@ let VEC = 0, RMODE = 'fill', OLW = 1;
 const INK = '#1a2a40';
 function rect(ctx, x, y, w, h, color) {
   if (VEC) {
-    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.3);
+    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.08);
     if (RMODE === 'outline') { ctx.lineWidth = OLW * 2; ctx.strokeStyle = INK; ctx.stroke(); }
     else { ctx.fillStyle = color; ctx.fill(); }
     return;
@@ -963,27 +963,39 @@ export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}, l
   finally { ctx.restore(); VEC--; OLW = prevOl; RMODE = 'fill'; }
 }
 
-// A paper-doll rig of rounded parts with overlapping round joints, a dark
-// outline and simple two-tone cel shading.
+// A paper-doll rig of blocky parts (square-ended limbs with a block at each
+// joint), one dark outline and simple two-tone cel shading: Minecraft-ish,
+// but drawn sharp instead of as pixels.
 function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   const X = v => ox + v[0] * S, Y = v => oy + v[1] * S;
   const ol = OLW = Math.max(0.6, S * 0.075);
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.miterLimit = 2;
   const body = flash ? '#ffffff' : ch.body;
   const limbCol = flash ? '#ffffff' : ch.limb;
   const handCol = flash ? '#ffffff' : ch.hand || (ch.limb === ch.body ? shade(ch.body, 0.2) : ch.body);
   const path = pts => { ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); };
   const stroke = (w, col) => { ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke(); };
-  // A limb: two round-capped bones through the joint, outlined, with a soft
-  // highlight along the top edge.
+  // A limb: two square bones with a block at the joint, outlined, with a
+  // lighter strip along the top edge.
+  const bone = (a, b, w) => {
+    const ax = X(a), ay = Y(a), bx = X(b), by = Y(b), L = Math.hypot(bx - ax, by - ay) || 1;
+    const nx = -(by - ay) / L * w / 2, ny = (bx - ax) / L * w / 2, ex = (bx - ax) / L * w * 0.15, ey = (by - ay) / L * w * 0.15;
+    return [[ax + nx - ex, ay + ny - ey], [bx + nx + ex, by + ny + ey], [bx - nx + ex, by - ny + ey], [ax - nx - ex, ay - ny - ey]];
+  };
+  const quad = (q, col, w) => { path(q); ctx.closePath(); if (w) stroke(w, col); else { ctx.fillStyle = col; ctx.fill(); } };
   const limb = (a, b, c, w, col) => {
-    const pts = [[X(a), Y(a)], [X(b), Y(b)], [X(c), Y(c)]];
-    path(pts); stroke(w + ol * 2, INK); stroke(w, col);
-    path(pts.map(q => [q[0] - w * 0.16, q[1] - w * 0.16])); stroke(w * 0.28, 'rgba(255,255,255,0.22)');
+    const q1 = bone(a, b, w), q2 = bone(b, c, w), j = w * 0.56;
+    const knee = [[X(b) - j, Y(b) - j], [X(b) + j, Y(b) - j], [X(b) + j, Y(b) + j], [X(b) - j, Y(b) + j]];
+    for (const q of [q1, q2, knee]) quad(q, INK, ol * 2);
+    for (const q of [q1, q2, knee]) quad(q, col);
+    // Shade one side of each bone a touch darker, like a lit cube.
+    const mixPt = (p, q, k) => [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
+    for (const q of [q1, q2]) quad([mixPt(q[3], q[0], 0.62), mixPt(q[2], q[1], 0.62), q[2], q[3]], 'rgba(0,0,0,0.12)');
   };
   const blob = (x, y, r, col) => {
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.rect(x - r, y - r, r * 2, r * 2);
     stroke(ol * 2, INK); ctx.fillStyle = col; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x - r, y - r, r * 2, r * 0.6);
   };
 
   if (gear.back === 'cape') {
@@ -994,7 +1006,7 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   limb(P.lh, P.lk, P.la, S * 0.34, limbCol);
   limb(P.rh, P.rk, P.ra, S * 0.34, limbCol);
   for (const a of [P.la, P.ra]) {
-    roundRect(ctx, X(a) - S * 0.26, Y(a) - S * 0.11, S * 0.52, S * 0.26, S * 0.12);
+    ctx.beginPath(); ctx.rect(X(a) - S * 0.26, Y(a) - S * 0.11, S * 0.52, S * 0.26);
     stroke(ol * 2, INK); ctx.fillStyle = '#2b2b33'; ctx.fill();
   }
 
@@ -1006,8 +1018,8 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   g.addColorStop(0.22, body); g.addColorStop(0.74, body);
   g.addColorStop(0.74, shade(body, -0.1)); g.addColorStop(1, shade(body, -0.1));
   path(tp); ctx.closePath();
-  stroke(S * 0.2 + ol * 2, INK);
-  ctx.fillStyle = g; ctx.fill(); stroke(S * 0.2, g);
+  stroke(S * 0.06 + ol * 2, INK);
+  ctx.fillStyle = g; ctx.fill(); stroke(S * 0.06, g);
   const cx = (X(P.ls) + X(P.rs) + X(P.lh) + X(P.rh)) / 4, cy = (Y(P.ls) + Y(P.rs) + Y(P.lh) + Y(P.rh)) / 4;
   rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
   if (ch.stripes && !flash) {
@@ -1027,7 +1039,7 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   // Arms, with round hands.
   limb(P.ls, P.le, P.lw, S * 0.28, limbCol);
   limb(P.rs, P.re, P.rw, S * 0.28, limbCol);
-  for (const w of [P.lw, P.rw]) blob(X(w), Y(w), S * 0.2, handCol);
+  for (const w of [P.lw, P.rw]) blob(X(w), Y(w), S * 0.18, handCol);
   if (ch.stripes && !flash) {
     for (const [a, b] of [[P.le, P.lw], [P.re, P.rw], [P.lk, P.la], [P.rk, P.ra]]) {
       const x = X(a) + (X(b) - X(a)) * 0.7, y = Y(a) + (Y(b) - Y(a)) * 0.7;
@@ -1078,7 +1090,7 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   };
   if (VEC) {
     // Outline pass for the whole head silhouette, then the fills on top.
-    const headShape = () => roundRect(ctx, left, top, hw, hh, hs * 0.26);
+    const headShape = () => roundRect(ctx, left, top, hw, hh, hs * 0.05);
     RMODE = 'outline'; behind(); headShape(); ctx.lineWidth = OLW * 2; ctx.strokeStyle = INK; ctx.stroke();
     RMODE = 'fill'; behind();
     const g = ctx.createLinearGradient(0, top, 0, top + hh);
