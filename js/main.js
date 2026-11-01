@@ -524,7 +524,7 @@ function enterLobby(auto = false) {
 
 // A short timed game rolls straight into another round with a new theme,
 // keeping everyone's characters, until SET_ROUNDS rounds have been played.
-const SET_ROUNDS = 5, NEXT_SECS = 15;
+const SET_ROUNDS = 3, NEXT_SECS = 15;
 let setRound = 1, roundTheme = pickTheme(), setThemes = [], nextTimer = null;
 let setScores = [];     // running total for each player slot across the set
 const total = p => setScores[p.index] ?? p.score;
@@ -675,6 +675,7 @@ function nextBreak() {
 }
 
 function startPlay() {
+  boss = null;
   setState('play');
   startMusic(songTurn);
   roundT = 0;
@@ -720,7 +721,145 @@ function pumpArms(p) {
   });
 }
 
+// ---------------- Boss fight ----------------
+// After the last round, Captain Squawk (the crazy bird, in a pirate hat)
+// turns up for a squad boss fight. He hovers in the sky while the kids throw
+// bombs at him (the same arm swing as throw time), and every so often swoops
+// down at their heads and they duck. Everyone's bombs drain one shared health
+// bar, so the 4 year old's bomb counts as much as the 10 year old's. If it
+// runs long every bomb counts for more, so it always ends in a win.
+//
+// When he's worn out, Super Eagle (his arch enemy) dives in and knocks him
+// out of the sky. Then the kids feed Super Eagle their points: every throw
+// flings a lump of their score into his beak. He keeps what he eats from one
+// day to the next and levels up, getting a little bigger each level.
+let boss = null;
+const BOSS = { enter: 3, warn: 1.0, dive: 0.75, past: 0.45, recover: 1.4, hpPerKid: 22, eagle: 4.2, eagleHit: 1.3, feedMax: 22, fly: 4.5 };
+const EAGLE_KEY = 'bitzigo-eagle';
+let eagle = { fed: 0 };
+try { eagle = { fed: 0, ...JSON.parse(localStorage.getItem(EAGLE_KEY) || '{}') }; } catch { }
+// Points needed to reach each level: 5k for level 2, then 10k more, 15k more…
+const eagleNeed = lvl => 2500 * (lvl - 1) * lvl;
+const eagleLevel = fed => Math.floor((1 + Math.sqrt(1 + 4 * fed / 2500)) / 2);
+const FIGHTING = ['enter', 'hover', 'warn', 'dive', 'recover'];
+
+function startBoss() {
+  throwEnd = 0; pumpEnd = 0; wyr = null;
+  const max = BOSS.hpPerKid * players.length;
+  boss = { t: 0, mode: 'enter', modeT: 0, hp: max, max, dmg: 1, swoop: null, swoopId: 0, hitAt: -9, dir: 1, hoverFor: 4, fed: 0, level: eagleLevel(eagle.fed), levelAt: -9, gulpAt: -9 };
+  players.forEach(p => { p.rush = false; p.feedLeft = null; p.startBreak('boss', boss); });
+  showBanner('BOSS TIME!', 'Throw bombs at Captain Squawk! Duck when he swoops!', 3.5);
+  cue('boss_time');
+  setIntensity(1);
+}
+function bossMode(m) {
+  boss.mode = m;
+  boss.modeT = 0;
+  // He swoops more often as he gets weaker.
+  const k = boss.hp / boss.max;
+  if (m === 'hover') boss.hoverFor = (k > 0.66 ? 4.2 : k > 0.33 ? 3.4 : 2.6) + Math.random() * 1.2;
+}
+const stunAll = secs => players.forEach(p => { if (p.throwing) p.throwing.stun = secs; });
+function updateBoss(dt) {
+  const B = boss;
+  B.t += dt;
+  B.modeT += dt;
+  B.dmg = B.t > 90 ? 3 : B.t > 65 ? 2 : 1;
+  if (B.hp <= 0 && FIGHTING.includes(B.mode)) {
+    // Worn out: here comes Super Eagle.
+    bossMode('eagle');
+    B.swoop = null;
+    B.dir = Math.random() < 0.5 ? -1 : 1;
+    stunAll(99);
+    showBanner('SUPER EAGLE!', "Here comes Captain Squawk's arch enemy!", 3);
+    cue('eagle_time');
+    sfx.screech();
+    return;
+  }
+  switch (B.mode) {
+    case 'enter': if (B.modeT >= BOSS.enter) bossMode('hover'); break;
+    case 'hover':
+      if (B.modeT >= B.hoverFor) {
+        bossMode('warn');
+        B.dir = Math.random() < 0.5 ? -1 : 1;
+        B.swoop = { id: ++B.swoopId, arrive: B.t + BOSS.warn + BOSS.dive };
+        approachSound('bird', B.dir < 0 ? 'left' : 'right');
+        cue('duck');
+      }
+      break;
+    case 'warn': if (B.modeT >= BOSS.warn) bossMode('dive'); break;
+    case 'dive': if (B.modeT >= BOSS.dive + BOSS.past) bossMode('recover'); break;
+    case 'recover': if (B.modeT >= BOSS.recover) bossMode('hover'); break;
+    case 'eagle':
+      if (B.modeT >= BOSS.eagleHit && !B.koAt) {
+        // KAPOW: Super Eagle rams him out of the sky.
+        B.koAt = B.t;
+        sfx.boom(); sfx.strike();
+        players.forEach(p => { p.shake = 0.6; p.addPoints(500 * p.breakMult, ['KAPOW!', 'KNOCKOUT!', 'SUPER!'][p.index % 3]); });
+        cue('boss_win');
+      }
+      if (B.modeT >= BOSS.eagle) {
+        bossMode('feed');
+        // Everything they scored in the whole set goes in, a lump per throw.
+        players.forEach(p => {
+          p.feedLeft = (setScores[p.index] || 0) + p.score;
+          p.feedChunk = Math.max(10, Math.ceil(p.feedLeft / 8 / 10) * 10);
+        });
+        stunAll(0);
+        showBanner('FEED SUPER EAGLE!', 'Throw your points into his beak!', 3);
+        cue('feed_time');
+      }
+      break;
+    case 'feed': {
+      const flying = players.some(p => p.throwing?.coins?.length);
+      // Nobody throwing? After a while the rest goes in by itself.
+      if (B.modeT >= BOSS.feedMax) players.forEach(p => {
+        if (p.feedLeft > 0 && p.throwing) { p.throwing.coins.push({ t: 0, dur: 0.8, amt: p.feedLeft, side: 0, big: true }); p.feedLeft = 0; }
+      });
+      const lvl = eagleLevel(eagle.fed + B.fed);
+      if (lvl > B.level) {
+        B.level = lvl;
+        B.levelAt = B.t;
+        showBanner('LEVEL UP!', `Super Eagle is level ${lvl}!`, 2.4);
+        cue('eagle_level');
+        sfx.level(); sfx.boom();
+      }
+      if (B.modeT > 2 && !flying && players.every(p => !(p.feedLeft > 0))) {
+        eagle.fed += B.fed;
+        try { localStorage.setItem(EAGLE_KEY, JSON.stringify(eagle)); } catch { }
+        bossMode('fly');
+        stunAll(99);
+        showBanner('SUPER EAGLE!', `Level ${B.level}, and stronger than ever!`, 3);
+        sfx.screech(); sfx.finish();
+      }
+      break;
+    }
+    case 'fly': if (B.modeT >= BOSS.fly) B.mode = 'done'; break;
+  }
+}
+
+// How full Super Eagle is on the way to his next level, shown while feeding.
+function drawEagleMeter(y) {
+  const fed = eagle.fed + (boss.mode === 'fly' ? 0 : boss.fed);
+  const lvl = eagleLevel(fed), lo = eagleNeed(lvl), hi = eagleNeed(lvl + 1);
+  const k = Math.max(0, Math.min(1, (fed - lo) / (hi - lo)));
+  const w = Math.min(W * 0.3, H * 0.6), h = Math.max(10, H * 0.028), x = W / 2 - w / 2;
+  const lbl = H * 0.03;
+  text(ctx, `SUPER EAGLE · LEVEL ${lvl}`, W / 2, y + lbl * 0.6, lbl, '#ffe14d');
+  const by = y + lbl * 1.3;
+  ctx.fillStyle = '#1b1b22'; ctx.fillRect(x - 3, by - 3, w + 6, h + 6);
+  ctx.fillStyle = '#3a2a10'; ctx.fillRect(x, by, w, h);
+  ctx.fillStyle = boss.t - boss.gulpAt < 0.12 ? '#ffffff' : '#ffc21a'; ctx.fillRect(x, by, w * k, h);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(x, by, w * k, h * 0.3);
+}
+
 function endRound(manual = false) {
+  const beatBoss = boss?.mode === 'done';
+  // Ended early in the middle of feeding: Super Eagle still keeps what he ate.
+  if (boss && boss.mode === 'feed' && boss.fed) { eagle.fed += boss.fed; try { localStorage.setItem(EAGLE_KEY, JSON.stringify(eagle)); } catch { } }
+  const fedNow = boss?.fed || 0;
+  boss = null;
+  players.forEach(p => { p.feedLeft = null; });
   setState('end');
   stopMusic();
   songTurn++;
@@ -731,7 +870,7 @@ function endRound(manual = false) {
   if (roundT > 10) saveGame(players, { theme: themeNow().name, seconds: roundT });
   players.forEach(p => { setScores[p.index] = (setScores[p.index] || 0) + p.score; });
   if (!manual && settings.seconds && setRound < SET_ROUNDS) scheduleNext();
-  showResults();
+  showResults(beatBoss, fedNow);
 }
 
 function showBanner(textStr, sub = '', secs = 2) {
@@ -741,12 +880,12 @@ function showBanner(textStr, sub = '', secs = 2) {
 
 // ---------------- End screen ----------------
 
-function showResults() {
+function showResults(beatBoss = false, fedNow = 0) {
   const box = $('#results');
   box.innerHTML = '';
   const awards = pickAwards(players);
   const multi = setRound > 1;
-  $('#end h1').textContent = nextTimer ? `Round ${setRound} of ${SET_ROUNDS} done!` : 'Great moving, squad!';
+  $('#end h1').textContent = nextTimer ? `Round ${setRound} of ${SET_ROUNDS} done!` : beatBoss ? 'You beat Captain Squawk!' : 'Great moving, squad!';
   [...players].sort((a, b) => total(b) - total(a)).forEach(p => {
     const div = document.createElement('div');
     div.className = 'result';
@@ -761,6 +900,12 @@ function showResults() {
     div.querySelector('.award').textContent = awards.get(p);
     box.appendChild(div);
   });
+  if (fedNow) {
+    const note = document.createElement('div');
+    note.className = 'eagleNote';
+    note.textContent = `🦅 Super Eagle ate ${fedNow.toLocaleString()} points! He's level ${eagleLevel(eagle.fed)} now.`;
+    box.prepend(note);
+  }
   const hasHR = players.some(p => p.heartRate);
   $('#heart').textContent = hasHR ? '♥ Redo heart check' : '♥ Heart check';
   $('#splash').innerHTML = splashHtml();
@@ -1091,6 +1236,31 @@ function captureFace(p) {
   p.faceImg = img;
 }
 
+// The kid's own face, live from the camera, peeking out of their character
+// like a kid in a dog suit. A tight crop around the face, smoothed so it
+// doesn't jitter, mirrored to match what they see. If the camera loses them
+// for a moment it holds the last picture, then falls back to the lobby photo.
+const FACE_PX = 96;
+function liveFace(p) {
+  const pts = p.pts, f = pts && video.videoWidth && frame ? features(pts) : null;
+  if (f && pts[0].v > 0.5) {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const size = Math.min(vh, f.torso * 0.62 * vh);
+    const cx = (1 - pts[0].x / frame.aspect) * vw, cy = pts[0].y * vh - f.torso * 0.05 * vh;
+    const s = p.faceCrop ||= { cx, cy, size };
+    if (Math.hypot(cx - s.cx, cy - s.cy) > size) Object.assign(s, { cx, cy, size }); // jumped to someone else: snap
+    s.cx += (cx - s.cx) * 0.45; s.cy += (cy - s.cy) * 0.45; s.size += (size - s.size) * 0.2;
+    const c = p.faceCan ||= Object.assign(document.createElement('canvas'), { width: FACE_PX, height: FACE_PX });
+    const g = c.getContext('2d');
+    g.setTransform(-1, 0, 0, 1, FACE_PX, 0);
+    g.drawImage(video, s.cx - s.size / 2, s.cy - s.size / 2, s.size, s.size, 0, 0, FACE_PX, FACE_PX);
+    p.faceAt = performance.now();
+    return c;
+  }
+  if (p.faceCan && performance.now() - p.faceAt < 800) return p.faceCan;
+  return p.faceImg?.complete && p.faceImg.naturalWidth ? p.faceImg : null;
+}
+
 // ---------------- Main loop ----------------
 
 // The game clock stands still while the game is paused.
@@ -1347,7 +1517,11 @@ function updateGame(t, dt) {
   }
 
   let ramp = 0;
-  if (state === 'play') {
+  if (state === 'play' && boss) {
+    roundT += dt;
+    updateBoss(dt);
+    if (boss.mode === 'done') { endRound(); return; }
+  } else if (state === 'play') {
     roundT += dt;
     const dur = settings.seconds;
     if (throwPlan.length && roundT >= throwPlan[0] && !throwEnd && (!dur || dur - roundT > THROW_SECS + 15)) {
@@ -1400,7 +1574,11 @@ function updateGame(t, dt) {
       }
       players.forEach(p => { p.rush = rush; });
       if (left <= 3 && Math.ceil(left) !== Math.ceil(left + dt)) sfx.beep(false);
-      if (left <= 0) { endRound(); return; }
+      if (left <= 0) {
+        // The last round of a set ends in the boss fight.
+        if (setRound >= SET_ROUNDS) startBoss();
+        else { endRound(); return; }
+      }
     }
   }
   const moving = state === 'play' || state === 'tutorial';
@@ -1426,6 +1604,7 @@ function draw(t) {
   cctx.clearRect(0, 0, W, H);
   fctx.clearRect(0, 0, lowFront.width, lowFront.height);
   LAYERS.queue = [];
+  for (const p of players) p.faceSrc = settings.mode === 'camera' ? liveFace(p) : p.faceTest || null;
   try { drawScene(t); } finally { flushCharacters(cctx, charK); }
 }
 
@@ -1448,8 +1627,9 @@ function drawScene(t) {
     for (const p of players) drawLaneHud(ctx, laneBox(p.index, n, W, H), p, p.character, { debug });
   for (const q of fl) drawLaneHud(ctx, laneBox(q.index, n, W, H), q, q.character, {});
 
-  // Timer.
-  if (state === 'play' && settings.seconds) {
+  // Timer, or the boss's health bar in the boss fight.
+  if (state === 'play' && boss) { if (boss.mode === 'feed' || boss.mode === 'fly') drawEagleMeter(hudBottom(n) + H * 0.005); }
+  else if (state === 'play' && settings.seconds) {
     const left = Math.max(0, settings.seconds - roundT);
     const m = Math.floor(left / 60), s = Math.floor(left % 60);
     const size = H * 0.05;
@@ -1575,7 +1755,7 @@ function drawLobby(t) {
     const act = st.ready ? { reach: Math.floor(t * 3) % 2 === 0 } : {};
     const P = cartoonPose(act, Math.sin(t * 6 + i) * 0.05);
     lctx.globalAlpha = st.found ? 1 : 0.35;
-    queueLobbyCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
+    queueLobbyCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear, { face: p.faceSrc });
     lctx.globalAlpha = 1;
   });
   fl.forEach((q, i) => {
@@ -1682,6 +1862,7 @@ if (new URLSearchParams(location.search).has('debug')) {
   window.qs = {
     get frame() { return frame; }, get players() { return players; }, get state() { return state; },
     get tracker() { return tracker; }, advance(sec) { roundT += sec; },
+    get boss() { return boss; }, startBoss, set round(n) { setRound = n; },
     startBreak(type) {
       throwEnd = roundT + (type === 'wyr' ? WYR_SECS : THROW_SECS);
       players.forEach(p => p.startBreak(type));
