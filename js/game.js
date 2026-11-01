@@ -28,6 +28,8 @@ export const KINDS = ['log', 'crate', 'bird', 'rope'];
 // Stop-and-do breaks. Cans and the snowman are thrown at, boards are chopped
 // (same overhand arm swing), bubbles are popped by flapping up to them, and
 // fires are put out by pointing an arm to aim a water hose.
+// Hats and accessories floating down the road as prizes: off for now.
+const HATS = false;
 export const BREAKS = ['karate', 'bubbles', 'fire', 'cans', 'snowman', ...MINI];
 
 // Hats and accessories that float down the road now and then. Running into
@@ -386,8 +388,8 @@ export class Player {
 
   spawn() {
     const tn = tuning(this.skill + (this.ramp || 0));
-    // Now and then a hat floats down the road instead: a free prize.
-    if (this.judged >= 4 && this.clock - this.lastGear > 22 && Math.random() < 0.4) {
+    // Now and then a hat floats down the road instead: a free prize (switched off).
+    if (HATS && this.judged >= 4 && this.clock - this.lastGear > 22 && Math.random() < 0.4) {
       const worn = new Set(Object.values(this.gear));
       const item = pick(GEAR.filter(g => !worn.has(g.id)));
       const arrive = Math.max(this.clock + tn.travel, this.lastArrive + 0.9);
@@ -883,7 +885,7 @@ export class Course {
     const tn = tuning(pace + ramp);
     const arrive = onBeat(clock, Math.max(clock + tn.travel, this.lastArrive + 0.9), this.lastArrive + 0.9);
     const judged = Math.min(...players.map(p => p.judged));
-    if (judged >= 4 && clock - this.lastGear > 22 && Math.random() < 0.4) {
+    if (HATS && judged >= 4 && clock - this.lastGear > 22 && Math.random() < 0.4) {
       for (const p of players) {
         const worn = new Set(Object.values(p.gear));
         const item = pick(GEAR.filter(g => !worn.has(g.id)));

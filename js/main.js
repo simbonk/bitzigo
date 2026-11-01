@@ -981,7 +981,6 @@ function pickAwards(ps) {
     ['Sharp Shooter', p => p.counts.knock],
     ['Karate Master', p => p.counts.chop],
     ['Bubble Popper', p => p.counts.pop],
-    ['Hat Collector', p => p.counts.gear],
     ['Fire Hero', p => p.counts.fire],
     ['Dance Star', p => p.counts.dance],
     ['City Stomper', p => p.counts.stomp],
