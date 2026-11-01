@@ -11,8 +11,10 @@ html, body {
 /* Below the status bar / Dynamic Island when held upright (0 in landscape). */
 #stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); width: 100%; height: calc(100% - env(safe-area-inset-top)); display: block; }
 /* The pixel world: a small canvas blown up with hard edges, never blurred. */
-#world { position: fixed; left: 0; top: env(safe-area-inset-top); display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
+#world, #worldFront { position: fixed; left: 0; top: env(safe-area-inset-top); display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
 #stage { background: transparent; }
+#chars { position: fixed; left: 0; top: env(safe-area-inset-top); width: 100%; height: calc(100% - env(safe-area-inset-top)); display: block; pointer-events: none; }
+#worldFront { pointer-events: none; }
 #safeProbe { position: fixed; visibility: hidden; pointer-events: none; width: 0; height: 0; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 #cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
@@ -67,6 +69,14 @@ h1 { margin: 0 0 4px; font-size: 40px; color: #ffd23f; letter-spacing: 1px; text
   position: fixed; z-index: 15; left: 50%; transform: translateX(-50%); bottom: calc(6px + env(safe-area-inset-bottom));
   display: flex; gap: 8px; padding: 5px 7px; border-radius: 16px; background: rgba(16, 24, 48, .55); opacity: .95;
 }
+/* Tucked away below the screen edge; pops back up with a little bounce. */
+#hudButtons { transition: translate .38s cubic-bezier(.34, 1.56, .64, 1), opacity .25s ease; }
+#hudButtons.tuck { translate: 0 calc(100% + 14px + env(safe-area-inset-bottom)); opacity: 0; pointer-events: none; transition: translate .3s ease-in, opacity .3s ease-in; }
+#hudButtons .arcade { transition: scale .35s cubic-bezier(.34, 1.8, .64, 1); }
+#hudButtons.tuck .arcade { scale: .6; }
+#hudButtons .arcade:nth-child(3) { transition-delay: .04s; }
+#hudButtons .arcade:nth-child(4) { transition-delay: .08s; }
+#hudButtons .arcade:nth-child(5) { transition-delay: .12s; }
 @media (orientation: landscape) { #hudButtons { left: auto; transform: none; right: calc(8px + var(--safeX)); } }
 .arcade {
   --face: #3d7be0; --ink: #fff;
