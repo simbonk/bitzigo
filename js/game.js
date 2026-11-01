@@ -409,6 +409,7 @@ export class Player {
     if (MINI.includes(T.type)) return;
     T.cooldown = 0.35;
     if (T.type === 'karate') { this.chop(); return; }
+    if (!T.cans) return; // fire time: the hose aims, nothing is thrown
     const alive = T.cans.filter(c => !c.down);
     if (!alive.length) return;
     // A snowman is hit from the top down; cans are anybody's guess.
