@@ -807,8 +807,12 @@ function cameraPose(p) {
     lk: g(LM.rKn), rk: g(LM.lKn), la: g(LM.rAn), ra: g(LM.lAn),
   };
   // Legs are often out of frame: fall back to cartoon legs under the hips.
-  const legsOk = Math.min(pts[LM.lKn].v, pts[LM.rKn].v, pts[LM.lAn].v, pts[LM.rAn].v) > 0.5;
-  if (!legsOk) {
+  // Knees alone are enough to show running on the spot; feet come later.
+  P.kneesSeen = Math.min(pts[LM.lKn].v, pts[LM.rKn].v) > 0.5;
+  const legsOk = P.kneesSeen && Math.min(pts[LM.lAn].v, pts[LM.rAn].v) > 0.5;
+  if (P.kneesSeen && !legsOk) {
+    P.la = [P.lk[0], P.lk[1] + 0.8]; P.ra = [P.rk[0], P.rk[1] + 0.8];
+  } else if (!legsOk) {
     const bend = clamp(P.lh[1] * 0.6, 0, 0.6);
     P.lk = [P.lh[0] - 0.05 - bend * 0.6, P.lh[1] + 0.8 - bend * 0.3];
     P.rk = [P.rh[0] + 0.05 + bend * 0.6, P.rh[1] + 0.8 - bend * 0.3];
@@ -823,7 +827,7 @@ function cameraPose(p) {
 // part close to the cartoon's own length and only take its direction from the
 // camera, with a little of the real length mixed in so it still feels alive.
 const segLen = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
-export function steadyPose(P, keepArms) {
+export function steadyPose(P, keepArms, crouch = 0) {
   // Fixed bone lengths: only the angles come from the camera, so arms and
   // legs never shrink or stretch when a kid leans in or turns.
   const firm = (m, ref) => ref;
@@ -850,21 +854,28 @@ export function steadyPose(P, keepArms) {
   // hips up and down in the picture, which made the character float off the
   // road, so the feet always stand on the ground line and the legs bend to
   // reach them. Real jumps come from the game's jump move, which lifts the
-  // character separately and springs it back down. A kid who ducks (hips
-  // clearly lower than their calibrated standing height) crouches a little:
-  // the body sinks and the knees bend out.
-  const crouch = clamp(hc[1] - 0.15, 0, 0.55);
-  const drop = crouch - hc[1];
+  // character separately and springs it back down. A kid who ducks (the
+  // game's crouch: hips and head both clearly lower) crouches a little: the
+  // body sinks and the knees bend out. A knee the camera sees lifted
+  // (running on the spot) lifts that foot off the ground.
+  const drop = clamp(crouch, 0, 0.5) - hc[1];
   for (const k in out) out[k] = [out[k][0], out[k][1] + drop];
   for (const [hp, kn, an, side] of [['lh', 'lk', 'la', -1], ['rh', 'rk', 'ra', 1]]) {
+    // A thigh looks shorter to the camera as its knee comes up towards it.
+    // Compared with the other leg, so a kid's own leg length doesn't matter
+    // and one foot always stays down.
+    const thigh = k => P[k][1] - P[k === 'lk' ? 'lh' : 'rh'][1];
+    const lift = P.kneesSeen ? clamp((thigh(kn === 'lk' ? 'rk' : 'lk') - thigh(kn) - 0.12) * 1.4, 0, 0.75) : 0;
     const H = out[hp], foot = [H[0] + side * 0.02, STAND.la[1]];
     const len = segLen(H, foot) || 1, d = Math.min(len, 1.6), half = Math.sqrt(Math.max(0, 0.64 - (d / 2) ** 2));
     const ux = (foot[0] - H[0]) / len, uy = (foot[1] - H[1]) / len, A = [H[0] + ux * d, H[1] + uy * d];
     // Knee halfway down the leg, pushed out sideways (away from the body).
     let px = -uy, py = ux;
     if (px * side < 0) { px = -px; py = -py; }
-    out[kn] = [H[0] + ux * d / 2 + px * half, H[1] + uy * d / 2 + py * half];
-    out[an] = A;
+    // A lifted knee comes up towards the camera: knee and foot both rise, so
+    // the thigh looks short and the shin hangs under it, like running.
+    out[kn] = [H[0] + ux * d / 2 + px * half, H[1] + uy * d / 2 + py * half - lift];
+    out[an] = [A[0], A[1] - lift];
   }
   for (const [sh, el, wr] of [['ls', 'le', 'lw'], ['rs', 're', 'rw']]) {
     if (keepArms) {
@@ -898,7 +909,7 @@ function drawAvatar(ctx, L, p, time, ch) {
   if (p.pts && p.base) {
     // Smooth out camera jitter so the character doesn't twitch.
     // A 1-Euro filter: heavy smoothing while still, almost none in fast moves.
-    const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type));
+    const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type), p.crouch);
     const f = p.poseFilter ??= {}, now = performance.now() / 1000;
     P = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [oneEuro(f, k + 'x', v[0], now), oneEuro(f, k + 'y', v[1], now)]]));
     // One bad camera number would otherwise stick in the filter: start it afresh.
