@@ -839,17 +839,26 @@ export function steadyPose(P, keepArms) {
   [out.lh, out.rh] = span(hc, P.lh, P.rh, segLen(S0.lh, S0.rh));
   [out.ls, out.rs] = span(sc, P.ls, P.rs, segLen(S0.ls, S0.rs));
   out.nose = toward(sc, mid(P.ls, P.rs), P.nose, 0.5, [0, -0.5]);
-  for (const [hp, kn, an] of [['lh', 'lk', 'la'], ['rh', 'rk', 'ra']]) {
-    out[kn] = toward(out[hp], P[hp], P[kn], 0.8, [0, 0.8]);
-    out[an] = toward(out[kn], P[kn], P[an], 0.8, [0, 0.8]);
-  }
   // Feet on the ground: leaning toward the camera or stepping closer moves the
   // hips up and down in the picture, which made the character float off the
-  // road. Slide the whole body so the lower foot always stands on the ground
-  // line. Real jumps come from the game's jump move, which lifts the
-  // character separately and springs it back down.
-  const drop = STAND.la[1] - Math.max(out.la[1], out.ra[1]);
+  // road, so the feet always stand on the ground line and the legs bend to
+  // reach them. Real jumps come from the game's jump move, which lifts the
+  // character separately and springs it back down. A kid who ducks (hips
+  // clearly lower than their calibrated standing height) crouches a little:
+  // the body sinks and the knees bend out.
+  const crouch = clamp(hc[1] - 0.15, 0, 0.55);
+  const drop = crouch - hc[1];
   for (const k in out) out[k] = [out[k][0], out[k][1] + drop];
+  for (const [hp, kn, an, side] of [['lh', 'lk', 'la', -1], ['rh', 'rk', 'ra', 1]]) {
+    const H = out[hp], foot = [H[0] + side * 0.02, STAND.la[1]];
+    const len = segLen(H, foot) || 1, d = Math.min(len, 1.6), half = Math.sqrt(Math.max(0, 0.64 - (d / 2) ** 2));
+    const ux = (foot[0] - H[0]) / len, uy = (foot[1] - H[1]) / len, A = [H[0] + ux * d, H[1] + uy * d];
+    // Knee halfway down the leg, pushed out sideways (away from the body).
+    let px = -uy, py = ux;
+    if (px * side < 0) { px = -px; py = -py; }
+    out[kn] = [H[0] + ux * d / 2 + px * half, H[1] + uy * d / 2 + py * half];
+    out[an] = A;
+  }
   for (const [sh, el, wr] of [['ls', 'le', 'lw'], ['rs', 're', 'rw']]) {
     if (keepArms) {
       // Hand break games: the hands must stay exactly where the camera saw them.

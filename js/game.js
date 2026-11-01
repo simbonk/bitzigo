@@ -211,7 +211,14 @@ export class Player {
     this.setActions(latched);
 
     // Slowly follow the kid if they drift closer/further while standing normally.
-    if (!latched.jump && !latched.leanL && !latched.leanR && brk !== 'tray' && brk !== 'rain') {
+    // Not while they duck: the standing height would sink with them, and
+    // standing back up would then look like a jump.
+    // (If the kid stays low for a few seconds, they've probably just moved,
+    // so the standing height catches up after all.)
+    const low = f.hip.y - B.hipY > 0.15 * t;
+    if (!low) this.lowSince = null; else this.lowSince ??= now;
+    const ducking = low && now - this.lowSince < 3;
+    if (!ducking && !latched.jump && !latched.leanL && !latched.leanR && brk !== 'tray' && brk !== 'rain') {
       const a = 0.02;
       B.hipX = lerp(B.hipX, f.hip.x, 0.008); // slow, so a little wiggle shows on screen
       B.noseX = lerp(B.noseX, f.nose.x, 0.02);
