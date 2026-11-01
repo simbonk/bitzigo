@@ -153,87 +153,177 @@ export function missSound(kind) {
   else sfx.miss();
 }
 
-// ---------- Music: a bouncy chiptune loop, scheduled ahead on the audio clock ----------
+// ---------- Music: an energetic chiptune track for each world, scheduled ahead on the audio clock ----------
 
-const music = { on: false, bpm: 128, step: 0, next: 0, timer: null, bus: null, intense: 0, song: null };
+const music = { on: false, step: 0, next: 0, timer: null, bus: null, echo: null, intense: 0, song: null };
 const hz = m => 440 * 2 ** ((m - 69) / 12);
-// Chord tones for the lead to pick from: major (M) or minor (m).
-const TONES = { M: [0, 4, 7, 12, 16, 19], m: [0, 3, 7, 12, 15, 19] };
-// Four-bar loops. roots: bass note per bar (MIDI); q: chord quality per bar;
-// lead: 16 steps of chord-tone indexes (-1 rests); beat: drum pattern.
-export const SONGS = [
-  { name: 'Forest Run', bpm: 128, roots: [57, 53, 48, 55], q: 'mMMM', lead: [0, 2, 3, 2, 4, 3, 2, 3, 0, 2, 3, 4, 5, 4, 3, 2], wave: 'square', beat: 'four' },
-  { name: 'Snow Dash', bpm: 140, roots: [48, 55, 57, 53], q: 'MMmM', lead: [3, -1, 2, 3, 4, -1, 3, 2, 1, 2, 3, -1, 4, 5, 4, 3], wave: 'triangle', beat: 'four' },
-  { name: 'Desert Zoom', bpm: 132, roots: [50, 46, 48, 45], q: 'mMMM', lead: [0, 1, 2, 1, 3, 2, 1, 2, 0, -1, 2, 3, 4, 3, 2, 1], wave: 'sawtooth', beat: 'break' },
-  { name: 'Space Hop', bpm: 120, roots: [52, 48, 55, 50], q: 'mMMM', lead: [0, 2, 4, 2, 0, 2, 4, 5, 3, 2, 4, 2, 3, 4, 5, 4], wave: 'square', beat: 'break' },
-  { name: 'Hyper Rush', bpm: 150, roots: [54, 50, 57, 52], q: 'mMMM', lead: [3, 3, 2, 3, 4, 3, 2, 1, 3, 3, 2, 3, 5, 4, 3, 2], wave: 'square', beat: 'four' },
-];
+const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const midi = n => { const m = /^([A-G])(#|b)?(\d)$/.exec(n); return 12 * (+m[3] + 1) + NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
+// A melody line: one token per 8th note, '.' rests, '-' holds the last note.
+// Turns it into 16th-note steps: { n: midi, len: steps } on note starts.
+function line(str) {
+  const tok = str.replace(/\|/g, ' ').trim().split(/\s+/), out = [];
+  tok.forEach((t, i) => {
+    if (t === '-') { for (let j = out.length - 1; j >= 0; j--) if (out[j]) { out[j].len += 2; break; } }
+    else if (t !== '.') out[i * 2] = { n: midi(t), len: 2 };
+  });
+  out.length = tok.length * 2;
+  return out;
+}
+// Chords: "Am F C G" (one per bar) -> bass root (MIDI, around A2) and chord tones.
+function chords(str) {
+  return str.trim().split(/\s+/).map(c => {
+    const m = /^([A-G](?:#|b)?)(m?)$/.exec(c), root = midi(m[1] + '2');
+    return { root: root < 40 ? root + 12 : root, tones: m[2] ? [0, 3, 7, 12, 15, 19] : [0, 4, 7, 12, 16, 19] };
+  });
+}
 
-function note(freq, t, dur, type, vol) {
+// Eight-bar songs: chords per bar (four, played twice), a melody for bars
+// 1-4 (A) and 5-8 (B), and 16-step drum and bass patterns.
+// bass: r root, o octave up, f fifth, '.' rest.
+// Every song is made for jumping about: 144-170 beats a minute, and faster
+// still as the timer runs down.
+const SONG_DEFS = {
+  forest: { name: 'Treetop Sprint', bpm: 150, chords: 'Am F C G', lead: 'square', echo: true, arp: 'triangle',
+    A: 'A4 . C5 E5 A5 - G5 E5 | F5 - E5 C5 A4 . C5 F5 | E5 - G5 - C6 - B5 G5 | D5 . G5 B5 D6 - B5 G5',
+    B: 'E6 - D6 C6 A5 - C6 D6 | C6 - A5 F5 C6 - A5 F5 | G5 E5 G5 C6 E6 - D6 C6 | B5 - G5 D5 G5 A5 B5 D6',
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', bass: 'r.o.r.o.r.o.r.o.' },
+  snow: { name: 'Snowball Blitz', bpm: 156, chords: 'C G Am F', lead: 'triangle', lead2: 'square', echo: true,
+    A: 'C5 E5 G5 E5 C6 - G5 E5 | D5 G5 B5 G5 D6 - B5 G5 | E5 A5 C6 A5 E6 - C6 A5 | F5 A5 C6 A5 F5 . G5 A5',
+    B: 'G5 - G5 - G5 - E5 F5 | G5 - D5 - B4 - D5 G5 | A5 - A5 - C6 - B5 A5 | F5 - E5 - D5 - C5 .',
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '', jingle: 'x.x.x.x.x.x.x.xx', bass: 'r...f...r...f.o.', ping: true },
+  desert: { name: 'Sand Viper', bpm: 146, chords: 'Dm Eb Dm C', lead: 'sawtooth', detune: true,
+    A: 'D5 . A4 D5 F5 E5 D5 C#5 | Eb5 - G5 - Bb5 - G5 Eb5 | D5 F5 A5 - G5 F5 E5 D5 | C5 E5 G5 - E5 - C#5 .',
+    B: 'A5 - Bb5 A5 G5 F5 E5 F5 | G5 - Bb5 - Eb6 - D6 Bb5 | A5 - F5 - D5 - F5 A5 | G5 E5 C5 E5 G5 - A5 .',
+    kick: 'x.....x...x.....', snare: '....x.......x..x', hat: 'x.xxx.xxx.xxx.xx', bass: 'r.rr..r.r.rr.fo.', tom: '...........x.x.x' },
+  space: { name: 'Comet Chase', bpm: 160, chords: 'Em C G D', lead: 'sawtooth', detune: true, echo: true, arp: 'square',
+    A: 'E5 G5 B5 E6 B5 G5 E5 B4 | E5 G5 C6 E6 C6 G5 E5 C5 | D5 G5 B5 D6 B5 G5 D5 B4 | D5 F#5 A5 D6 A5 F#5 D5 A4',
+    B: 'B5 - - A5 G5 - F#5 G5 | E5 - - - C6 - B5 A5 | B5 - - D6 - B5 G5 B5 | A5 - F#5 - D5 - F#5 A5',
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'xxxxxxxxxxxxxxxx', bass: 'rrorrorrorroroor', laser: true },
+  beach: { name: 'Surf Smash', bpm: 152, chords: 'F Bb C F', lead: 'square', tremolo: true, echo: true,
+    A: 'F5 - A5 C6 F6 - C6 A5 | Bb5 - D6 - F6 - D6 Bb5 | C6 - E6 G6 C6 - Bb5 G5 | A5 - C6 - F5 - . .',
+    B: 'C6 C6 Bb5 A5 G5 A5 Bb5 C6 | D6 - C6 Bb5 F5 - D5 F5 | E5 G5 C6 E6 G6 - E6 C6 | F6 - C6 - A5 - F5 .',
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', bongo: 'x..x.x..x..x.x.x', bass: 'r..r..r.f..f..o.' },
+  candy: { name: 'Sugar Rush', bpm: 168, chords: 'G Em C D', lead: 'square', arp: 'square', echo: true,
+    A: 'G5 B5 D6 B5 G5 B5 D6 G6 | E5 G5 B5 G5 E5 G5 B5 E6 | C6 - E6 - G6 - E6 C6 | D6 - F#6 - A6 - F#6 D6',
+    B: 'B5 - D6 - B5 - G5 A5 | B5 - G5 - E5 - G5 B5 | C6 B5 A5 G5 E5 G5 C6 E6 | D6 - - C6 B5 A5 F#5 A5',
+    kick: 'x...x...x...x...', snare: '....x.......x...', clap: '....x.......x.x.', hat: '..x...x...x...x.', bass: 'r.o.r.o.f.o.r.o.' },
+  spooky: { name: 'Monster Dash', bpm: 144, chords: 'Em Em C B', lead: 'square', lead2: 'triangle', echo: true,
+    A: 'E5 . G5 . B5 Bb5 A5 G5 | E5 . G5 . B5 - E6 . | C6 . B5 A5 G5 . E5 . | D#5 . F#5 . B5 - - .',
+    B: 'E6 - D#6 E6 B5 - G5 B5 | E6 - D#6 E6 G6 - E6 . | C6 - B5 C6 E6 - C6 . | B5 A5 G5 F#5 D#5 - B4 .',
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', bass: 'r...f...o...f...', bell: true },
+  boss: { name: "Captain Squawk's Showdown", bpm: 170, chords: 'Dm Bb C A', lead: 'sawtooth', detune: true, echo: true, arp: 'square',
+    A: 'D5 D5 F5 D5 A5 D5 G5 F5 | D5 D5 F5 D5 Bb5 F5 D5 . | E5 E5 G5 E5 C6 G5 E5 . | C#5 E5 A5 C#6 E6 - C#6 A5',
+    B: 'D6 - A5 - F5 - A5 D6 | F6 - D6 - Bb5 - F5 Bb5 | G6 - E6 - C6 - G5 E5 | A5 - C#6 - E6 - A6 .',
+    kick: 'x.x.x.x.x.x.x.xx', snare: '....x.......x...', hat: 'xxxxxxxxxxxxxxxx', bass: 'rrrrrrrrrrrrrrro', laser: true },
+};
+export const SONGS = Object.entries(SONG_DEFS).map(([id, d]) => ({ id, ...d, bars: chords(d.chords), melody: [...line(d.A), ...line(d.B)] }));
+
+function note(freq, t, dur, type, vol, dest = music.bus, detune = 0) {
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type;
   o.frequency.setValueAtTime(freq, t);
+  if (detune) o.detune.setValueAtTime(detune, t);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(music.bus);
+  o.connect(g).connect(dest);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
 
-function drum(t, kind) {
-  if (kind === 'kick') {
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.frequency.setValueAtTime(150, t);
-    o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
-    g.gain.setValueAtTime(0.9, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-    o.connect(g).connect(music.bus);
-    o.start(t); o.stop(t + 0.16);
-    return;
+let noiseBuf = null;
+function noiseHit(t, len, type, freq, vol, q = 1) {
+  if (!noiseBuf) {
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.3, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  const len = Math.ceil(ac.sampleRate * (kind === 'snare' ? 0.15 : 0.04));
-  const buf = ac.createBuffer(1, len, ac.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-  const src = ac.createBufferSource();
-  src.buffer = buf;
-  const f = ac.createBiquadFilter();
-  f.type = 'highpass';
-  f.frequency.value = kind === 'snare' ? 1200 : 7000;
-  const g = ac.createGain();
-  g.gain.value = kind === 'snare' ? 0.45 : 0.18;
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = noiseBuf;
+  f.type = type; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
   src.connect(f).connect(g).connect(music.bus);
-  src.start(t);
+  src.start(t); src.stop(t + len + 0.02);
 }
 
+function drum(t, kind) {
+  if (kind === 'kick' || kind === 'tom' || kind === 'bongo') {
+    const [f0, f1, len, vol] = { kick: [150, 40, 0.15, 0.9], tom: [220, 90, 0.18, 0.5], bongo: [420, 260, 0.09, 0.35] }[kind];
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + len * 0.8);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    o.connect(g).connect(music.bus);
+    o.start(t); o.stop(t + len + 0.02);
+    return;
+  }
+  if (kind === 'snare') return noiseHit(t, 0.15, 'highpass', 1200, 0.45);
+  if (kind === 'clap') { for (const d of [0, 0.012, 0.024]) noiseHit(t + d, 0.1, 'bandpass', 1500, 0.35, 0.8); return; }
+  if (kind === 'jingle') { noiseHit(t, 0.08, 'bandpass', 9000, 0.22, 2); noiseHit(t + 0.03, 0.06, 'bandpass', 7000, 0.15, 2); return; }
+  noiseHit(t, 0.04, 'highpass', 7000, 0.18); // hat
+}
+
+const hit = (pat, beat) => pat && pat[beat] === 'x';
 function schedule() {
-  const song = music.song;
-  const spb = 60 / (song.bpm + music.intense * 24) / 4; // seconds per 16th note
+  const S = music.song;
+  const spb = 60 / (S.bpm + music.intense * 20) / 4; // seconds per 16th note
   while (music.next < ac.currentTime + 0.15) {
-    const s = music.step % 64, beat = s % 16, bar = Math.floor(s / 16);
-    const root = song.roots[bar], t = music.next;
-    if (song.beat === 'four' ? beat % 4 === 0 : beat === 0 || beat === 6 || beat === 10) drum(t, 'kick');
-    if (beat === 4 || beat === 12) drum(t, 'snare');
-    if (beat % 2 === 1) drum(t, 'hat');
-    if (music.intense > 0.5 && beat % 4 === 2) drum(t, 'hat');
-    // Octave-bouncing bass on every 8th note.
-    if (beat % 2 === 0) note(hz(root - 12 + (beat % 4 === 2 ? 12 : 0)), t, spb * 1.8, 'square', 0.16);
-    // Lead arpeggio, busier as the workout heats up.
-    const li = song.lead[beat];
-    if (li >= 0 && (beat % 2 === 0 || music.intense > 0.3)) note(hz(root + 12 + TONES[song.q[bar]][li]), t, spb * 0.9, song.wave, song.wave === 'sawtooth' ? 0.04 : 0.06);
+    const s = music.step % 128, beat = s % 16, bar = Math.floor(s / 16);
+    const ch = S.bars[bar % S.bars.length], t = music.next, hot = music.intense;
+    // Drums.
+    if (hit(S.kick, beat)) drum(t, 'kick');
+    if (hit(S.snare, beat)) drum(t, 'snare');
+    if (hit(S.clap, beat)) drum(t, 'clap');
+    if (hit(S.hat, beat) || (hot > 0.5 && beat % 2 === 1 && !S.jingle)) drum(t, 'hat');
+    if (hit(S.jingle, beat)) drum(t, 'jingle');
+    if (hit(S.bongo, beat)) drum(t, 'bongo');
+    if (hit(S.tom, beat) && bar % 2 === 1) drum(t, 'tom');
+    // A drum fill into every fourth bar.
+    if (bar % 4 === 3 && beat >= 12) drum(t, beat % 2 ? 'tom' : 'snare');
+    // Bass.
+    const b = S.bass[beat];
+    if (b && b !== '.') note(hz(ch.root - 12 + (b === 'o' ? 12 : b === 'f' ? 7 : 0)), t, spb * 1.6, 'square', 0.15);
+    // Chord arpeggio in 16ths, filling out as the timer runs down.
+    if (S.arp && (hot > 0.2 || beat % 2 === 0)) note(hz(ch.root + 24 + ch.tones[[0, 1, 2, 3, 2, 1][s % 6]]), t, spb * 0.8, S.arp, 0.035);
+    // Lead melody, with a second voice an octave down on some songs.
+    const m = S.melody[s];
+    if (m) {
+      const dur = spb * m.len * 0.92;
+      if (S.tremolo) for (let k = 0; k < m.len; k++) note(hz(m.n), t + k * spb, spb * 0.85, S.lead, 0.05, music.lead);
+      else note(hz(m.n), t, dur, S.lead, S.lead === 'sawtooth' ? 0.04 : 0.06, music.lead);
+      if (S.detune) note(hz(m.n), t, dur, S.lead, 0.03, music.lead, 12);
+      if (S.lead2) note(hz(m.n - 12), t, dur, S.lead2, 0.05, music.lead);
+    }
+    // Little world touches.
+    if (S.laser && beat === 0 && bar % 2 === 1) { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(120, t + 0.25); g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.26); o.connect(g).connect(music.bus); o.start(t); o.stop(t + 0.28); }
+    if (S.ping && beat === 14) note(hz(ch.root + 36), t, 0.4, 'sine', 0.06);
+    if (S.bell && beat === 0) note(hz(ch.root + 31), t, 0.9, 'triangle', 0.06);
     music.next += spb;
     music.step++;
   }
 }
 
-export function startMusic(songIndex = 0) {
+// song: a world's id (forest, snow, …, or 'boss'), or a number to pick in turn.
+export function startMusic(song = 0) {
   if (!ac || music.on) return;
-  music.song = SONGS[((songIndex % SONGS.length) + SONGS.length) % SONGS.length];
+  music.song = SONGS.find(x => x.id === song) || SONGS[((+song || 0) % SONGS.length + SONGS.length) % SONGS.length];
   music.step = 0;
   if (!music.bus) {
     music.bus = ac.createGain();
     music.bus.connect(master);
+    // The lead goes through a little echo, for that big-arcade sound.
+    music.lead = ac.createGain();
+    const d = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
+    fb.gain.value = 0.3; wet.gain.value = 0.35;
+    music.lead.connect(music.bus);
+    music.lead.connect(d); d.connect(fb).connect(d); d.connect(wet).connect(music.bus);
+    music.delay = d; music.wet = wet;
   }
+  music.delay.delayTime.value = 60 / music.song.bpm * 0.75; // a dotted 8th
+  music.wet.gain.value = music.song.echo ? 0.35 : 0;
   music.bus.gain.value = muted ? 0 : 0.35;
   music.on = true;
   music.next = ac.currentTime + 0.05;
@@ -245,7 +335,7 @@ export function startMusic(songIndex = 0) {
 // null when no music is playing.
 export function beatInfo() {
   if (!ac || !music.on || !music.song) return null;
-  const spb = 60 / (music.song.bpm + music.intense * 24) / 4;
+  const spb = 60 / (music.song.bpm + music.intense * 20) / 4;
   return { now: ac.currentTime, t0: music.next - (music.step % 4) * spb, period: spb * 4 };
 }
 // 1 right on a beat, fading to 0 just before the next one: for things that pulse with the music.

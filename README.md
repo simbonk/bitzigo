@@ -83,3 +83,5 @@ The MediaPipe runtime (Apache-2.0) and pose model are vendored in `vendor/` and 
 **Swim time:** a lake with a little island and a palm tree out in the middle. Every big arm stroke moves the swimmer out towards it, and they get smaller the further they go. On the island they turn round and do a little victory dance; one crossing each, and once everyone has danced for a moment it's back to running.
 
 Characters never stand still: on the road they run (feet lifting in turn, arms pumping while they hang down, a bounce on every step) on top of what the camera sees, and in the break games they jog on the spot.
+
+**Music:** every world has its own energetic chiptune track, 144 to 170 beats a minute and speeding up as the timer runs down: Treetop Sprint (forest), Snowball Blitz (snow, with sleigh bells), Sand Viper (desert), Comet Chase (space, with laser zaps), Surf Smash (beach, tremolo surf guitar and bongos), Sugar Rush (candy), Monster Dash (spooky, with a bell) and Captain Squawk's Showdown for the boss fight. They're eight-bar songs written as note names in `js/audio.js` (`SONG_DEFS`), with the lead through a little echo.
