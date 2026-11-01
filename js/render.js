@@ -338,7 +338,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, L.cx + (i - 2.5) * L.S * 0.35, wy - L.S * (0.2 + 0.5 * T.splash) - (i % 2) * L.S * 0.2, L.S * 0.15, L.S * 0.15, '#e6f4ff');
   } });
   // The pond sits under everything; other break props draw over the kid.
-  if (T?.type === 'chops') items.push({ z: KARATE_Z, draw: () => drawLog(ctx, L, T, time) });
+  if (T?.type === 'chops') items.push({ z: FRONT_Z, draw: () => drawLog(ctx, L, T, time) });
   if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
   else if (T?.type === 'boss' && T.boss) {
     // Captain Squawk hangs behind the kid, and comes in front when he swoops.
@@ -347,9 +347,9 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     const ep = eaglePos(L, T.boss);
     if (ep) items.push({ z: 0.04, draw: () => drawEagle(ctx, ep, time) });
   } else if (T && T.type !== 'bubbles') {
-    items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
+    items.push(T.type === 'karate' ? { z: FRONT_Z, draw: () => drawBoards(ctx, L, T) }
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
-      : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
+      : { z: FRONT_Z, draw: () => drawTower(ctx, L, T) });
   }
   // Everything after the runner (things passing in front, splashes, balls)
   // goes on the front world layer, above the character layer.
@@ -1039,16 +1039,21 @@ function drawObstacle(ctx, L, o, z) {
   ctx.restore();
 }
 
-// Throw time: a pyramid of cans on a little table down the road.
-const TOWER_Z = 0.3;
+// Throw time: a pyramid of cans on a little table, right in front of the
+// kid (between them and the camera), so they knock it over towards you.
+const TOWER_Z = 0.3;   // the burning house, down the road
+const FRONT_Z = -0.02; // things the kid hits: just in front of them
+const NEAR = 0.8;      // ...and a bit smaller, so they don't hide the kid
+// Where they stand: on the road just in front of the kid's feet.
+const frontSpot = L => ({ y: L.ground + L.S * 0.35, s: 1 });
 function canBox(L, c) {
-  const { y, s } = project(L, TOWER_Z);
-  const u = L.S * s, cw = u * 0.72, ch = u * 0.9;
+  const { y, s } = frontSpot(L);
+  const u = L.S * s * NEAR, cw = u * 0.72, ch = u * 0.9;
   return { x: L.cx + c.x * cw * 1.08, y: y - u * 1.1 + c.y * ch, cw, ch, u, ground: y };
 }
 function drawTower(ctx, L, T) {
-  const { y, s } = project(L, TOWER_Z);
-  const u = L.S * s;
+  const { y, s } = frontSpot(L);
+  const u = L.S * s * NEAR;
   if (T.type === 'snowman') { drawSnowman(ctx, L, T, u * SNOW_SCALE, y); return; }
   block(ctx, L.cx - u * 1.4, y - u * 1.1, u * 2.8, u * 0.3, '#8a5220', 0.3);
   rect(ctx, L.cx - u * 1.2, y - u * 0.8, u * 0.2, u * 0.8, '#6b3e18');
@@ -1066,7 +1071,7 @@ function drawTower(ctx, L, T) {
   }
 }
 // Snowman: three stacked snowballs, bigger than a can. Hit ones tumble away.
-const SNOW_SCALE = 1.5;
+const SNOW_SCALE = 1.1;
 function snowmanBox(L, c, u, ground) {
   let y = ground;
   for (let r = 0; r < c.row; r++) y -= u * [1.25, 1, 0.75][r] * 0.92;
@@ -1097,12 +1102,11 @@ function drawSnowman(ctx, L, T, u, ground) {
     ctx.restore();
   }
 }
-// Karate time: boards across two bricks, out in front of the kid down the
-// road (so they show over the kid's head). Chopped boards snap and fly.
-const KARATE_Z = 0.3;
+// Karate time: boards across two bricks, right in front of the kid (between
+// them and the camera). Chopped boards snap and fly.
 function drawBoards(ctx, L, T) {
-  const { y, s } = project(L, KARATE_Z);
-  const u = L.S * s * 1.3;
+  const { y, s } = frontSpot(L);
+  const u = L.S * s * 1.0;
   block(ctx, L.cx - u * 1.5, y - u * 1.0, u * 0.6, u * 1.0, '#9aa7b8', 0.2);
   block(ctx, L.cx + u * 0.9, y - u * 1.0, u * 0.6, u * 1.0, '#9aa7b8', 0.2);
   const bh = u * 0.24;
@@ -1118,11 +1122,11 @@ function drawBoards(ctx, L, T) {
     }
   }
 }
-// Chop frenzy: a log on a stump out in front. Every chop splits it, the
-// halves fly off, and a fresh log drops on.
+// Chop frenzy: a log on a stump right in front of the kid. Every chop
+// splits it, the halves fly off, and a fresh log drops on.
 function drawLog(ctx, L, T, time) {
-  const { y, s } = project(L, KARATE_Z);
-  const u = L.S * s * 1.3, k = T.flash / 0.15;
+  const { y, s } = frontSpot(L);
+  const u = L.S * s * 0.75, k = T.flash / 0.15;
   block(ctx, L.cx - u * 0.9, y - u * 0.9, u * 1.8, u * 0.9, '#8a5220', 0.25);   // stump
   rect(ctx, L.cx - u * 0.75, y - u * 0.9, u * 1.5, u * 0.12, '#d8a868');
   const top = y - u * 0.9, lw = u * 0.9, lh = u * 1.3;
@@ -1255,8 +1259,8 @@ function drawBalls(ctx, L, T) {
     const k = Math.min(1, b.t / b.dur);
     let c = canBox(L, b.target);
     if (T.type === 'snowman') {
-      const { y: g, s } = project(L, TOWER_Z);
-      const sb = snowmanBox(L, b.target, L.S * s * SNOW_SCALE, g);
+      const { y: g, s } = frontSpot(L);
+      const sb = snowmanBox(L, b.target, L.S * s * NEAR * SNOW_SCALE, g);
       c = { x: sb.x, y: sb.y + sb.d / 2, ch: sb.d };
     }
     const sx = L.cx + b.side * L.S * 0.7, sy = L.ground - L.S * 3.4;
@@ -1558,11 +1562,12 @@ function drawAvatar(ctx, L, p, time, ch) {
   }
   // Running, the character faces away down the road (you see the back of
   // their head) and does a quick head turn to the camera as a reaction:
-  // after a move, when bonked, or on a streak. The break games and the boss
-  // fight are the same: the targets are out in front, down the road. Only
-  // before the run starts (and when paused) do they face the camera.
+  // after a move, when bonked, or on a streak. In the break games they turn
+  // round to face the camera, with what they chop or knock over between them
+  // and the camera. For the fire and the boss, both down the road and up in
+  // the sky, they keep facing away.
   const onFire = p.fx?.some(e => e.type === 'fire');
-  const body = (!T && !(p.run > 0.3)) || p.paused;
+  const body = (T ? T.type !== 'boss' && T.type !== 'fire' : !(p.run > 0.3)) || p.paused;
   const glance = body || p.bonk > 0 || p.bump > 0.15 || onFire;
   p.turn = glance ? 1 : 0; // a quick, cheesy snap round: no spinning
   const look = { sx, sy, wow, turn: p.turn, back: !body };
