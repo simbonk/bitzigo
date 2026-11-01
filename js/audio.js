@@ -85,6 +85,11 @@ export const sfx = {
   // Rope swing: a rising-falling slide whistle.
   swing() { tone(400, 0.35, { type: 'sine', vol: 0.3, slide: 3 }); tone(1200, 0.35, { type: 'sine', vol: 0.25, slide: 0.4, delay: 0.35 }); },
   splash() { tone(150, 0.2, { type: 'sine', vol: 0.4, slide: 0.4 }); noise(0.6, { vol: 0.7, from: 1800, to: 200, q: 0.7 }); [0.2, 0.32, 0.45].forEach(d => tone(900 + d * 1000, 0.05, { type: 'sine', vol: 0.15, slide: 1.6, delay: d })); },
+  // Boss fight: a bomb going off on Captain Squawk.
+  boom() { tone(65, 0.45, { type: 'sine', vol: 0.75, slide: 0.4 }); noise(0.55, { vol: 0.7, from: 2500, to: 120, q: 0.6 }); tone(880, 0.06, { type: 'square', vol: 0.08, delay: 0.03 }); },
+  // Super Eagle's cry, and his gulp when he eats a lump of points.
+  screech() { tone(1400, 0.5, { type: 'sawtooth', vol: 0.1, slide: 0.55 }); tone(1800, 0.35, { type: 'square', vol: 0.05, slide: 0.6, delay: 0.05 }); noise(0.4, { vol: 0.2, from: 5000, to: 2000, q: 3 }); },
+  gulp() { tone(300, 0.14, { type: 'sine', vol: 0.4, slide: 0.45 }); [1047, 1319, 1568].forEach((f, i) => tone(f, 0.06, { type: 'triangle', vol: 0.12, delay: 0.1 + i * 0.04 })); },
   throw() { noise(0.18, { vol: 0.35, from: 900, to: 2600, q: 3 }); },
   knock() { noise(0.2, { vol: 0.5, from: 4000, to: 900, q: 2 }); tone(520, 0.06, { vol: 0.12 }); tone(390, 0.08, { vol: 0.12, delay: 0.07 }); },
   strike() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.12, { vol: 0.16, delay: i * 0.06 })); },
@@ -285,7 +290,7 @@ const VOICE_LINES = [
   'go', 'three', 'two', 'one', 'throw_time', 'karate_time', 'snowball_time', 'bubble_time', 'fire_time',
   'dance_time', 'kaiju_time', 'bugs_time', 'goalie_time', 'climb_time', 'tray_time', 'rain_time', 'fly_time', 'chops_time', 'wyr_time', 'swim_time',
   'back', 'final_rush', 'great', 'ready', 'lesson_log', 'lesson_crate', 'lesson_duck', 'lesson_rope',
-  'got_it', 'lobby', 'heart', 'champions',
+  'got_it', 'lobby', 'heart', 'champions', 'boss_time', 'boss_win', 'eagle_time', 'feed_time', 'eagle_level',
 ];
 const clips = {};
 let current = null;
@@ -330,7 +335,14 @@ export function setAnnouncer(on) { announcer = on; }
 
 // Lines with no recorded clip yet: the browser's own voice says them, so the
 // kids still hear what to do. A recorded voice/<name>.mp3 takes over.
-const SPOKEN = { duck: 'Duck!', lesson_duck: 'Crazy bird! Duck under it!' };
+const SPOKEN = {
+  duck: 'Duck!', lesson_duck: 'Crazy bird! Duck under it!',
+  boss_time: 'Boss time! Captain Squawk is here! Throw bombs at him, and duck when he swoops!',
+  boss_win: 'Super Eagle knocked out Captain Squawk!',
+  eagle_time: "Look! It's Super Eagle, the crazy bird's arch enemy!",
+  feed_time: 'Feed Super Eagle! Throw your points into his beak!',
+  eagle_level: 'Super Eagle leveled up!',
+};
 function speak(text) {
   try {
     const s = window.speechSynthesis;

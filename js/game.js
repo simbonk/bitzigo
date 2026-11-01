@@ -131,7 +131,7 @@ export class Player {
     this.misses = 0;
     this.judged = 0;
     this.missRun = 0;
-    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0, fly: 0, swim: 0, wyr: 0 };
+    this.counts = { jump: 0, punch: 0, dodge: 0, swing: 0, knock: 0, chop: 0, pop: 0, gear: 0, fire: 0, dance: 0, stomp: 0, bugs: 0, saves: 0, climb: 0, stack: 0, rain: 0, fly: 0, swim: 0, wyr: 0, bomb: 0 };
     this.typeStats = {};
     this.obstacles = [];
     this.clock = 0;
@@ -392,10 +392,12 @@ export class Player {
   }
 
   // Break time: obstacles pause and each kid gets a stop-and-do game.
-  startBreak(type = 'cans') {
+  // shared: the one boss everybody fights, for the boss fight (see main.js).
+  startBreak(type = 'cans', shared = null) {
     this.obstacles = [];
     const B = { type, balls: [], cooldown: 0, cleared: 0 };
-    if (type === 'bubbles') { B.alt = 0; B.target = 0; B.vel = 0; B.falling = false; B.flapAt = -9; B.bubble = this.newBubble(); B.pops = []; }
+    if (type === 'boss') Object.assign(B, { boss: shared, bombs: [], booms: [], coins: [], yums: [], stun: 0, react: null, ducked: -1, bonked: -1 });
+    else if (type === 'bubbles') { B.alt = 0; B.target = 0; B.vel = 0; B.falling = false; B.flapAt = -9; B.bubble = this.newBubble(); B.pops = []; }
     else if (type === 'karate') B.boards = boards();
     else if (type === 'fire') { B.fires = this.newFires(); B.aim = 0; B.aimTarget = 0; B.on = false; B.hiss = 0; }
     else if (MINI.includes(type)) startMini(this, B);
@@ -424,6 +426,7 @@ export class Player {
     if (!T || T.cooldown > 0) return;
     if (T.type === 'bubbles') { this.flap(); return; }
     if (MINI.includes(T.type)) return;
+    if (T.type === 'boss') { this.throwBomb(); return; }
     T.cooldown = 0.35;
     if (T.type === 'karate') { this.chop(); return; }
     if (!T.cans) return; // fire time: the hose aims, nothing is thrown
@@ -433,6 +436,86 @@ export class Player {
     const target = T.type === 'snowman' ? alive[alive.length - 1] : pick(alive);
     T.balls.push({ t: 0, dur: 0.55, target, hit: Math.random() < 0.85, side: this.act.left ? -1 : this.act.right ? 1 : 0 });
     this.onEvent?.('throw');
+  }
+
+  // Boss fight: lob a bomb up at Captain Squawk. It lands if he's up in the
+  // sky; while he's swooping at you it sails past.
+  throwBomb() {
+    const T = this.throwing;
+    if (T.stun > 0) return;
+    if (T.boss?.mode === 'feed') { this.feedEagle(); return; }
+    T.cooldown = 0.3;
+    T.bombs.push({ t: 0, dur: 0.6, side: this.act.left ? -1 : this.act.right ? 1 : this.counts.bomb % 2 ? 1 : -1 });
+    this.counts.bomb++;
+    this.onEvent?.('throw');
+  }
+
+  // Feeding Super Eagle: each throw flings a lump of your points into his beak.
+  feedEagle() {
+    const T = this.throwing;
+    if (!(this.feedLeft > 0)) return;
+    T.cooldown = 0.25;
+    const amt = Math.min(this.feedChunk || this.feedLeft, this.feedLeft);
+    this.feedLeft -= amt;
+    T.coins.push({ t: 0, dur: 0.7, amt, side: this.act.left ? -1 : this.act.right ? 1 : T.coins.length % 2 ? 1 : -1 });
+    this.onEvent?.('throw');
+  }
+
+  // How long either side of the swoop a duck still counts: roomy for a 4 year old.
+  get duckTol() { return lerp(0.5, 0.3, clamp((this.age - 4) / 8, 0, 1)); }
+
+  updateBoss(T, dt) {
+    const S = T.boss;
+    T.stun = Math.max(0, T.stun - dt);
+    if (T.react) T.react.t += dt;
+    for (const b of T.bombs) {
+      b.t += dt;
+      if (b.t < b.dur || b.done) continue;
+      b.done = true;
+      if (['hover', 'enter', 'warn'].includes(S.mode) && S.hp > 0) {
+        b.hit = true;
+        S.hp = Math.max(0, S.hp - S.dmg);
+        S.hitAt = S.t;
+        T.booms.push({ t: 0, side: b.side });
+        this.addPoints(60 * this.breakMult, Math.random() < 0.4 ? pick(['BOOM!', 'KABOOM!', 'BULLSEYE!', 'TAKE THAT!']) : false);
+        this.onEvent?.('boom');
+      } else this.pop('Whoosh!', '#ffffff');
+    }
+    T.bombs = T.bombs.filter(b => b.t < b.dur + 0.1);
+    for (const c of T.coins) {
+      c.t += dt;
+      if (c.t < c.dur || c.done) continue;
+      c.done = true;
+      S.fed += c.amt;
+      S.gulpAt = S.t;
+      T.yums.push({ t: 0, big: c.big });
+      if (c.big || Math.random() < 0.4) this.fx.push({ type: 'kapow', text: pick(['YUM!', 'CHOMP!', 'GULP!', 'MORE!']), t: 0, life: 0.85, rot: rand(-0.25, 0.25), hue: Math.floor(rand(0, 360)) });
+      this.onEvent?.('gulp');
+    }
+    T.coins = T.coins.filter(c => !c.done);
+    for (const q of T.yums) q.t += dt;
+    T.yums = T.yums.filter(q => q.t < 0.7);
+    for (const q of T.booms) q.t += dt;
+    T.booms = T.booms.filter(q => q.t < 0.6);
+    // The swoop: duck while he goes over your head.
+    const sw = S.swoop;
+    if (!sw || T.ducked === sw.id || T.bonked === sw.id || this.absent) return;
+    const d = S.t - sw.arrive, tol = this.duckTol;
+    if (d >= -tol && d <= tol * 0.6 && this.act.duck) {
+      T.ducked = sw.id;
+      T.react = { mood: 'mad', t: 0 };
+      this.counts.dodge++;
+      this.addPoints(80 * this.breakMult, pick(['MISSED ME!', 'TOO LOW!', 'NOPE!']));
+      this.onEvent?.('dodge');
+    } else if (d > tol * 0.6) {
+      T.bonked = sw.id;
+      T.react = { mood: 'laugh', t: 0 };
+      T.stun = 0.8;
+      this.bonk = 0.5;
+      this.streak = 0;
+      this.pop('HA HA HA!', '#ffd0d0');
+      this.onEvent?.('bonk');
+    }
   }
 
   chop() {
@@ -495,6 +578,7 @@ export class Player {
     const T = this.throwing;
     T.cooldown = Math.max(0, T.cooldown - dt);
     if (MINI.includes(T.type)) { updateMini(this, T, dt); return; }
+    if (T.type === 'boss') { this.updateBoss(T, dt); return; }
     if (T.type === 'bubbles') {
       T.pops = T.pops.filter(q => (q.t += dt) < 0.6);
       if (T.falling) {

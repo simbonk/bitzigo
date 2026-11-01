@@ -537,3 +537,6 @@ h1 { letter-spacing: 1.5px; text-shadow: 0 3px 0 #b5830f, 0 5px 0 rgba(0,0,0,.35
 #pauseBox .big { width: min(320px, 70vw); }
 body.gamePaused #hudButtons { opacity: 1; z-index: 21; }
 #pauseGo .ic { margin-right: .3em; }
+
+/* Under the results after the boss fight: what Super Eagle ate. */
+.eagleNote { font-family: 'Lilita One', system-ui, sans-serif; font-size: 1.3em; color: #ffe14d; text-align: center; margin: 0 0 0.4em; text-shadow: 0 2px 0 #1b1b22; }

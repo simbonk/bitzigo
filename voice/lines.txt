@@ -36,3 +36,8 @@ fly_time|Fly high! Flap your arms as fast as you can!
 chops_time|Karate frenzy! Chop, chop, chop, as fast as you can!
 wyr_time|Would you rather? Strike a pose to pick!
 swim_time|Swim time! Big arm strokes to cross the pond!
+boss_time|Boss time! Captain Squawk is here! Throw bombs at him, and duck when he swoops!
+boss_win|Super Eagle knocked out Captain Squawk!
+eagle_time|Look! It's Super Eagle, the crazy bird's arch enemy!
+feed_time|Feed Super Eagle! Throw your points into his beak!
+eagle_level|Super Eagle leveled up!

@@ -338,7 +338,13 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   } });
   // The pond sits under everything; other break props draw over the kid.
   if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
-  else if (T && T.type !== 'bubbles') {
+  else if (T?.type === 'boss' && T.boss) {
+    // Captain Squawk hangs behind the kid, and comes in front when he swoops.
+    const pos = bossPos(L, T.boss);
+    if (pos) items.push({ z: pos.front ? -0.1 : 0.05, draw: () => drawBoss(ctx, L, T, pos, time) });
+    const ep = eaglePos(L, T.boss);
+    if (ep) items.push({ z: 0.04, draw: () => drawEagle(ctx, ep, time) });
+  } else if (T && T.type !== 'bubbles') {
     items.push(T.type === 'karate' ? { z: KARATE_Z, draw: () => drawBoards(ctx, L, T) }
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
       : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
@@ -357,6 +363,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
   items.push({ z: 0.015, draw: () => { drawAvatar(ctx, L, p, time, character); toFront(); } });
   items.sort((a, b) => b.z - a.z).forEach(it => it.draw());
   if (T?.balls) drawBalls(ctx, L, T);
+  if (T?.type === 'boss' && T.boss) drawBombs(ctx, L, T, time);
   if (B) drawBubbles(ctx, L, B, time);
   if (T?.type === 'fire' && T.on) drawWater(ctx, L, T, time);
 
@@ -642,7 +649,15 @@ function drawBird(ctx, bx, by, b, flap, mood) {
   rect(ctx, bx - b * 0.15, by + b * 0.05, b * 0.3, b * 0.25, '#ffd0d8');      // belly
   rect(ctx, bx - b * 0.75, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, wing); // wings
   rect(ctx, bx + b * 0.45, by - b * (flap ? 0.55 : 0.05), b * 0.3, b * 0.45, wing);
-  if (mood === 'laugh') {
+  if (mood === 'ko') {
+    // Knocked out: X eyes and a dangling tongue.
+    for (const ex of [-0.2, 0.2]) for (let i = -1; i <= 1; i++) {
+      rect(ctx, bx + b * (ex + i * 0.06) - b * 0.03, by - b * (0.14 + i * 0.06) - b * 0.03, b * 0.07, b * 0.07, '#1b1b22');
+      rect(ctx, bx + b * (ex - i * 0.06) - b * 0.03, by - b * (0.14 + i * 0.06) - b * 0.03, b * 0.07, b * 0.07, '#1b1b22');
+    }
+    rect(ctx, bx - b * 0.1, by, b * 0.2, b * 0.14, '#ffb02e');
+    rect(ctx, bx - b * 0.04, by + b * 0.12, b * 0.08, b * 0.14, '#ff6b81');
+  } else if (mood === 'laugh') {
     // Squeezed-shut eyes, a wide open beak, and happy tears.
     rect(ctx, bx - b * 0.32, by - b * 0.2, b * 0.24, b * 0.07, '#1b1b22');
     rect(ctx, bx + b * 0.08, by - b * 0.2, b * 0.24, b * 0.07, '#1b1b22');
@@ -704,6 +719,251 @@ function drawBirdMood(ctx, L, e) {
       ctx.restore();
     }
   }
+}
+
+// ---------------- Boss fight: Captain Squawk ----------------
+// Where the boss is in this lane right now, worked out from the shared boss
+// state alone, so every lane (and a friend's) shows the same fight.
+const ease = k => k * k * (3 - 2 * k);
+function bossPos(L, B) {
+  const S = L.S, b = Math.min(S * 2.0, L.w * 0.36);
+  const headY = L.ground - S * 3.2;
+  const hx = L.cx + Math.sin(B.t * 1.1) * Math.min(L.w * 0.22, S * 2.5);
+  const hy = Math.max(L.horizon + b * 0.2, L.ground - S * 6.2) + Math.sin(B.t * 3) * S * 0.15;
+  const side = { x: L.cx + B.dir * Math.min(L.w * 0.3, S * 2.4), y: headY - S * 0.8 };
+  const k = B.modeT;
+  switch (B.mode) {
+    case 'enter': { const e = ease(Math.min(1, k / 2.2)); return { x: hx, y: -b + (hy + b) * e, b }; }
+    case 'warn': return { x: hx + Math.sin(k * 50) * S * 0.08, y: hy - S * 0.7 * ease(Math.min(1, k / 0.4)), b, warn: true };
+    case 'dive': {
+      const D = 0.75;
+      if (k <= D) { const e = (k / D) ** 2; return { x: hx + (L.cx - hx) * e, y: hy - S * 0.7 + (headY - S * 0.1 - hy + S * 0.7) * e, b, front: true }; }
+      const e = Math.min(1, (k - D) / 0.45);
+      return { x: L.cx + (side.x - L.cx) * e, y: headY - S * 0.1 + (side.y - headY + S * 0.1) * e, b, front: true };
+    }
+    case 'recover': {
+      // Hangs about beside the kid for a moment (laughing, or hopping mad), then back up.
+      const e = ease(Math.max(0, Math.min(1, (k - 0.7) / 0.7)));
+      return { x: side.x + (hx - side.x) * e, y: side.y + (hy - side.y) * e + (e ? 0 : Math.sin(k * 14) * S * 0.1), b };
+    }
+    case 'eagle': {
+      // Dazed, until Super Eagle rams him: then he tumbles away out of the lane.
+      if (k < 1.3) return { x: hx, y: hy + Math.sin(k * 5) * S * 0.2, b, dazed: true };
+      const e = k - 1.3;
+      return { x: hx - B.dir * e * L.w * 0.8, y: hy - S * 2 * e + e * e * S * 7, b, dead: true, spin: e };
+    }
+    case 'feed': case 'fly': case 'done': return null;
+    default: return { x: hx, y: hy, b };
+  }
+}
+
+function drawBoss(ctx, L, T, pos, time) {
+  const B = T.boss, S = L.S;
+  let { x, y, b } = pos;
+  const hit = B.t - B.hitAt < 0.15;
+  if (hit) { x += Math.sin(time * 90) * S * 0.12; }
+  // His mood: X eyes when beaten, a laugh if he just bonked this kid,
+  // hopping mad if this kid ducked him or he's been hit.
+  const r = T.react && T.react.t < 1.6 ? T.react.mood : null;
+  const mood = pos.dead || pos.dazed ? 'ko' : r === 'laugh' ? 'laugh' : r === 'mad' || hit || pos.warn ? 'mad' : null;
+  const flap = Math.floor(time * (pos.front ? 14 : 8)) % 2;
+  // Bigger shadow as he gets close.
+  if (pos.front) shadow(ctx, x, L.ground + S * 0.02, b * 0.5, S * 0.2, 0.2);
+  drawBird(ctx, x, y, b, flap, mood);
+  // Captain's pirate hat and eye patch.
+  const hatY = y - b * 0.62 - (pos.dead ? Math.min(1, pos.spin / 1.2) * b * 2.5 : 0);
+  rect(ctx, x - b * 0.48, hatY, b * 0.96, b * 0.14, '#1b1b22');
+  rect(ctx, x - b * 0.3, hatY - b * 0.2, b * 0.6, b * 0.22, '#1b1b22');
+  rect(ctx, x - b * 0.3, hatY - b * 0.04, b * 0.6, b * 0.05, '#ffd23f');
+  rect(ctx, x - b * 0.06, hatY - b * 0.15, b * 0.12, b * 0.09, '#ffffff');
+  if (!pos.dead && !pos.dazed && mood !== 'laugh') {
+    rect(ctx, x - b * 0.33, y - b * 0.27, b * 0.26, b * 0.26, '#1b1b22');
+    rect(ctx, x - b * 0.5, y - b * 0.33, b * 1.0, b * 0.04, '#1b1b22');
+  }
+  // Smoke when he's been hurt a lot.
+  const hurt = 1 - B.hp / B.max;
+  for (let i = 0; i < (hurt > 0.66 ? 4 : hurt > 0.33 ? 2 : 0); i++) {
+    const q = (time * 0.9 + i / 4) % 1, sz = Math.max(1, b * (0.1 + q * 0.18));
+    ctx.save();
+    ctx.globalAlpha *= 0.7 * (1 - q);
+    rect(ctx, x + (i - 1.5) * b * 0.2 - sz / 2, y - b * (0.4 + q * 1.1), sz, sz, '#6a6a72');
+    ctx.restore();
+  }
+  // His health bar, under him: everyone's bombs drain the same one.
+  if (!pos.dead && !pos.dazed && !pos.front) {
+    const bw = b * 1.3, bh = Math.max(2, b * 0.13), bx = x - bw / 2, by = y + b * 0.55, k = B.hp / B.max;
+    rect(ctx, bx - 1, by - 1, bw + 2, bh + 2, '#1b1b22');
+    rect(ctx, bx, by, bw, bh, '#4a1a24');
+    rect(ctx, bx, by, bw * k, bh, hit ? '#ffffff' : k > 0.33 ? '#3ddc84' : '#ff9f1c');
+  }
+  // Stars spinning round his head while he's dazed.
+  if (pos.dazed) for (let i = 0; i < 3; i++) {
+    const a = time * 5 + i * 2.1, sz = Math.max(1, b * 0.12);
+    rect(ctx, x + Math.cos(a) * b * 0.55 - sz / 2, y - b * 0.85 + Math.sin(a) * b * 0.15 - sz / 2, sz, sz, '#ffe14d');
+  }
+  // "!" just before he swoops.
+  if (pos.warn && Math.floor(time * 8) % 2) {
+    rect(ctx, x + b * 0.6, y - b * 0.9, b * 0.14, b * 0.4, '#ffe14d');
+    rect(ctx, x + b * 0.6, y - b * 0.42, b * 0.14, b * 0.12, '#ffe14d');
+  }
+  // Feathers everywhere when he's beaten.
+  if (pos.dead) for (let i = 0; i < 10; i++) {
+    const a = i * 2.4, k = Math.min(1, pos.spin / 2);
+    rect(ctx, x + Math.cos(a) * b * 1.4 * k, y + Math.sin(a) * b * 0.8 * k + k * k * b, b * 0.12, b * 0.06, i % 2 ? '#ff5d73' : '#c9304a');
+  }
+}
+
+// Bombs lobbed from the kid's hands up at the boss, and the booms when they land.
+function drawBombs(ctx, L, T, time) {
+  const S = L.S, B = T.boss;
+  const ep = eaglePos(L, B);
+  if (ep) drawCoins(ctx, L, T, ep, time);
+  // The big KAPOW when Super Eagle hits him.
+  if (B.koAt && B.t - B.koAt < 0.9) drawExplosion(ctx, L.cx, Math.max(L.horizon + S, L.ground - S * 6.2), Math.min(S * 3, L.w * 0.5), (B.t - B.koAt) / 0.9, 0);
+  // Fireworks when he levels up, and as he flies off.
+  if (B.t - B.levelAt < 1.5 || B.mode === 'fly') {
+    const t0 = B.mode === 'fly' ? B.modeT : B.t - B.levelAt;
+    for (let i = 0; i < 4; i++) {
+      const q = (t0 * 0.9 + i * 0.27) % 1, seed = Math.floor(t0 * 0.9 + i * 0.27) * 7 + i;
+      const fx = L.x + L.w * (0.15 + ((seed * 37) % 70) / 100), fy = L.horizon * (0.3 + ((seed * 53) % 60) / 100) + S;
+      drawExplosion(ctx, fx, fy, S * 1.4, q, seed);
+    }
+  }
+  const to = bossPos(L, B);
+  if (!to) return;
+  for (const bomb of T.bombs) {
+    if (bomb.t > bomb.dur) continue;
+    const k = bomb.t / bomb.dur;
+    const sx = L.cx + bomb.side * S * 0.6, sy = L.ground - S * 3.6;
+    const x = sx + (to.x - sx) * k, y = sy + (to.y - sy) * k - Math.sin(k * Math.PI) * S * 1.4;
+    const r = S * 0.24;
+    block(ctx, x - r, y - r, r * 2, r * 2, '#2b2b33', 0.25);
+    rect(ctx, x - r * 0.15, y - r * 1.5, r * 0.3, r * 0.6, '#8a6a3a');
+    rect(ctx, x - r * 0.3, y - r * 1.9, r * 0.6, r * 0.5, Math.floor(time * 20) % 2 ? '#ffe14d' : '#ff9f1c');
+  }
+  for (const q of T.booms) {
+    const k = q.t / 0.6, n = 10;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, d = to.b * (0.3 + k * 0.8), sz = Math.max(1, to.b * 0.18 * (1 - k));
+      rect(ctx, to.x + Math.cos(a) * d - sz / 2, to.y + Math.sin(a) * d - sz / 2, sz, sz, i % 2 ? '#ffe14d' : '#ff6a1a');
+    }
+  }
+}
+
+// A burst of pixels flying out from (x, y): k goes 0..1 over its life.
+const BOOM_COLS = [['#ffe14d', '#ff6a1a', '#ffffff'], ['#7df9ff', '#3fa7ff', '#ffffff'], ['#ff8fc8', '#ff4fa3', '#ffe14d'], ['#3ddc84', '#ffe14d', '#ffffff']];
+function drawExplosion(ctx, x, y, r, k, seed) {
+  const cols = BOOM_COLS[Math.abs(seed) % BOOM_COLS.length];
+  if (k < 0.25) {
+    ctx.save(); ctx.globalAlpha *= 1 - k / 0.25;
+    rect(ctx, x - r * 0.4, y - r * 0.4, r * 0.8, r * 0.8, '#ffffff');
+    ctx.restore();
+  }
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + seed, d = r * (0.2 + k * 1.0) * (i % 2 ? 0.8 : 1), sz = Math.max(1, r * 0.16 * (1 - k));
+    rect(ctx, x + Math.cos(a) * d - sz / 2, y + Math.sin(a) * d + k * k * r * 0.4 - sz / 2, sz, sz, cols[i % 3]);
+  }
+}
+
+// ---------------- Super Eagle ----------------
+// Captain Squawk's arch enemy, in a red cape and mask. He gets a little bigger
+// with every level, from all the points the kids have fed him.
+function eaglePos(L, B) {
+  const S = L.S, lvl = B.level || 1;
+  const eb = Math.min(S * 2.2, L.w * 0.38) * (1 + 0.05 * Math.min(lvl - 1, 8));
+  const hy = Math.max(L.horizon + eb * 0.2, L.ground - S * 6.2);
+  const k = B.modeT;
+  if (B.mode === 'eagle') {
+    const hx = L.cx + Math.sin(B.t * 1.1) * Math.min(L.w * 0.22, S * 2.5);
+    if (k < 1.3) {
+      const e = (k / 1.3) ** 2, sx = L.cx + B.dir * L.w * 0.6, sy = -eb;
+      return { x: sx + (hx - sx) * e, y: sy + (hy - sy) * e, b: eb, dive: true };
+    }
+    const e = ease(Math.min(1, (k - 1.3) / 1.2));
+    return { x: hx + (L.cx - hx) * e, y: hy - S * 0.8 * Math.sin(e * Math.PI) , b: eb, proud: true };
+  }
+  if (B.mode === 'feed') {
+    const gulp = B.t - B.gulpAt < 0.2;
+    return { x: L.cx + Math.sin(B.t * 1.3) * S * 0.5, y: hy + Math.sin(B.t * 3) * S * 0.12, b: eb * (gulp ? 1.08 : 1), open: !gulp, gulp };
+  }
+  if (B.mode === 'fly' || B.mode === 'done') {
+    const grow = 1 + 0.25 * ease(Math.min(1, k / 1.2));
+    const up = Math.max(0, k - 1.8);
+    return { x: L.cx, y: hy - up * up * S * 4, b: eb * grow, proud: true, glow: true };
+  }
+  return null;
+}
+
+function drawEagle(ctx, e, time) {
+  const { x, y, b } = e;
+  const flap = Math.floor(time * (e.dive ? 18 : 9)) % 2;
+  const brown = '#7a4a22', dark = '#4e2d12', cape = '#e63946', gold = '#ffc21a';
+  if (e.glow) {
+    // A ring of twinkling sparkles: he's powered up.
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + time * 1.5, on = Math.floor(time * 10 + i) % 3;
+      if (!on) continue;
+      const sz = Math.max(1, b * 0.1);
+      rect(ctx, x + Math.cos(a) * b * 1.25 - sz / 2, y + Math.sin(a) * b * 0.95 - sz / 2, sz, sz, i % 2 ? '#fff3b0' : '#ffe14d');
+    }
+  }
+  // Cape flowing out behind.
+  rect(ctx, x - b * 0.5, y - b * 0.2, b * 1.0, b * 0.95, cape);
+  rect(ctx, x - b * 0.6 + Math.sin(time * 9) * b * 0.05, y + b * 0.6, b * 1.2, b * 0.25, cape);
+  // Wings, spread wide like a superhero.
+  const wy = y - b * (flap ? 0.55 : 0.15);
+  for (const s of [-1, 1]) {
+    rect(ctx, x + s * b * 0.45 - (s < 0 ? b * 0.75 : 0), wy, b * 0.75, b * 0.38, brown);
+    rect(ctx, x + s * b * 1.05 - (s < 0 ? b * 0.3 : 0), wy + b * 0.05, b * 0.3, b * 0.45, dark);
+    rect(ctx, x + s * b * 0.6 - b * 0.05, wy + b * 0.38, b * 0.1, b * 0.14, dark);
+  }
+  // Body, with a gold star on the chest.
+  block(ctx, x - b * 0.42, y - b * 0.25, b * 0.84, b * 0.8, brown, 0.2);
+  rect(ctx, x - b * 0.12, y + b * 0.02, b * 0.24, b * 0.24, gold);
+  rect(ctx, x - b * 0.2, y + b * 0.1, b * 0.4, b * 0.08, gold);
+  // Talons.
+  rect(ctx, x - b * 0.3, y + b * 0.55, b * 0.16, b * 0.14, gold);
+  rect(ctx, x + b * 0.14, y + b * 0.55, b * 0.16, b * 0.14, gold);
+  // White head, red mask, fierce eyes.
+  block(ctx, x - b * 0.32, y - b * 0.78, b * 0.64, b * 0.58, '#ffffff', 0.15);
+  rect(ctx, x - b * 0.34, y - b * 0.62, b * 0.68, b * 0.16, cape);
+  rect(ctx, x - b * 0.22, y - b * 0.6, b * 0.12, b * 0.11, '#ffffff');
+  rect(ctx, x + b * 0.1, y - b * 0.6, b * 0.12, b * 0.11, '#ffffff');
+  rect(ctx, x - b * 0.18, y - b * 0.58, b * 0.06, b * 0.08, '#1b1b22');
+  rect(ctx, x + b * 0.12, y - b * 0.58, b * 0.06, b * 0.08, '#1b1b22');
+  rect(ctx, x - b * 0.26, y - b * 0.7, b * 0.2, b * 0.05, '#1b1b22');
+  rect(ctx, x + b * 0.06, y - b * 0.7, b * 0.2, b * 0.05, '#1b1b22');
+  // Hooked yellow beak: wide open while he's waiting to be fed.
+  if (e.open) {
+    rect(ctx, x - b * 0.14, y - b * 0.44, b * 0.28, b * 0.1, gold);
+    rect(ctx, x - b * 0.1, y - b * 0.34, b * 0.2, b * 0.12, '#a8102a');
+    rect(ctx, x - b * 0.12, y - b * 0.22, b * 0.24, b * 0.06, gold);
+  } else {
+    rect(ctx, x - b * 0.12, y - b * 0.44, b * 0.24, b * 0.16, gold);
+    rect(ctx, x - b * 0.04, y - b * 0.3, b * 0.08, b * 0.08, '#c98a00');
+  }
+  // Speed lines on the dive.
+  if (e.dive) for (let i = 0; i < 4; i++) rect(ctx, x + (i - 1.5) * b * 0.35, y - b * (1.3 + (i % 2) * 0.3), Math.max(1, b * 0.05), b * 0.5, '#ffffff');
+}
+
+// Lumps of points flung from the kid's hands into Super Eagle's beak.
+function drawCoins(ctx, L, T, ep, time) {
+  const S = L.S, mx = ep.x, my = ep.y - ep.b * 0.32;
+  for (const c of T.coins) {
+    const k = Math.min(1, c.t / c.dur);
+    const sx = L.cx + c.side * S * 0.6, sy = L.ground - S * 3.6;
+    const x = sx + (mx - sx) * k, y = sy + (my - sy) * k - Math.sin(k * Math.PI) * S * 1.2;
+    const r = S * (c.big ? 0.45 : 0.26) * (1 - k * 0.3);
+    const shine = Math.floor(time * 12 + c.amt) % 2;
+    block(ctx, x - r, y - r, r * 2, r * 2, '#ffc21a', 0.3);
+    rect(ctx, x - r * 0.25, y - r * 0.6, r * 0.5, r * 1.2, shine ? '#fff3b0' : '#c98a00');
+    for (let j = 1; j <= 3; j++) {
+      const kk = Math.max(0, k - j * 0.07), tx = sx + (mx - sx) * kk, ty = sy + (my - sy) * kk - Math.sin(kk * Math.PI) * S * 1.2;
+      rect(ctx, tx - r * 0.2, ty - r * 0.2, r * 0.4, r * 0.4, '#ffe14d');
+    }
+  }
+  for (const q of T.yums) drawExplosion(ctx, mx, my, ep.b * (q.big ? 1.2 : 0.6), q.t / 0.7, 3);
 }
 
 function drawObstacle(ctx, L, o, z) {
@@ -1234,7 +1494,7 @@ function drawAvatar(ctx, L, p, time, ch) {
     const z = (o.arrive - p.clock) / o.travel;
     return z > -0.03 && z < (o.kind === 'bird' ? 0.45 : 0.22);
   });
-  const look = { sx, sy, wow };
+  const look = { sx, sy, wow, face: p.faceSrc };
   queueCharacter(ctx, { x: L.x, w: L.w, h: L.h }, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
@@ -1412,6 +1672,31 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   } else {
     behind();
     block(ctx, left, top, hw, hh, head, 0.18);
+  }
+
+  // The kid's own face, peeking out of the character like a kid in a dog suit.
+  const face = look.face;
+  if (face && VEC && ch.id !== 'none') {
+    const fx = left + hw * 0.14, fy = top + hh * 0.2, fw = hw * 0.72, fh = hh * 0.72, fr = fw * 0.32;
+    ctx.save();
+    roundRect(ctx, fx, fy, fw, fh, fr);
+    ctx.lineWidth = Math.max(1, hs * 0.07); ctx.strokeStyle = shade(head, -0.28); ctx.stroke();
+    ctx.clip();
+    ctx.fillStyle = '#e8c4a0'; ctx.fillRect(fx, fy, fw, fh);
+    try { ctx.drawImage(face, fx, fy, fw, fh); } catch { }
+    if (flash) { ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(fx, fy, fw, fh); }
+    ctx.restore();
+    // A few costume bits that sit on the forehead.
+    if (ch.id === 'ninja') px(0, 0.6, 8, 1, '#e63946');
+    if (ch.id === 'frog') { px(0, -1.6, 3, 2.4, head); px(5, -1.6, 3, 2.4, head); px(0.6, -1.2, 1.8, 1.8, '#ffffff'); px(5.6, -1.2, 1.8, 1.8, '#ffffff'); px(1.1, -0.7, 0.9, 0.9, '#1b1b22'); px(6.1, -0.7, 0.9, 0.9, '#1b1b22'); }
+    if (ch.id === 'firefighter' && !gear.hat) { px(-0.2, -2.6, 8.4, 4.2, '#e63946'); px(2.5, -2.4, 3, 3, '#ffd23f'); px(3.4, -1.8, 1.2, 1.8, '#e63946'); px(-0.2, 1.1, 8.4, 0.5, '#a81a26'); }
+    for (const mode of ['outline', 'fill']) {
+      RMODE = mode;
+      if (gear.face) drawGearItem(ctx, gear.face, left, top, u);
+      if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
+    }
+    RMODE = 'fill';
+    return;
   }
 
   // Faces.
@@ -1622,14 +1907,18 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
     .sort((a, b) => a.z - b.z)[0];
   if (p.throwing?.type === 'wyr') {
     // Would You Rather draws one shared board in the middle: see drawWyrBoard.
+  } else if (p.throwing?.type === 'boss' && !['warn', 'dive'].includes(p.throwing.boss?.mode)) {
+    // Boss fight: the boss himself is the cue to throw; only DUCK! gets a sign.
   } else if (p.throwing) {
     const size = clamp(L.w * 0.1, 22, 64);
     const y = L.horizon * 0.66;
     const bob = Math.sin(performance.now() / 150) * size * 0.08;
     const type = p.throwing.type;
-    const kind = { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop', swim: 'rope' }[type] || 'throw';
+    const bm = type === 'boss' ? p.throwing.boss?.mode : null;
+    const ducking = bm === 'warn' || bm === 'dive';
+    const kind = ducking ? 'bird' : { bubbles: 'flap', karate: 'chop', fire: 'spray', dance: 'dance', kaiju: 'kaiju', bugs: 'bugs', goalie: 'goalie', climb: 'climb', tray: 'tray', rain: 'rain', fly: 'flap', chops: 'chop', swim: 'rope' }[type] || 'throw';
     const B = p.throwing;
-    const word = type === 'swim' ? `SWIM! ${B.goal - B.dist} to go` : type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
+    const word = type === 'boss' ? (ducking ? 'DUCK!' : bm === 'dead' || bm === 'done' ? 'HOORAY!' : 'THROW BOMBS!') : type === 'swim' ? `SWIM! ${B.goal - B.dist} to go` : type === 'fly' ? `FLAP! ${B.flaps} flaps` : type === 'chops' ? `CHOP! ${B.chops} chops` : kind === 'flap' ? (B.falling ? 'WHEEE!' : B.bubble ? `FLAP! ${B.bubble.flaps - B.bubble.done} more` : 'FLAP!') : { chop: 'CHOP!', throw: 'THROW!', spray: 'POINT & SPRAY!', dance: B.move ? DANCE[B.move.key].name : 'DANCE!', kaiju: 'SMASH & STOMP!', bugs: 'SPLAT THE BUGS!', goalie: 'BLOCK THE BALLS!', climb: `CLIMB! ${B.height || 0} m`, tray: `CATCH! ${B.stack?.length || 0} stacked`, rain: B.roof ? (B.water > 0.35 ? (B.want < 0 ? '◀ LEAN LEFT!' : 'LEAN RIGHT! ▶') : 'FILLING…') : 'HANDS UP = ROOF!' }[kind];
     if (kind === 'dance' && B.move) {
       // Picture card of the move to copy, with a shrinking timer bar.
       const m = B.move, k = Math.min(1, m.t / m.dur);
@@ -1799,7 +2088,8 @@ function drawScore(ctx, L, p, r, pad) {
   const k = p.bump > 0 ? p.bump / 0.5 : 0;
   const x0 = L.x + pad + (L.x < 1 ? SAFE.l : 0), y0 = pad;
   const cx = x0 + r, cy = y0 + r;
-  const label = p.score.toLocaleString();
+  // While feeding Super Eagle the plate counts down what's left to feed him.
+  const label = (p.feedLeft != null ? p.feedLeft : p.score).toLocaleString();
   const sf = r * 1.05, nf = r * 0.4;
   ctx.font = `${R(sf)}px ${FONT}`;
   const tw = Math.max(ctx.measureText(label).width, r * 1.2);
