@@ -296,6 +296,13 @@ export class Player {
     this.swing = Math.max(0, this.swing - dt);
     this.shake = Math.max(0, this.shake - dt);
     this.bump = Math.max(0, this.bump - dt);
+    if (this.stealLeft > 0) {
+      // Count down in tens, so the plate visibly ticks backwards.
+      this.stealAcc = (this.stealAcc || 0) + Math.min(this.stealLeft, this.stealRate * dt);
+      const t = Math.min(this.score, Math.floor(this.stealAcc / 10) * 10);
+      this.score -= t; this.stealLeft -= t; this.stealAcc -= t;
+      if (this.score <= 0 || this.stealLeft < 10) { this.stealLeft = 0; this.stealAcc = 0; }
+    }
     this.spin = Math.max(0, (this.spin || 0) - dt);
     this.beatFlash = Math.max(0, (this.beatFlash || 0) - dt);
     this.comboPop = Math.max(0, (this.comboPop || 0) - dt);
@@ -527,6 +534,7 @@ export class Player {
       this.bonk = 0.5;
       this.streak = 0;
       this.pop('HA HA HA!', '#ffd0d0');
+      this.steal(250);
       this.onEvent?.('bonk');
     }
   }
@@ -796,9 +804,19 @@ export class Player {
     if (!o.tutorial) this.setSkill(this.skill - 0.8);
     this.pop(o.tutorial ? 'Try again!' : o.kind === 'rope' ? 'SPLASH!' : o.kind === 'bird' ? 'HA HA HA!' : 'Oops!', '#ffd0d0');
     // Bonked by the bird: it hovers there laughing at them.
-    if (o.kind === 'bird') this.birdMood(o, 'laugh');
+    if (o.kind === 'bird') { this.birdMood(o, 'laugh'); this.steal(100); }
     if (o.kind === 'rope') this.fx.push({ type: 'splash', parts: sprinkle(16), t: 0, life: 0.8 });
     this.onEvent?.('miss', o);
+  }
+
+  // The crazy bird pinches points: the score counts backwards for a moment.
+  steal(n) {
+    const take = Math.min(Math.round(this.score / 10) * 10, n);
+    if (take <= 0) return;
+    this.stealLeft = (this.stealLeft || 0) + take;
+    this.stealRate = this.stealLeft / 1.1;
+    this.fx.push({ type: 'points', text: `-${take}`, color: '#ff4d5e', t: 0, life: 1.2 });
+    this.onEvent?.('steal');
   }
 
   setSkill(s) {

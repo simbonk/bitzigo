@@ -96,6 +96,8 @@ export const sfx = {
   // Super Eagle's cry, and his gulp when he eats a lump of points.
   screech() { tone(1400, 0.5, { type: 'sawtooth', vol: 0.1, slide: 0.55 }); tone(1800, 0.35, { type: 'square', vol: 0.05, slide: 0.6, delay: 0.05 }); noise(0.4, { vol: 0.2, from: 5000, to: 2000, q: 3 }); },
   gulp() { tone(300, 0.14, { type: 'sine', vol: 0.4, slide: 0.45 }); [1047, 1319, 1568].forEach((f, i) => tone(f, 0.06, { type: 'triangle', vol: 0.12, delay: 0.1 + i * 0.04 })); },
+  // Points pinched by the bird: coins tumbling down the scale.
+  steal() { [1568, 1319, 1047, 784, 659, 523].forEach((f, i) => tone(f, 0.07, { type: 'triangle', vol: 0.14, delay: 0.25 + i * 0.09 })); },
   throw() { noise(0.18, { vol: 0.35, from: 900, to: 2600, q: 3 }); },
   knock() { noise(0.2, { vol: 0.5, from: 4000, to: 900, q: 2 }); tone(520, 0.06, { vol: 0.12 }); tone(390, 0.08, { vol: 0.12, delay: 0.07 }); },
   strike() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.12, { vol: 0.16, delay: i * 0.06 })); },
