@@ -194,6 +194,13 @@ export class Player {
     // Hands around the body, for the break games.
     this.hands = handsOf(pts, f).map(w => (w ? { x: (w.x - f.hip.x) / t, y: (w.y - B.hipY) / t } : null));
     this.hipShift = clamp((f.hip.x - B.hipX) / t, -1, 1);
+    // How far the kid is ducking, for the character to crouch (0 standing,
+    // up to 0.5 torso). Only a real duck counts: both the hips and the head
+    // have to drop clearly, so leaning in, bouncing on the spot or a wobbly
+    // hip reading leaves the character standing tall.
+    const dropH = (f.hip.y - B.hipY) / t, dropN = (f.nose.y - B.noseY) / t;
+    const duck = clamp(Math.min(dropH, dropN) - 0.3, 0, 0.5);
+    this.crouch = (this.crouch || 0) + (duck - (this.crouch || 0)) * 0.25;
     if (MINI.includes(brk)) handsMini(this, this.throwing, this.hands, now);
     else if (brk) {
       // Throwing, chopping and flapping are all one big arm swing downwards:
