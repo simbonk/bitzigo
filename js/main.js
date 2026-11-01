@@ -606,7 +606,7 @@ function startTutorial() {
 const LESSONS = [
   { kind: 'log', title: 'Brick wall? JUMP!' },
   { kind: 'crate', side: 'mid', title: 'Crate? PUNCH it!' },
-  { kind: 'bird', side: 'left', title: 'Crazy bird? LEAN away!' },
+  { kind: 'bird', side: 'left', title: 'Crazy bird? DUCK!', clip: 'lesson_duck' },
   { kind: 'rope', title: 'Puddle? GRAB the rope!' },
 ];
 
@@ -614,7 +614,7 @@ const LESSONS = [
 function callFor(o) {
   if (o.kind === 'log') return 'jump';
   if (o.kind === 'rope') return 'rope';
-  if (o.kind === 'bird') return o.side === 'left' ? 'lean_right' : 'lean_left';
+  if (o.kind === 'bird') return 'duck';
   return o.side === 'mid' ? 'punch' : `punch_${o.side}`;
 }
 let lastCall = 0;
@@ -1339,7 +1339,7 @@ function updateGame(t, dt) {
       } else {
         const L = LESSONS[tut.step];
         showBanner(L.title, '', 4.2);
-        cue(`lesson_${L.kind}`);
+        cue(L.clip || `lesson_${L.kind}`);
         players.forEach(p => p.teach(L.kind, L.side || null, 4));
         tut.next = tn + 5.6;
       }
