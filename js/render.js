@@ -839,6 +839,17 @@ export function steadyPose(P, keepArms) {
   [out.lh, out.rh] = span(hc, P.lh, P.rh, segLen(S0.lh, S0.rh));
   [out.ls, out.rs] = span(sc, P.ls, P.rs, segLen(S0.ls, S0.rs));
   out.nose = toward(sc, mid(P.ls, P.rs), P.nose, 0.5, [0, -0.5]);
+  for (const [hp, kn, an] of [['lh', 'lk', 'la'], ['rh', 'rk', 'ra']]) {
+    out[kn] = toward(out[hp], P[hp], P[kn], 0.8, [0, 0.8]);
+    out[an] = toward(out[kn], P[kn], P[an], 0.8, [0, 0.8]);
+  }
+  // Feet on the ground: leaning toward the camera or stepping closer moves the
+  // hips up and down in the picture, which made the character float off the
+  // road. Slide the whole body so the lower foot always stands on the ground
+  // line. Real jumps come from the game's jump move, which lifts the
+  // character separately and springs it back down.
+  const drop = STAND.la[1] - Math.max(out.la[1], out.ra[1]);
+  for (const k in out) out[k] = [out[k][0], out[k][1] + drop];
   for (const [sh, el, wr] of [['ls', 'le', 'lw'], ['rs', 're', 'rw']]) {
     if (keepArms) {
       // Hand break games: the hands must stay exactly where the camera saw them.
@@ -848,10 +859,6 @@ export function steadyPose(P, keepArms) {
     }
     out[el] = toward(out[sh], P[sh], P[el], segLen(S0[sh], S0[el]), [0, 0.48]);
     out[wr] = toward(out[el], P[el], P[wr], segLen(S0[el], S0[wr]), [0, 0.44]);
-  }
-  for (const [hp, kn, an] of [['lh', 'lk', 'la'], ['rh', 'rk', 'ra']]) {
-    out[kn] = toward(out[hp], P[hp], P[kn], 0.8, [0, 0.8]);
-    out[an] = toward(out[kn], P[kn], P[an], 0.8, [0, 0.8]);
   }
   return out;
 }
