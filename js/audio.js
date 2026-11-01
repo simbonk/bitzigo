@@ -32,7 +32,7 @@ export function holdAudio(on) {
 
 export function setMuted(m) {
   muted = m;
-  if (music.bus) music.bus.gain.value = m ? 0 : 0.35;
+  if (music.bus) music.bus.gain.value = m ? 0 : 0.45;
 }
 
 function tone(freq, dur, { type = 'square', vol = 0.25, slide = 0, delay = 0 } = {}) {
@@ -196,11 +196,11 @@ const SONG_DEFS = {
     A: 'D5 . A4 D5 F5 E5 D5 C#5 | Eb5 - G5 - Bb5 - G5 Eb5 | D5 F5 A5 - G5 F5 E5 D5 | C5 E5 G5 - E5 - C#5 .',
     B: 'A5 - Bb5 A5 G5 F5 E5 F5 | G5 - Bb5 - Eb6 - D6 Bb5 | A5 - F5 - D5 - F5 A5 | G5 E5 C5 E5 G5 - A5 .',
     kick: 'x.....x...x.....', snare: '....x.......x..x', hat: 'x.xxx.xxx.xxx.xx', bass: 'r.rr..r.r.rr.fo.', tom: '...........x.x.x' },
-  space: { name: 'Comet Chase', bpm: 156, chords: 'Cm Ab Eb Bb', lead: 'sawtooth', detune: true, echo: true, arp: 'square',
+  space: { name: 'Comet Chase', bpm: 156, chords: 'Cm Ab Eb Bb', lead: 'sawtooth', voice: 'synth', bassVoice: 'saw', pad: true, bigSnare: true, echo: true, arp: 'triangle',
     A: 'G5 - - G5 Bb5 - C6 - | Eb6 - D6 C6 - Bb5 C6 - | G5 - - G5 Bb5 - Eb6 - | F6 - Eb6 D6 - Bb5 D6 F6',
     B: 'C6 - Eb6 - G6 - F6 Eb6 | C6 - - Ab5 - C6 Eb6 - | Bb5 - - G5 Eb5 - G5 Bb5 | D6 - F6 - Bb6 - - .',
     kick: 'x...x...x...x...', snare: '....x.......x...', clap: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', bass: 'roorroorroorroor', laser: true },
-  beach: { name: 'Surf Smash', bpm: 162, chords: 'E F E E', lead: 'sawtooth', detune: true, tremolo: true, echo: true,
+  beach: { name: 'Surf Smash', bpm: 162, chords: 'E F E E', lead: 'sawtooth', voice: 'guitar', bassVoice: 'round', shaker: true, tremolo: true, echo: true,
     A: 'E5 F5 G#5 A5 B5 - A5 G#5 | F5 - G#5 A5 C6 - B5 A5 | G#5 A5 B5 C6 D6 - C6 B5 | A5 G#5 F5 G#5 E5 - - .',
     B: 'E6 - D6 C6 B5 - C6 D6 | C6 - B5 A5 F5 - A5 C6 | B5 - C6 B5 G#5 - E5 G#5 | B5 - - A5 G#5 F5 E5 .',
     kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', bongo: 'x..x.x..x..x.x.x', tom: '.........x.x.x.x', bass: 'r.rr.rr.r.rr.ro.' },
@@ -231,6 +231,45 @@ function note(freq, t, dur, type, vol, dest = music.bus, detune = 0) {
   o.stop(t + dur + 0.02);
 }
 
+// Special instruments for some worlds.
+let crunch = null;
+function voice(kind, freq, t, dur, vol, dest) {
+  const g = ac.createGain(), out = [];
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  let into = g;
+  if (kind === 'synth' || kind === 'pad') {
+    // Three detuned saws through a resonant low-pass that closes on each note.
+    const f = ac.createBiquadFilter();
+    f.type = 'lowpass'; f.Q.value = kind === 'pad' ? 1 : 5;
+    if (kind === 'pad') f.frequency.setValueAtTime(1100, t);
+    else { f.frequency.setValueAtTime(4200, t); f.frequency.exponentialRampToValueAtTime(900, t + Math.max(0.08, dur)); }
+    f.connect(g); into = f;
+    for (const d of [-12, 0, 12]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(freq, t); o.detune.value = d; out.push(o); }
+    if (kind === 'pad') { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.3); g.gain.linearRampToValueAtTime(0.0001, t + dur); }
+  } else if (kind === 'guitar') {
+    // Overdriven surf guitar: two saws into a soft clipper and a mid-range band-pass.
+    if (!crunch) { crunch = new Float32Array(1025); for (let i = 0; i < 1025; i++) crunch[i] = Math.tanh((i / 512 - 1) * 6); } // odd length: 0 in, 0 out
+    const ws = ac.createWaveShaper(), bp = ac.createBiquadFilter(), lp = ac.createBiquadFilter();
+    ws.curve = crunch; bp.type = 'peaking'; bp.frequency.value = 1400; bp.gain.value = 8; lp.type = 'lowpass'; lp.frequency.value = 3800;
+    ws.connect(bp).connect(lp).connect(g); into = ws;
+    for (const d of [-7, 7]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(freq, t); o.detune.value = d; out.push(o); }
+  } else if (kind === 'saw') {
+    // Plucky filtered saw bass.
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 6;
+    f.frequency.setValueAtTime(2000, t); f.frequency.exponentialRampToValueAtTime(220, t + dur);
+    f.connect(g); into = f;
+    const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(freq, t); out.push(o);
+  } else {
+    // 'round': a warm, thumpy bass.
+    const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(freq, t); out.push(o);
+    const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.setValueAtTime(freq, t); out.push(o2);
+  }
+  g.connect(dest);
+  for (const o of out) { o.connect(into); o.start(t); o.stop(t + dur + 0.05); }
+}
+
 let noiseBuf = null;
 function noiseHit(t, len, type, freq, vol, q = 1) {
   if (!noiseBuf) {
@@ -243,7 +282,7 @@ function noiseHit(t, len, type, freq, vol, q = 1) {
   f.type = type; f.frequency.value = freq; f.Q.value = q;
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + len);
-  src.connect(f).connect(g).connect(music.bus);
+  src.connect(f).connect(g).connect(music.drums);
   src.start(t); src.stop(t + len + 0.02);
 }
 
@@ -256,7 +295,7 @@ function drum(t, kind) {
     o.frequency.exponentialRampToValueAtTime(f1, t + len * 0.8);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + len);
-    o.connect(g).connect(music.bus);
+    o.connect(g).connect(music.drums);
     o.start(t); o.stop(t + len + 0.02);
     return;
   }
@@ -275,7 +314,9 @@ function schedule() {
     const ch = S.bars[bar % S.bars.length], t = music.next, hot = music.intense;
     // Drums.
     if (hit(S.kick, beat)) drum(t, 'kick');
-    if (hit(S.snare, beat)) drum(t, 'snare');
+    if (hit(S.snare, beat)) { if (S.bigSnare) { noiseHit(t, 0.35, 'bandpass', 1800, 0.55, 0.6); noiseHit(t, 0.08, 'highpass', 3000, 0.3); } else drum(t, 'snare'); }
+    if (S.shaker && beat % 2 === 0) noiseHit(t, 0.05, 'highpass', 9000, beat % 4 ? 0.1 : 0.16);
+    if (S.pad && beat === 0) for (const k of [0, 1, 2]) voice('pad', hz(ch.root + 12 + ch.tones[k]), t, spb * 16, 0.03, music.bus);
     if (hit(S.clap, beat)) drum(t, 'clap');
     if (hit(S.hat, beat) || (hot > 0.5 && beat % 2 === 1 && !S.jingle)) drum(t, 'hat');
     if (hit(S.jingle, beat)) drum(t, 'jingle');
@@ -285,14 +326,22 @@ function schedule() {
     if (bar % 4 === 3 && beat >= 12) drum(t, beat % 2 ? 'tom' : 'snare');
     // Bass.
     const b = S.bass[beat];
-    if (b && b !== '.') note(hz(ch.root - 12 + (b === 'o' ? 12 : b === 'f' ? 7 : 0)), t, spb * 1.6, 'square', 0.15);
+    if (b && b !== '.') {
+      const bf = hz(ch.root - 12 + (b === 'o' ? 12 : b === 'f' ? 7 : 0));
+      if (S.bassVoice) voice(S.bassVoice, bf, t, spb * (S.bassVoice === 'round' ? 2.4 : 1.4), S.bassVoice === 'round' ? 0.34 : 0.2, music.bus);
+      else note(bf, t, spb * 1.6, 'square', 0.15);
+    }
     // Chord arpeggio in 16ths, filling out as the timer runs down.
     if (S.arp && (hot > 0.2 || beat % 2 === 0)) note(hz(ch.root + 24 + ch.tones[[0, 1, 2, 3, 2, 1][s % 6]]), t, spb * 0.8, S.arp, 0.035);
     // Lead melody, with a second voice an octave down on some songs.
     const m = S.melody[s];
     if (m) {
       const dur = spb * m.len * 0.92;
-      if (S.tremolo) for (let k = 0; k < m.len; k++) note(hz(m.n), t + k * spb, spb * 0.85, S.lead, 0.05, music.lead);
+      if (S.voice) {
+        if (S.tremolo) for (let k = 0; k < m.len; k++) voice(S.voice, hz(m.n), t + k * spb, spb * 0.9, 0.06, music.lead);
+        else voice(S.voice, hz(m.n), t, Math.max(dur, spb * 1.5), 0.05, music.lead);
+      }
+      else if (S.tremolo) for (let k = 0; k < m.len; k++) note(hz(m.n), t + k * spb, spb * 0.85, S.lead, 0.05, music.lead);
       else note(hz(m.n), t, dur, S.lead, S.lead === 'sawtooth' ? 0.04 : 0.06, music.lead);
       if (S.detune) note(hz(m.n), t, dur, S.lead, 0.03, music.lead, 12);
       if (S.lead2) note(hz(m.n - 12), t, dur, S.lead2, 0.05, music.lead);
@@ -313,9 +362,15 @@ export function startMusic(song = 0) {
   music.step = 0;
   if (!music.bus) {
     music.bus = ac.createGain();
-    music.bus.connect(master);
+    // Keep sub-bass rumble and any DC out of the speakers.
+    const hp = ac.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 35;
+    music.bus.connect(hp).connect(master);
+    // Drums a bit back, melody up front, so the tune carries over the beat.
+    music.drums = ac.createGain(); music.drums.gain.value = 0.62; music.drums.connect(music.bus);
     // The lead goes through a little echo, for that big-arcade sound.
     music.lead = ac.createGain();
+    music.lead.gain.value = 2.0;
     const d = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
     fb.gain.value = 0.3; wet.gain.value = 0.35;
     music.lead.connect(music.bus);
@@ -324,7 +379,7 @@ export function startMusic(song = 0) {
   }
   music.delay.delayTime.value = 60 / music.song.bpm * 0.75; // a dotted 8th
   music.wet.gain.value = music.song.echo ? 0.35 : 0;
-  music.bus.gain.value = muted ? 0 : 0.35;
+  music.bus.gain.value = muted ? 0 : 0.45;
   music.on = true;
   music.next = ac.currentTime + 0.05;
   music.timer = setInterval(schedule, 40);
