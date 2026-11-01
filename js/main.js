@@ -1,6 +1,6 @@
 import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions } from './game.js';
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
-import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, text, SAFE, laneHudBottom, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
+import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, LAYERS, flushCharacters, queueLobbyCharacter, text, SAFE, laneHudBottom, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
 import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity, holdAudio } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
@@ -16,6 +16,10 @@ const ctx = canvas.getContext('2d');
 // block on every screen. Text, HUD and the camera view draw on #stage above it.
 const low = $('#world');
 const lctx = low.getContext('2d');
+const lowFront = $('#worldFront'), fctx = lowFront.getContext('2d'); // world bits in front of the runners
+const charCanvas = $('#chars'), cctx = charCanvas.getContext('2d');   // smooth cartoon characters
+LAYERS.world = low; LAYERS.front = fctx;
+let charK = 1; // character-canvas pixels per world pixel
 const video = $('#cam');
 
 const settings = {
@@ -1094,14 +1098,17 @@ function resize() {
   const cw = canvas.clientWidth || innerWidth, chh = canvas.clientHeight || innerHeight;
   W = Math.round(cw * dpr);
   H = Math.round(chh * dpr);
-  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; charCanvas.width = W; charCanvas.height = H; }
   // A whole number of real screen pixels per world pixel, about 270 rows tall.
   PX = Math.max(2, Math.round(chh * real / 270));
   const lw = Math.ceil(cw * real / PX), lh = Math.ceil(chh * real / PX);
   if (low.width !== lw || low.height !== lh) {
-    low.width = lw; low.height = lh;
-    low.style.width = `${lw * PX / real}px`; low.style.height = `${lh * PX / real}px`;
+    for (const c of [low, lowFront]) {
+      c.width = lw; c.height = lh;
+      c.style.width = `${lw * PX / real}px`; c.style.height = `${lh * PX / real}px`;
+    }
   }
+  charK = PX * dpr / real;
   const cs = getComputedStyle(safeProbe);
   SAFE.l = (parseFloat(cs.paddingLeft) || 0) * dpr;
   SAFE.r = (parseFloat(cs.paddingRight) || 0) * dpr;
@@ -1404,6 +1411,14 @@ function updateGame(t, dt) {
 
 function draw(t) {
   ctx.clearRect(0, 0, W, H);
+  cctx.setTransform(1, 0, 0, 1, 0, 0);
+  cctx.clearRect(0, 0, W, H);
+  fctx.clearRect(0, 0, lowFront.width, lowFront.height);
+  LAYERS.queue = [];
+  try { drawScene(t); } finally { flushCharacters(cctx, charK); }
+}
+
+function drawScene(t) {
   lctx.imageSmoothingEnabled = false;
   if (state === 'setup' || state === 'end') {
     drawAttract(t);
@@ -1549,7 +1564,7 @@ function drawLobby(t) {
     const act = st.ready ? { reach: Math.floor(t * 3) % 2 === 0 } : {};
     const P = cartoonPose(act, Math.sin(t * 6 + i) * 0.05);
     lctx.globalAlpha = st.found ? 1 : 0.35;
-    drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
+    queueLobbyCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, CHARACTERS[slotChar[i]], false, p.gear);
     lctx.globalAlpha = 1;
   });
   fl.forEach((q, i) => {
@@ -1558,7 +1573,7 @@ function drawLobby(t) {
     const S = Math.min(low.height * 0.05, L.w * 0.12);
     const P = cartoonPose(q.act, Math.sin(t * 6 + q.index) * 0.05);
     lctx.globalAlpha = fr.state === 'lobby' ? 1 : 0.5;
-    drawCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, q.character, false, q.gear);
+    queueLobbyCharacter(lctx, L.cx, low.height * 0.765 - 1.65 * S, S, P, q.character, false, q.gear);
     lctx.globalAlpha = 1;
   });
   

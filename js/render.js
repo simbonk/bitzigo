@@ -76,9 +76,45 @@ function shade(hex, amt) {
 }
 
 const R = Math.round;
+// Characters are smooth outlined cartoons drawn at full resolution (the world
+// stays pixel art). While one is drawn, VEC is on and rect() makes rounded
+// shapes instead of pixel blocks; in the 'outline' pass it only strokes the
+// dark silhouette, so overlapping parts share one clean outline.
+let VEC = 0, RMODE = 'fill', OLW = 1;
+const INK = '#1a2a40';
 function rect(ctx, x, y, w, h, color) {
+  if (VEC) {
+    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.3);
+    if (RMODE === 'outline') { ctx.lineWidth = OLW * 2; ctx.strokeStyle = INK; ctx.stroke(); }
+    else { ctx.fillStyle = color; ctx.fill(); }
+    return;
+  }
   ctx.fillStyle = color;
   ctx.fillRect(R(x), R(y), Math.max(1, R(w)), Math.max(1, R(h)));
+}
+
+// Where characters go: drawn later on their own sharp canvas (see main.js),
+// between the pixel world behind the runner and the bits that pass in front.
+export const LAYERS = { world: null, front: null, queue: null };
+function queueCharacter(ctx, clip, ...args) {
+  if (LAYERS.queue && ctx.canvas === LAYERS.world) LAYERS.queue.push({ m: ctx.getTransform(), alpha: ctx.globalAlpha, clip, args });
+  else drawCharacter(ctx, ...args);
+}
+export function queueLobbyCharacter(ctx, ...args) { queueCharacter(ctx, null, ...args); }
+// k: character-canvas pixels per world pixel.
+export function flushCharacters(cctx, k) {
+  const q = LAYERS.queue || [];
+  for (const it of q) {
+    cctx.save();
+    cctx.setTransform(k, 0, 0, k, 0, 0);
+    if (it.clip) { cctx.beginPath(); cctx.rect(it.clip.x, 0, it.clip.w, it.clip.h); cctx.clip(); }
+    const m = it.m;
+    cctx.setTransform(k * m.a, k * m.b, k * m.c, k * m.d, k * m.e, k * m.f);
+    cctx.globalAlpha = it.alpha;
+    drawCharacter(cctx, ...it.args);
+    cctx.restore();
+  }
+  q.length = 0;
 }
 
 // A block with a lighter top face, so it reads as a cube.
@@ -294,7 +330,18 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
       : T.type === 'fire' ? { z: TOWER_Z, draw: () => drawHouse(ctx, L, T, time) }
       : { z: TOWER_Z, draw: () => drawTower(ctx, L, T) });
   }
-  items.push({ z: 0.015, draw: () => drawAvatar(ctx, L, p, time, character) });
+  // Everything after the runner (things passing in front, splashes, balls)
+  // goes on the front world layer, above the character layer.
+  const back = ctx, front = LAYERS.front && ctx.canvas === LAYERS.world ? LAYERS.front : null;
+  const toFront = () => {
+    if (!front) return;
+    const m = ctx.getTransform();
+    front.save();
+    front.beginPath(); front.rect(L.x, 0, L.w, L.h); front.clip();
+    front.setTransform(m);
+    ctx = front;
+  };
+  items.push({ z: 0.015, draw: () => { drawAvatar(ctx, L, p, time, character); toFront(); } });
   items.sort((a, b) => b.z - a.z).forEach(it => it.draw());
   if (T?.balls) drawBalls(ctx, L, T);
   if (B) drawBubbles(ctx, L, B, time);
@@ -307,8 +354,9 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     ctx.fillRect(L.x, 0, L.w, L.h);
   }
   ctx.restore();
-  // Lane divider.
-  rect(ctx, L.x + L.w - 1, 0, 2, L.h, '#1b2340');
+  if (ctx !== back) { back.restore(); ctx = back; }
+  // Lane divider (above the runners).
+  rect(front || ctx, L.x + L.w - 1, 0, 2, L.h, '#1b2340');
 }
 
 function mix(a, b, k) {
@@ -767,7 +815,9 @@ function cameraPose(p) {
 // camera, with a little of the real length mixed in so it still feels alive.
 const segLen = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 export function steadyPose(P, keepArms) {
-  const firm = (m, ref) => clamp(ref * 0.75 + m * 0.25, ref * 0.85, ref * 1.12);
+  // Fixed bone lengths: only the angles come from the camera, so arms and
+  // legs never shrink or stretch when a kid leans in or turns.
+  const firm = (m, ref) => ref;
   const toward = (from, a, b, ref, fallback) => {
     const dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy);
     if (m < 0.05) return [from[0] + fallback[0], from[1] + fallback[1]];
@@ -804,13 +854,28 @@ export function steadyPose(P, keepArms) {
   return out;
 }
 
+// 1-Euro filter (Casiez et al.) for one value. Units: torso lengths, seconds.
+const EURO = { min: 1.0, beta: 0.9, d: 1.0 };
+function oneEuro(state, key, x, t) {
+  const s = state[key];
+  if (!s || t - s.t > 0.5) { state[key] = { x, dx: 0, t }; return x; }
+  const dt = t - s.t;
+  if (dt <= 0) return s.x;
+  const alpha = cut => 1 / (1 + 1 / (2 * Math.PI * cut * dt));
+  s.dx += alpha(EURO.d) * ((x - s.x) / dt - s.dx);
+  s.x += alpha(EURO.min + EURO.beta * Math.abs(s.dx)) * (x - s.x);
+  s.t = t;
+  return s.x;
+}
+
 function drawAvatar(ctx, L, p, time, ch) {
   let P;
   if (p.pts && p.base) {
     // Smooth out camera jitter so the character doesn't twitch.
-    const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type)), prev = p.drawPose;
-    P = prev ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [prev[k][0] + (v[0] - prev[k][0]) * 0.45, prev[k][1] + (v[1] - prev[k][1]) * 0.45]])) : raw;
-    p.drawPose = P;
+    // A 1-Euro filter: heavy smoothing while still, almost none in fast moves.
+    const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type));
+    const f = p.poseFilter ??= {}, now = performance.now() / 1000;
+    P = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [oneEuro(f, k + 'x', v[0], now), oneEuro(f, k + 'y', v[1], now)]]));
   }
   else P = cartoonPose(p.act, Math.sin(time * 8 + p.index) * 0.04);
   const S = L.S;
@@ -868,7 +933,7 @@ function drawAvatar(ctx, L, p, time, ch) {
     return z > -0.03 && z < (o.kind === 'bird' ? 0.45 : 0.22);
   });
   const look = { sx, sy, wow };
-  drawCharacter(ctx, ox, oy, S, P, ch, flash, p.gear, look);
+  queueCharacter(ctx, { x: L.x, w: L.w, h: L.h }, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
 // Little dust puffs kicked up behind each footstep.
@@ -891,51 +956,90 @@ function drawDust(ctx, cx, ground, S, steps) {
 
 // Draws a blocky character with hip centre at (ox, oy).
 export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}, look = {}) {
+  VEC++;
+  const prevOl = OLW;
+  ctx.save();
+  try { drawRig(ctx, ox, oy, S, P, ch, flash, gear || {}, look || {}); }
+  finally { ctx.restore(); VEC--; OLW = prevOl; RMODE = 'fill'; }
+}
+
+// A paper-doll rig of rounded parts with overlapping round joints, a dark
+// outline and simple two-tone cel shading.
+function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   const X = v => ox + v[0] * S, Y = v => oy + v[1] * S;
-  if (gear?.back === 'cape') {
-    // Cape flowing behind, from the shoulders to the knees.
-    fillPoly(ctx, [[X(P.ls) - S * 0.1, Y(P.ls)], [X(P.rs) + S * 0.1, Y(P.rs)], [X(P.rk) + S * 0.5, Y(P.rk)], [X(P.lk) - S * 0.5, Y(P.lk)]], '#e63946');
-  }
+  const ol = OLW = Math.max(0.6, S * 0.075);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   const body = flash ? '#ffffff' : ch.body;
   const limbCol = flash ? '#ffffff' : ch.limb;
+  const handCol = flash ? '#ffffff' : ch.hand || (ch.limb === ch.body ? shade(ch.body, 0.2) : ch.body);
+  const path = pts => { ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); };
+  const stroke = (w, col) => { ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke(); };
+  // A limb: two round-capped bones through the joint, outlined, with a soft
+  // highlight along the top edge.
   const limb = (a, b, c, w, col) => {
-    pixLine(ctx, X(a), Y(a), X(b), Y(b), Math.max(2, w), col);
-    pixLine(ctx, X(b), Y(b), X(c), Y(c), Math.max(2, w), col);
+    const pts = [[X(a), Y(a)], [X(b), Y(b)], [X(c), Y(c)]];
+    path(pts); stroke(w + ol * 2, INK); stroke(w, col);
+    path(pts.map(q => [q[0] - w * 0.16, q[1] - w * 0.16])); stroke(w * 0.28, 'rgba(255,255,255,0.22)');
   };
+  const blob = (x, y, r, col) => {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    stroke(ol * 2, INK); ctx.fillStyle = col; ctx.fill();
+  };
+
+  if (gear.back === 'cape') {
+    path([[X(P.ls) - S * 0.1, Y(P.ls)], [X(P.rs) + S * 0.1, Y(P.rs)], [X(P.rk) + S * 0.5, Y(P.rk)], [X(P.lk) - S * 0.5, Y(P.lk)]]);
+    ctx.closePath(); stroke(ol * 2 + S * 0.1, INK); stroke(S * 0.1, '#e63946'); ctx.fillStyle = '#e63946'; ctx.fill();
+  }
+  // Legs and shoes.
   limb(P.lh, P.lk, P.la, S * 0.34, limbCol);
   limb(P.rh, P.rk, P.ra, S * 0.34, limbCol);
-  for (const a of [P.la, P.ra]) rect(ctx, X(a) - S * 0.24, Y(a) - S * 0.08, S * 0.48, S * 0.2, '#2b2b33');
+  for (const a of [P.la, P.ra]) {
+    roundRect(ctx, X(a) - S * 0.26, Y(a) - S * 0.11, S * 0.52, S * 0.26, S * 0.12);
+    stroke(ol * 2, INK); ctx.fillStyle = '#2b2b33'; ctx.fill();
+  }
 
-  // Torso as a quad between shoulders and hips.
-  fillPoly(ctx, [[X(P.ls) - S * 0.08, Y(P.ls)], [X(P.rs) + S * 0.08, Y(P.rs)], [X(P.rh) + S * 0.1, Y(P.rh) + S * 0.12], [X(P.lh) - S * 0.1, Y(P.lh) + S * 0.12]], body);
+  // Torso: a rounded trapezoid, lit from the left.
+  const tp = [[X(P.ls) - S * 0.02, Y(P.ls)], [X(P.rs) + S * 0.02, Y(P.rs)], [X(P.rh) + S * 0.04, Y(P.rh) + S * 0.08], [X(P.lh) - S * 0.04, Y(P.lh) + S * 0.08]];
+  const xl = Math.min(tp[0][0], tp[3][0]) - S * 0.1, xr = Math.max(tp[1][0], tp[2][0]) + S * 0.1;
+  const g = ctx.createLinearGradient(xl, 0, xr, 0);
+  g.addColorStop(0, shade(body, 0.1)); g.addColorStop(0.22, shade(body, 0.1));
+  g.addColorStop(0.22, body); g.addColorStop(0.74, body);
+  g.addColorStop(0.74, shade(body, -0.1)); g.addColorStop(1, shade(body, -0.1));
+  path(tp); ctx.closePath();
+  stroke(S * 0.2 + ol * 2, INK);
+  ctx.fillStyle = g; ctx.fill(); stroke(S * 0.2, g);
   const cx = (X(P.ls) + X(P.rs) + X(P.lh) + X(P.rh)) / 4, cy = (Y(P.ls) + Y(P.rs) + Y(P.lh) + Y(P.rh)) / 4;
   rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
   if (ch.stripes && !flash) {
     // Reflective bands across the coat and on the cuffs, like a real turnout coat.
-    const xl = Math.min(X(P.ls), X(P.lh)) - S * 0.05, xr = Math.max(X(P.rs), X(P.rh)) + S * 0.05;
+    ctx.save();
+    path(tp); ctx.closePath(); ctx.lineWidth = S * 0.2; ctx.clip();
+    const bl = xl - S * 0.1, br = xr + S * 0.1;
     for (const k of [0.45, 0.85]) {
       const y = Y(P.ls) + (Y(P.lh) - Y(P.ls)) * k;
-      rect(ctx, xl, y, xr - xl, S * 0.14, '#d8dce6');
-      rect(ctx, xl, y + S * 0.04, xr - xl, S * 0.05, '#ffe14d');
+      ctx.fillStyle = '#d8dce6'; ctx.fillRect(bl, y, br - bl, S * 0.14);
+      ctx.fillStyle = '#ffe14d'; ctx.fillRect(bl, y + S * 0.045, br - bl, S * 0.05);
     }
-    rect(ctx, cx - S * 0.06, Y(P.ls), S * 0.12, Y(P.lh) - Y(P.ls), '#b8801a');
+    ctx.restore();
+    rect(ctx, cx - S * 0.06, Y(P.ls) + S * 0.05, S * 0.12, Y(P.lh) - Y(P.ls), '#b8801a');
   }
 
+  // Arms, with round hands.
   limb(P.ls, P.le, P.lw, S * 0.28, limbCol);
   limb(P.rs, P.re, P.rw, S * 0.28, limbCol);
-  for (const w of [P.lw, P.rw]) rect(ctx, X(w) - S * 0.17, Y(w) - S * 0.17, S * 0.34, S * 0.34, flash ? '#fff' : ch.hand || (ch.limb === ch.body ? shade(ch.body, 0.2) : ch.body));
+  for (const w of [P.lw, P.rw]) blob(X(w), Y(w), S * 0.2, handCol);
   if (ch.stripes && !flash) {
     for (const [a, b] of [[P.le, P.lw], [P.re, P.rw], [P.lk, P.la], [P.rk, P.ra]]) {
       const x = X(a) + (X(b) - X(a)) * 0.7, y = Y(a) + (Y(b) - Y(a)) * 0.7;
-      rect(ctx, x - S * 0.17, y - S * 0.06, S * 0.34, S * 0.12, '#d8dce6');
+      ctx.beginPath(); ctx.moveTo(x - S * 0.06, y); ctx.lineTo(x + S * 0.06, y); stroke(S * 0.14, '#d8dce6');
     }
   }
 
-  // Head: a cube sitting on the shoulders, following the nose.
+  // Head, sitting on the shoulders and following the nose.
   const neck = [(P.ls[0] + P.rs[0]) / 2, (P.ls[1] + P.rs[1]) / 2];
   const hcx = X([neck[0] * 0.4 + P.nose[0] * 0.6, 0]);
   const hcy = Math.min(Y(P.nose), Y(neck) - S * 0.45);
-  drawHead(ctx, hcx, hcy, S, ch, flash, gear || {}, look);
+  drawHead(ctx, hcx, hcy, S, ch, flash, gear, look);
 }
 
 function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
@@ -946,32 +1050,46 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   const u = hw / 8, uy = hh / 8; // head "pixel"
   const px = (i, j, w, h, c) => rect(ctx, left + i * u, top + j * uy, w * u, h * uy, c);
 
-  // Things behind/above the head.
-  if (ch.id === 'fox') { px(0, -2, 2, 2, ch.body); px(6, -2, 2, 2, ch.body); px(0, -2, 1, 1, '#3a2a20'); px(7, -2, 1, 1, '#3a2a20'); }
-  if (ch.id === 'bunny') { px(1, -5, 2, 5, head); px(5, -5, 2, 5, head); px(1.5, -4.5, 1, 4, '#ffc4d6'); px(5.5, -4.5, 1, 4, '#ffc4d6'); }
-  if (ch.id === 'panda') { px(-0.5, -1, 2.5, 2.5, '#2b2b33'); px(6, -1, 2.5, 2.5, '#2b2b33'); }
-  if (ch.id === 'robot') { px(3.5, -3, 1, 3, '#6b788a'); px(3, -4, 2, 1.5, '#ff4d4d'); }
-  if (ch.id === 'dino') { px(1, -1.5, 1.5, 1.5, '#ffd23f'); px(3.3, -2, 1.5, 2, '#ffd23f'); px(5.6, -1.5, 1.5, 1.5, '#ffd23f'); }
-  if (ch.id === 'hedgehog') {
-    // Soft round prickles all over the back of the head.
-    const q = '#2a56a8';
-    px(-1, 0.5, 1.5, 2, q); px(-1.2, 3, 1.5, 2, q); px(7.5, 0.5, 1.5, 2, q); px(7.7, 3, 1.5, 2, q);
-    px(0.3, -1.3, 1.8, 1.8, q); px(2.6, -1.8, 1.8, 2, q); px(4.9, -1.6, 1.8, 2, q); px(6.6, -0.9, 1.5, 1.6, q);
+  const behind = () => {
+    // Things behind/above the head.
+    if (ch.id === 'fox') { px(0, -2, 2, 2, ch.body); px(6, -2, 2, 2, ch.body); px(0, -2, 1, 1, '#3a2a20'); px(7, -2, 1, 1, '#3a2a20'); }
+    if (ch.id === 'bunny') { px(1, -5, 2, 5, head); px(5, -5, 2, 5, head); px(1.5, -4.5, 1, 4, '#ffc4d6'); px(5.5, -4.5, 1, 4, '#ffc4d6'); }
+    if (ch.id === 'panda') { px(-0.5, -1, 2.5, 2.5, '#2b2b33'); px(6, -1, 2.5, 2.5, '#2b2b33'); }
+    if (ch.id === 'robot') { px(3.5, -3, 1, 3, '#6b788a'); px(3, -4, 2, 1.5, '#ff4d4d'); }
+    if (ch.id === 'dino') { px(1, -1.5, 1.5, 1.5, '#ffd23f'); px(3.3, -2, 1.5, 2, '#ffd23f'); px(5.6, -1.5, 1.5, 1.5, '#ffd23f'); }
+    if (ch.id === 'hedgehog') {
+      // Soft round prickles all over the back of the head.
+      const q = '#2a56a8';
+      px(-1, 0.5, 1.5, 2, q); px(-1.2, 3, 1.5, 2, q); px(7.5, 0.5, 1.5, 2, q); px(7.7, 3, 1.5, 2, q);
+      px(0.3, -1.3, 1.8, 1.8, q); px(2.6, -1.8, 1.8, 2, q); px(4.9, -1.6, 1.8, 2, q); px(6.6, -0.9, 1.5, 1.6, q);
+    }
+    if (ch.id === 'axolotl') {
+      // Frilly pink gills on both sides.
+      const g = '#ff5fa2';
+      px(-2, 0.4, 2, 1, g); px(-2.6, 2.4, 2.6, 1, g); px(-2, 4.4, 2, 1, g);
+      px(8, 0.4, 2, 1, g); px(8, 2.4, 2.6, 1, g); px(8, 4.4, 2, 1, g);
+    }
+    if (ch.id === 'cow') {
+      px(-0.4, -1.6, 1.2, 1.8, '#f0e0c0'); px(7.2, -1.6, 1.2, 1.8, '#f0e0c0');
+      px(-1.6, 1.2, 1.8, 1.1, '#2b2b33'); px(7.8, 1.2, 1.8, 1.1, '#2b2b33');
+    }
+    if (ch.id === 'ninja') { px(8, 1, 2, 0.8, '#e63946'); px(8.6, 1.8, 1.6, 0.7, '#e63946'); }
+    if (ch.id === 'firefighter' && !gear.hat) px(-1.6, 0.3, 11.2, 1.3, '#a81a26'); // helmet's long brim
+  };
+  if (VEC) {
+    // Outline pass for the whole head silhouette, then the fills on top.
+    const headShape = () => roundRect(ctx, left, top, hw, hh, hs * 0.26);
+    RMODE = 'outline'; behind(); headShape(); ctx.lineWidth = OLW * 2; ctx.strokeStyle = INK; ctx.stroke();
+    RMODE = 'fill'; behind();
+    const g = ctx.createLinearGradient(0, top, 0, top + hh);
+    g.addColorStop(0, shade(head, 0.12)); g.addColorStop(0.2, shade(head, 0.12));
+    g.addColorStop(0.2, head); g.addColorStop(0.82, head);
+    g.addColorStop(0.82, shade(head, -0.08)); g.addColorStop(1, shade(head, -0.08));
+    headShape(); ctx.fillStyle = g; ctx.fill();
+  } else {
+    behind();
+    block(ctx, left, top, hw, hh, head, 0.18);
   }
-  if (ch.id === 'axolotl') {
-    // Frilly pink gills on both sides.
-    const g = '#ff5fa2';
-    px(-2, 0.4, 2, 1, g); px(-2.6, 2.4, 2.6, 1, g); px(-2, 4.4, 2, 1, g);
-    px(8, 0.4, 2, 1, g); px(8, 2.4, 2.6, 1, g); px(8, 4.4, 2, 1, g);
-  }
-  if (ch.id === 'cow') {
-    px(-0.4, -1.6, 1.2, 1.8, '#f0e0c0'); px(7.2, -1.6, 1.2, 1.8, '#f0e0c0');
-    px(-1.6, 1.2, 1.8, 1.1, '#2b2b33'); px(7.8, 1.2, 1.8, 1.1, '#2b2b33');
-  }
-  if (ch.id === 'ninja') { px(8, 1, 2, 0.8, '#e63946'); px(8.6, 1.8, 1.6, 0.7, '#e63946'); }
-  if (ch.id === 'firefighter' && !gear.hat) px(-1.6, 0.3, 11.2, 1.3, '#a81a26'); // helmet's long brim
-
-  block(ctx, left, top, hw, hh, head, 0.18);
 
   // Faces.
   const eye = look.wow
@@ -1041,8 +1159,12 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
     const my = { frog: 4.6, fox: 6.0, cow: 6.4, robot: 5.4, hedgehog: 6.0, panda: 6.4 }[ch.id] ?? 5.9;
     px(3.1, my, 1.8, 1.6, '#3a1020'); px(3.5, my + 0.6, 1, 0.7, '#ff6b81');
   }
-  if (gear.face) drawGearItem(ctx, gear.face, left, top, u);
-  if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
+  for (const mode of VEC ? ['outline', 'fill'] : ['fill']) {
+    RMODE = mode;
+    if (gear.face) drawGearItem(ctx, gear.face, left, top, u);
+    if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
+  }
+  RMODE = 'fill';
 }
 
 // Hats and accessories in head "pixels" (u), relative to the head's top-left.

@@ -11,8 +11,10 @@ html, body {
 /* Below the status bar / Dynamic Island when held upright (0 in landscape). */
 #stage { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); width: 100%; height: calc(100% - env(safe-area-inset-top)); display: block; }
 /* The pixel world: a small canvas blown up with hard edges, never blurred. */
-#world { position: fixed; left: 0; top: env(safe-area-inset-top); display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
+#world, #worldFront { position: fixed; left: 0; top: env(safe-area-inset-top); display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
 #stage { background: transparent; }
+#chars { position: fixed; left: 0; top: env(safe-area-inset-top); width: 100%; height: calc(100% - env(safe-area-inset-top)); display: block; pointer-events: none; }
+#worldFront { pointer-events: none; }
 #safeProbe { position: fixed; visibility: hidden; pointer-events: none; width: 0; height: 0; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 #cam { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
