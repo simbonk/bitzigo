@@ -5,7 +5,7 @@ import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
 import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity, holdAudio } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
-import { saveGame, addHeartRates, clearStats, showStats } from './stats.js';
+import { saveGame, addHeartRates, clearStats, clearKidStats, showStats } from './stats.js';
 import { room, onRoom, host as hostRoom, join as joinRoom, leave as leaveRoom, send as sendRoom, connected as friendHere, friendTicks, setWant } from './net.js';
 
 const $ = s => document.querySelector(s);
@@ -111,7 +111,7 @@ function openKidPicker(i, row) {
   box.innerHTML = (list.length ? `<div class="pickHead">Who is this?</div><div class="kidList">${list.map(k => {
     const busy = inUse.has(k.name.toLowerCase());
     const ch = CHARACTERS[charIndex(k.char)];
-    return `<button class="kid" data-k="${esc(k.name.toLowerCase())}" ${busy ? 'disabled' : ''}><span class="sw" style="background:${k.color || '#888'}"></span>${esc(k.name)}<span class="meta">${k.age === 12 ? '12+' : k.age} · ${k.char ? ch.name : ''}</span></button>`;
+    return `<span class="kidItem"><button class="kid" data-k="${esc(k.name.toLowerCase())}" ${busy ? 'disabled' : ''}><span class="sw" style="background:${k.color || '#888'}"></span>${esc(k.name)}<span class="meta">${k.age === 12 ? '12+' : k.age}${k.char ? ` · ${ch.name}` : ''}</span></button><button class="kidDel" data-k="${esc(k.name.toLowerCase())}" title="Remove ${esc(k.name)}" aria-label="Remove ${esc(k.name)}">×</button></span>`;
   }).join('')}</div>` : `<div class="pickHead">Saved kids show up here after they play.</div>`) +
     `<div class="pickHead">Colour</div><div class="swatches">${PALETTE.map(c => `<button class="sw big" data-c="${c}" style="background:${c}" ${taken.includes(c) ? 'disabled' : ''}></button>`).join('')}</div>`;
   box.querySelectorAll('.kid').forEach(b => b.onclick = () => {
@@ -119,6 +119,16 @@ function openKidPicker(i, row) {
     p.name = k.name; p.age = k.age; p.char = k.char;
     if (k.color && !taken.includes(k.color)) p.color = k.color;
     save(); closeKidPicker(); renderPlayerRows();
+  });
+  // × removes a saved kid (made by mistake, say) and their stats on this device.
+  box.querySelectorAll('.kidDel').forEach(b => b.onclick = () => {
+    const k = kids[b.dataset.k];
+    if (!k || !confirm(`Remove ${k.name}? Their saved stats on this device are deleted too.`)) return;
+    delete kids[b.dataset.k];
+    try { localStorage.setItem(KIDS_KEY, JSON.stringify(kids)); } catch { }
+    clearKidStats(k.name);
+    updateKidList();
+    openKidPicker(i, row);
   });
   box.querySelectorAll('.swatches .sw').forEach(b => b.onclick = () => {
     p.color = b.dataset.c; save(); rememberKid(p); closeKidPicker(); renderPlayerRows();

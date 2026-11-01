@@ -14,7 +14,13 @@ function store(games) {
   try { localStorage.setItem(KEY, JSON.stringify(games.slice(-MAX_GAMES))); } catch { }
 }
 
+// Unnamed players ("Player 1") can't be picked again later, so their games
+// aren't kept: they would only clutter the stats.
+const unnamed = n => !String(n || '').trim() || /^player \d$/i.test(String(n).trim());
+
 export function saveGame(players, { theme, seconds }) {
+  players = players.filter(p => !unnamed(p.name));
+  if (!players.length) return;
   const games = load();
   games.push({
     at: Date.now(), theme, seconds: Math.round(seconds),
@@ -46,6 +52,12 @@ export function addHeartRates(players) {
 }
 
 export function clearStats() { store([]); }
+
+// Forget one kid's results: their rows go from every game, and a game left
+// with nobody in it goes too.
+export function clearKidStats(name) {
+  store(load().map(g => ({ ...g, players: g.players.filter(r => r.name !== name) })).filter(g => g.players.length));
+}
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const avg = a => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
@@ -171,10 +183,11 @@ export function statsHtml() {
     const s = summarize(mine).get(kid);
     html += `<div class="kidTiles">${[['Games', s?.games || 0], ['Minutes', Math.round((s?.secs || 0) / 60)], ['Calories*', (s?.kcal || 0).toLocaleString()], ['Best score', (s?.best || 0).toLocaleString()]]
       .map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
-    if (!mine.length) return html + `<p class="empty">No games for ${esc(kid)} in this time.</p>`;
+    const del = `<button class="kidDelStats" data-del="${esc(kid)}">Delete ${esc(kid)}'s stats</button>`;
+    if (!mine.length) return html + `<p class="empty">No games for ${esc(kid)} in this time.</p>` + del;
     const bs = buckets(view.period, mine);
     html += '<p class="note">Tap the graph to see a number.</p><div class="charts">' + METRICS.map(m => chartHtml(m, bs, kid, colors.get(kid) || '#ffd23f')).join('') + '</div>';
-    return html + '<p class="note">* Calories are a rough guess from minutes of movement and age, not a measurement.</p>';
+    return html + '<p class="note">* Calories are a rough guess from minutes of movement and age, not a measurement.</p>' + del;
   }
 
   if (!games.length) return html + '<p class="empty">No games in this time yet.</p>';
@@ -214,8 +227,12 @@ export function showStats(el, fresh) {
   if (fresh) { view.period = 'all'; view.kid = null; }
   el.innerHTML = statsHtml();
   el.onclick = e => {
-    const b = e.target.closest('[data-period],[data-kid],.bar');
+    const b = e.target.closest('[data-period],[data-kid],[data-del],.bar');
     if (!b) return;
+    if (b.dataset.del) {
+      if (confirm(`Delete all of ${b.dataset.del}'s stats on this device? This can't be undone.`)) { clearKidStats(b.dataset.del); view.kid = null; showStats(el); }
+      return;
+    }
     if (b.classList.contains('bar')) {
       const chart = b.closest('.chart');
       chart.querySelectorAll('.bar.sel').forEach(x => x.classList.remove('sel'));
