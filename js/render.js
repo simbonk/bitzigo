@@ -4,6 +4,7 @@
 import { LM, tuning } from './game.js';
 import { MINI, DANCE, CITY_X } from './minigames.js';
 import { posesFor, wyrImage, askLeft } from './wyr.js';
+import { beatPulse } from './audio.js';
 
 // How high (in lane heights) the sky view pans when a kid flies all the way up.
 const SKY_PAN = 0.38;
@@ -1268,6 +1269,22 @@ function drawBursts(ctx, L, p) {
         const sz = Math.max(1, q.r * L.S * 1.4);
         rect(ctx, x, y, sz, sz * (Math.floor(e.t * 12 + q.x * 10) % 2 ? 1 : 0.5), q.c);
       }
+    } else if (e.type === 'voxels') {
+      // Splinters flying out of the smashed crate, towards the screen: they
+      // grow as they come at you, tumble, and fly off past the edges.
+      const off = e.side === 'left' ? -1.2 : e.side === 'right' ? 1.2 : 0;
+      const cx = L.cx + off * L.S, cy = L.ground - L.S * 2.55;
+      for (const q of e.chunks) {
+        const near = 1 + q.vz * k * 5;                         // closer = bigger
+        const d = q.sp * k * L.S * 3 * near;
+        const sz = Math.max(1, q.r * L.S * near);
+        const x = cx + Math.cos(q.a) * d, y = cy + Math.sin(q.a) * d * 0.8 + k * k * L.S * 1.5;
+        const sq = Math.abs(Math.cos(q.spin * e.t));           // tumbling
+        ctx.save();
+        ctx.globalAlpha *= k > 0.75 ? (1 - k) / 0.25 : 1;
+        block(ctx, x - sz / 2, y - sz * sq / 2, sz, Math.max(1, sz * sq), q.c, 0.3);
+        ctx.restore();
+      }
     } else if (e.type === 'bird') {
       drawBirdMood(ctx, L, e);
     } else if (e.type === 'splash') {
@@ -1483,6 +1500,10 @@ function drawAvatar(ctx, L, p, time, ch) {
   if (p.lift > 0.08) sy = 1 + 0.08 * Math.min(1, p.lift * 1.5);
   else if (p.airAt && time - p.airAt < 0.22) sy = 1 - 0.13 * Math.sin((time - p.airAt) / 0.22 * Math.PI);
   else if (grounded && !p.pts) sy = 0.975 + 0.04 * Math.abs(Math.sin(Math.PI * steps));
+  // Crouching: the character squishes down like a coiled spring, the lower the more.
+  const coilTo = clamp((p.pts && p.base ? p.crouch || 0 : p.act?.duck ? 0.5 : 0) / 0.5, 0, 1);
+  const coil = p.coil = (p.coil || 0) + (coilTo - (p.coil || 0)) * 0.35;
+  if (coil > 0.02) sy *= 1 - 0.22 * coil;
   const sx = 1 + (1 - sy) * 0.7;
   if (sy !== 1) {
     const FEET = 1.68;
@@ -1494,7 +1515,24 @@ function drawAvatar(ctx, L, p, time, ch) {
     const z = (o.arrive - p.clock) / o.travel;
     return z > -0.03 && z < (o.kind === 'bird' ? 0.45 : 0.22);
   });
-  const look = { sx, sy, wow, face: p.faceSrc };
+  // ...and glows brighter the lower they go.
+  if (coil > 0.05) {
+    const gx = ox, gy = L.ground - S * 1.2, gr = S * (1.6 + coil * 1.2) * (1 + Math.sin(time * 18) * 0.05 * coil);
+    const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    g.addColorStop(0, `rgba(255,240,150,${0.75 * coil})`);
+    g.addColorStop(0.5, `rgba(255,200,60,${0.35 * coil})`);
+    g.addColorStop(1, 'rgba(255,200,60,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+  }
+  // Running, the character faces away down the road (you see the back of
+  // their head). They turn round to the camera, showing the kid's face, when
+  // something is about to hit them, when they get bonked or are on a streak,
+  // in the break games, and before the run starts.
+  const onFire = p.fx?.some(e => e.type === 'fire');
+  const front = !!T || wow || p.bonk > 0 || onFire || !(p.run > 0.3) || p.paused;
+  p.turn = (p.turn ?? 1) + ((front ? 1 : 0) - (p.turn ?? 1)) * 0.22;
+  const look = { sx, sy, wow, face: p.faceSrc, turn: p.turn };
   queueCharacter(ctx, { x: L.x, w: L.w, h: L.h }, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
@@ -1587,7 +1625,7 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
   stroke(S * 0.06 + ol * 2, INK);
   ctx.fillStyle = g; ctx.fill(); stroke(S * 0.06, g);
   const cx = (X(P.ls) + X(P.rs) + X(P.lh) + X(P.rh)) / 4, cy = (Y(P.ls) + Y(P.rs) + Y(P.lh) + Y(P.rh)) / 4;
-  rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
+  if (!(look.turn < 0.5)) rect(ctx, cx - S * 0.2, cy - S * 0.2, S * 0.4, S * 0.45, flash ? '#fff' : ch.belly);
   if (ch.stripes && !flash) {
     // Reflective bands across the coat and on the cuffs, like a real turnout coat.
     ctx.save();
@@ -1622,7 +1660,9 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
 
 function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   const hs = S * 1.0; // head size
-  const hw = hs * (look.sx || 1), hh = hs * (look.sy || 1);
+  // Turning round: the head narrows to a sliver as it spins, back to front.
+  const turn = look.turn ?? 1, back = turn < 0.5;
+  const hw = hs * (look.sx || 1) * Math.max(0.15, Math.abs(1 - 2 * turn)), hh = hs * (look.sy || 1);
   const left = x - hw / 2, top = y - hh / 2;
   const head = flash ? '#ffffff' : ch.head;
   const u = hw / 8, uy = hh / 8; // head "pixel"
@@ -1672,6 +1712,19 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   } else {
     behind();
     block(ctx, left, top, hw, hh, head, 0.18);
+  }
+
+  if (back) {
+    // The back of the head: plain, with just the costume's ears, hat or band.
+    if (ch.id === 'ninja') px(0, 1, 8, 1, '#e63946');
+    if (ch.id === 'firefighter' && !gear.hat) { px(-0.2, -2.6, 8.4, 4.2, '#e63946'); px(-1.6, 0.3, 11.2, 1.3, '#a81a26'); }
+    if (ch.id === 'frog') { px(0, -1.6, 3, 2.4, head); px(5, -1.6, 3, 2.4, head); }
+    for (const mode of VEC ? ['outline', 'fill'] : ['fill']) {
+      RMODE = mode;
+      if (gear.hat) drawGearItem(ctx, gear.hat, left, top, u);
+    }
+    RMODE = 'fill';
+    return;
   }
 
   // The kid's own face, peeking out of the character like a kid in a dog suit.
@@ -1932,12 +1985,28 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
   } else if (next) {
     const k = 1 - next.z / 0.8;
     const info = KIND_INFO[next.o.kind];
-    const size = clamp(L.w * 0.1, 22, 64) * (0.85 + 0.35 * k);
+    // The cue bounces with the music, and a ring closes in on it, landing
+    // exactly when the obstacle arrives (always on a beat).
+    const bp = beatPulse() ** 3;
+    const size = clamp(L.w * 0.1, 22, 64) * (0.85 + 0.35 * k) * (1 + 0.1 * bp);
     const y = L.horizon * 0.66;
     ctx.save();
     ctx.globalAlpha = 0.45 + 0.55 * k;
-    cueIcon(ctx, next.o, L.cx, y - size * 0.3, size);
+    const rr = size * (0.62 + 1.0 * clamp(next.z / 0.8, 0, 1));
+    ctx.beginPath(); ctx.arc(L.cx, y - size * 0.3, rr, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(2, size * 0.08 * (0.6 + k)); ctx.strokeStyle = next.z < 0.12 ? '#ffffff' : info.color; ctx.stroke();
+    cueIcon(ctx, next.o, L.cx, y - size * 0.3 - bp * size * 0.08, size);
     text(ctx, info.word, L.cx, y + size * 0.85, size * 0.62, info.color);
+    ctx.restore();
+  }
+
+  // Right on the beat: a gold ring bursts out where the cue was.
+  if (p.beatFlash > 0) {
+    const k = 1 - p.beatFlash / 0.5, size = clamp(L.w * 0.1, 22, 64), y = L.horizon * 0.66 - size * 0.3;
+    ctx.save();
+    ctx.globalAlpha = 1 - k;
+    ctx.beginPath(); ctx.arc(L.cx, y, size * (0.6 + k * 1.6), 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(3, size * 0.16 * (1 - k)); ctx.strokeStyle = '#ffe14d'; ctx.stroke();
     ctx.restore();
   }
 
@@ -2135,10 +2204,17 @@ function drawScore(ctx, L, p, r, pad) {
   if (p.streak >= 3) {
     const sx = x0 + pw + r * 0.25, sr = r * 0.55;
     if (sx + sr * 2.6 < L.x + L.w - pad) {
-      roundRect(ctx, sx, cy - sr, sr * 2.6, sr * 2, sr);
-      ctx.fillStyle = '#ff8a1a'; ctx.fill();
+      // Pops and flashes every time it goes up.
+      const pop = p.comboPop || 0, k = pop / 0.4;
+      ctx.save();
+      ctx.translate(sx + sr * 1.3, cy);
+      ctx.scale(1 + 0.5 * k, 1 + 0.5 * k);
+      ctx.rotate(Math.sin(k * 12) * 0.12 * k);
+      roundRect(ctx, -sr * 1.3, -sr, sr * 2.6, sr * 2, sr);
+      ctx.fillStyle = k > 0.5 ? '#ffffff' : k > 0 ? '#ffe14d' : '#ff8a1a'; ctx.fill();
       ctx.lineWidth = Math.max(2, r * 0.08); ctx.strokeStyle = '#1a2a40'; ctx.stroke();
-      text(ctx, `x${p.streak}`, sx + sr * 1.3, cy + sr * 0.05, sr * 1.15, '#ffffff');
+      text(ctx, `x${p.streak}`, 0, sr * 0.05, sr * 1.15, k > 0 ? '#ff5a1a' : '#ffffff');
+      ctx.restore();
     }
   }
 }

@@ -103,6 +103,17 @@ export function handsOf(pts, f) {
   });
 }
 
+// The music's beat, set up by main.js: snap(clock, arrive) moves an arrival
+// time onto the nearest beat, so every wall, crate and bird lands on the music.
+export const beatSync = { snap: null };
+const onBeat = (clock, arrive, after) => {
+  if (!beatSync.snap) return arrive;
+  let t = beatSync.snap(clock, arrive);
+  // Never squeeze it closer to the one before than the gap allows.
+  while (t < after) t = beatSync.snap(clock, t + 0.2);
+  return t;
+};
+
 const ACTS = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'duck', 'throw'];
 
 export class Player {
@@ -286,6 +297,8 @@ export class Player {
     this.shake = Math.max(0, this.shake - dt);
     this.bump = Math.max(0, this.bump - dt);
     this.spin = Math.max(0, (this.spin || 0) - dt);
+    this.beatFlash = Math.max(0, (this.beatFlash || 0) - dt);
+    this.comboPop = Math.max(0, (this.comboPop || 0) - dt);
     this.fx = this.fx.filter(e => (e.t += dt) < e.life);
     // A prize only stays on for a while, then it's back to the plain character.
     for (const slot in this.gear) if (this.clock - (this.gearAt[slot] ?? this.clock) > GEAR_SECS) { delete this.gear[slot]; delete this.gearAt[slot]; }
@@ -381,7 +394,7 @@ export class Player {
     this.lastType = kind;
     const lr = () => (Math.random() < 0.5 ? 'left' : 'right');
     const side = kind === 'crate' ? (tn.sides ? lr() : 'mid') : kind === 'bird' ? lr() : null;
-    const arrive = Math.max(this.clock + tn.travel, this.lastArrive + 0.9);
+    const arrive = onBeat(this.clock, Math.max(this.clock + tn.travel, this.lastArrive + 0.9), this.lastArrive + 0.9);
     this.obstacles.push({ kind, side, arrive, travel: arrive - this.clock, window: tn.window, result: null });
     this.lastArrive = arrive;
 
@@ -749,7 +762,13 @@ export class Player {
     o.tier = tier;
     this.tiers[tier]++;
     const base = [100, 70, 40][tier] * (o.kind === 'rope' ? 1.4 : 1);
-    this.addPoints(base + 5 * Math.min(this.streak, 20), ['PERFECT!', 'GREAT!', false][tier]);
+    // Right on the beat (everything arrives on one): a beat combo that
+    // climbs a musical scale and adds a bonus each time.
+    this.beatCombo = tier === 0 ? (this.beatCombo || 0) + 1 : 0;
+    const beat = this.beatCombo >= 2 ? 10 * Math.min(this.beatCombo, 10) : 0;
+    this.addPoints(base + 5 * Math.min(this.streak, 20) + beat, tier === 0 ? (this.beatCombo >= 3 ? `BEAT x${this.beatCombo}!` : 'ON BEAT!') : ['PERFECT!', 'GREAT!', false][tier]);
+    if (tier === 0) { this.beatFlash = 0.5; this.onEvent?.('onbeat', this.beatCombo); }
+    this.comboPop = 0.4;
     this.counts[{ log: 'jump', crate: 'punch', bird: 'dodge', rope: 'swing' }[o.kind]]++;
     if (o.kind === 'rope') this.swing = 0.9;
     // Climb fast while we are still finding their level, then gently.
@@ -766,6 +785,7 @@ export class Player {
   }
 
   fail(o) {
+    this.beatCombo = 0;
     o.result = 'miss';
     o.resultAt = this.clock;
     this.record(o, false);
@@ -802,6 +822,12 @@ export class Player {
 
   burst(o) {
     this.fx.push({ type: 'burst', kind: o.kind, side: o.side, parts: sprinkle(14), t: 0, life: 0.7 });
+    // Chunky wooden splinters that fly out of the crate towards the screen.
+    const chunks = [];
+    for (let i = 0; i < 12; i++) chunks.push({ a: rand(0, Math.PI * 2), sp: rand(0.5, 1.4), vz: rand(0.6, 1.4), r: rand(0.12, 0.24), spin: rand(-12, 12), c: pick(['#d08a3a', '#b8742a', '#e8a85a', '#8a5220']) });
+    this.fx.push({ type: 'voxels', side: o.side, chunks, t: 0, life: 0.75 });
+    this.shake = 0.45;
+    this.onEvent?.('hitstop');
   }
 
   confetti() {
@@ -837,7 +863,7 @@ export class Course {
     if (ref.throwing || ref.tutorial || ref.clock < this.nextSpawn) return;
     const clock = ref.clock;
     const tn = tuning(pace + ramp);
-    const arrive = Math.max(clock + tn.travel, this.lastArrive + 0.9);
+    const arrive = onBeat(clock, Math.max(clock + tn.travel, this.lastArrive + 0.9), this.lastArrive + 0.9);
     const judged = Math.min(...players.map(p => p.judged));
     if (judged >= 4 && clock - this.lastGear > 22 && Math.random() < 0.4) {
       for (const p of players) {

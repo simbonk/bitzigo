@@ -1,8 +1,8 @@
-import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions } from './game.js';
+import { Player, Course, COLORS, PALETTE, BREAKS, KEYMAP, features, keyActions, beatSync } from './game.js';
 import { MINI, keyHandsFor, handsMini } from './minigames.js';
 import { laneBox, drawLaneWorld, drawLaneHud, drawCharacter, cartoonPose, drawCamera, LAYERS, flushCharacters, queueLobbyCharacter, text, SAFE, laneHudBottom, CHARACTERS, THEMES, drawWyrQuestion, drawWyrBoard } from './render.js';
 import { startWyr, updateWyr, WYR_SECS } from './wyr.js';
-import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity, holdAudio } from './audio.js';
+import { unlockAudio, sfx, hitSound, missSound, approachSound, cue, setAnnouncer, setMuted, startMusic, stopMusic, setIntensity, holdAudio, beatInfo } from './audio.js';
 import { startCamera, stopCamera, createTracker } from './pose.js';
 import { runHeartCheck, awake } from './heart.js';
 import { saveGame, addHeartRates, clearStats, clearKidStats, showStats } from './stats.js';
@@ -478,7 +478,22 @@ $('#go').onclick = async () => {
   enterLobby();
 };
 
+// Everything on the road lands on a beat of the music: an arrival time on
+// the game clock is moved to the nearest beat on the audio clock. Over the
+// few seconds an obstacle travels, the two clocks keep step closely enough.
+beatSync.snap = (clock, arrive) => {
+  const b = state === 'play' ? beatInfo() : null;
+  if (!b) return arrive;
+  const at = b.now + (arrive - clock);
+  const snapped = b.t0 + Math.round((at - b.t0) / b.period) * b.period;
+  return clock + (snapped - b.now);
+};
+
+// Hit-stop: the whole game freezes for a split second on a big hit, so it lands.
+let hitStop = 0;
 function playerEvent(type, o) {
+  if (type === 'hitstop') { hitStop = 0.045; return; }
+  if (type === 'onbeat') { sfx.chime(Math.max(0, (o || 1) - 1)); return; }
   if (type === 'hit') hitSound(o.kind);
   else if (type === 'miss') missSound(o.kind);
   else if (sfx[type]) sfx[type]();
@@ -1309,7 +1324,12 @@ function loop() {
 
   shareTick(t);
   if (state === 'lobby') updateLobby(t);
-  else if (['ready', 'tutorial', 'play'].includes(state)) updateGame(t, dt);
+  else if (['ready', 'tutorial', 'play'].includes(state)) {
+    // During a hit-stop the game stands still (the drawing carries on).
+    let gdt = dt;
+    if (hitStop > 0) { hitStop -= dt; gdt = 0; }
+    updateGame(t, gdt);
+  }
 
   // A drawing bug must never freeze the whole screen: skip the bad frame.
   // One player alone can play in portrait; two or a friend game need landscape.

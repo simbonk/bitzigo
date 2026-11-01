@@ -85,6 +85,12 @@ export const sfx = {
   // Rope swing: a rising-falling slide whistle.
   swing() { tone(400, 0.35, { type: 'sine', vol: 0.3, slide: 3 }); tone(1200, 0.35, { type: 'sine', vol: 0.25, slide: 0.4, delay: 0.35 }); },
   splash() { tone(150, 0.2, { type: 'sine', vol: 0.4, slide: 0.4 }); noise(0.6, { vol: 0.7, from: 1800, to: 200, q: 0.7 }); [0.2, 0.32, 0.45].forEach(d => tone(900 + d * 1000, 0.05, { type: 'sine', vol: 0.15, slide: 1.6, delay: d })); },
+  // On the beat: a bright chime that climbs a scale as the beat combo grows.
+  chime(n = 0) {
+    const scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+    const f = 523 * 2 ** (scale[Math.min(n, scale.length - 1)] / 12);
+    tone(f, 0.18, { type: 'triangle', vol: 0.22 }); tone(f * 2, 0.12, { type: 'sine', vol: 0.1, delay: 0.03 });
+  },
   // Boss fight: a bomb going off on Captain Squawk.
   boom() { tone(65, 0.45, { type: 'sine', vol: 0.75, slide: 0.4 }); noise(0.55, { vol: 0.7, from: 2500, to: 120, q: 0.6 }); tone(880, 0.06, { type: 'square', vol: 0.08, delay: 0.03 }); },
   // Super Eagle's cry, and his gulp when he eats a lump of points.
@@ -230,6 +236,22 @@ export function startMusic(songIndex = 0) {
   music.on = true;
   music.next = ac.currentTime + 0.05;
   music.timer = setInterval(schedule, 40);
+}
+
+// Where the music's beats fall, so obstacles can land right on one.
+// Returns the audio clock now, the time of a beat, and the beat length, or
+// null when no music is playing.
+export function beatInfo() {
+  if (!ac || !music.on || !music.song) return null;
+  const spb = 60 / (music.song.bpm + music.intense * 24) / 4;
+  return { now: ac.currentTime, t0: music.next - (music.step % 4) * spb, period: spb * 4 };
+}
+// 1 right on a beat, fading to 0 just before the next one: for things that pulse with the music.
+export function beatPulse() {
+  const b = beatInfo();
+  if (!b) return 0;
+  const ph = (((b.now - b.t0) / b.period) % 1 + 1) % 1;
+  return 1 - ph;
 }
 
 export function stopMusic() {
