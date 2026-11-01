@@ -31,6 +31,9 @@ export const BREAKS = ['karate', 'bubbles', 'fire', 'cans', 'snowman', ...MINI];
 
 // Hats and accessories that float down the road now and then. Running into
 // one puts it on; the newest one in each slot replaces the old one.
+// How long a hat (or shades, or cape) stays on after it's picked up.
+const GEAR_SECS = 30;
+
 export const GEAR = [
   { id: 'crown', slot: 'hat', name: 'Crown' },
   { id: 'tophat', slot: 'hat', name: 'Top hat' },
@@ -107,11 +110,13 @@ export class Player {
     this.name = name || `Player ${index + 1}`;
     this.age = age;
     this.color = color || COLORS[index];
-    this.gear = {}; // kept between rounds
     this.reset();
   }
 
   reset() {
+    // Hats and other prizes last one round at most (see GEAR_SECS).
+    this.gear = {};
+    this.gearAt = {};
     this.skill = startSkill(this.age);
     this.startSkill = this.skill;
     this.peakSkill = this.skill;
@@ -278,6 +283,8 @@ export class Player {
     this.bump = Math.max(0, this.bump - dt);
     this.spin = Math.max(0, (this.spin || 0) - dt);
     this.fx = this.fx.filter(e => (e.t += dt) < e.life);
+    // A prize only stays on for a while, then it's back to the plain character.
+    for (const slot in this.gear) if (this.clock - (this.gearAt[slot] ?? this.clock) > GEAR_SECS) { delete this.gear[slot]; delete this.gearAt[slot]; }
     if (this.throwing) this.updateThrow(dt);
     if (!playing) return;
 
@@ -589,6 +596,7 @@ export class Player {
   collect(o) {
     o.result = 'hit';
     this.gear[o.item.slot] = o.item.id;
+    this.gearAt[o.item.slot] = this.clock;
     this.counts.gear++;
     this.addPoints(200 * this.breakMult, false);
     this.fx.push({ type: 'gear', text: o.item.name.toUpperCase() + '!', t: 0, life: 1.6 });

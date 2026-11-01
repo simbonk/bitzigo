@@ -451,7 +451,6 @@ $('#go').onclick = async () => {
   awake.start();
   players = settings.players.slice(0, settings.count).map((cfg, i) => new Player(i, cfg));
   players.forEach((p, i) => { const id = settings.players[i].char; slotChar[i] = id ? charIndex(id) : i % CHARACTERS.length; });
-  players.forEach(p => { p.gear = { ...(slotGear[p.index] || {}) }; });
   if (settings.mode === 'camera') {
     // Ask for the camera before going full screen: on iPad the permission
     // prompt gets lost behind a full screen page.
@@ -674,7 +673,6 @@ function nextBreak() {
   if (!breakBag.length) fillBreakBag();
   return breakBag.shift();
 }
-let slotGear = [];      // hats each player slot has collected
 
 function startPlay() {
   setState('play');
@@ -731,7 +729,7 @@ function endRound(manual = false) {
   sfx.finish();
   cue('great');
   if (roundT > 10) saveGame(players, { theme: themeNow().name, seconds: roundT });
-  players.forEach(p => { slotGear[p.index] = { ...p.gear }; setScores[p.index] = (setScores[p.index] || 0) + p.score; });
+  players.forEach(p => { setScores[p.index] = (setScores[p.index] || 0) + p.score; });
   if (!manual && settings.seconds && setRound < SET_ROUNDS) scheduleNext();
   showResults();
 }
