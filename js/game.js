@@ -1,5 +1,5 @@
 // Game rules: body-move detection, obstacles, and per-player adaptive difficulty.
-import { MINI, startMini, updateMini, handsMini } from './minigames.js';
+import { MINI, startMini, updateMini, handsMini, trackSwings } from './minigames.js';
 
 export const COLORS = ['#ff5a5f', '#3fa7ff', '#3ddc84', '#b57bff'];
 // Colours a kid can pick by tapping the dot beside their name.
@@ -85,6 +85,20 @@ export function features(pts) {
   return { nose: pts[LM.nose], sh, hip, torso, wrists: [pts[LM.lWr], pts[LM.rWr]] };
 }
 
+// Where each hand is (left, right), or null. A hand thrown up over the head
+// often leaves the picture or blurs, and the tracker then loses the wrist
+// while still seeing the elbow fine, so the hand is guessed from the
+// shoulder-to-elbow line instead (as if the arm were straight). That keeps
+// reaching, climbing and swimming working when the hands go out of view.
+export function handsOf(pts, f) {
+  return [[LM.lSh, LM.lEl, LM.lWr], [LM.rSh, LM.rEl, LM.rWr]].map(([s, e, w]) => {
+    const S = pts[s], E = pts[e], W = pts[w];
+    if (W.v >= 0.3) return W;
+    if (E.v >= 0.3 && S.v >= 0.3) return { x: E.x + (E.x - S.x) * 0.9, y: E.y + (E.y - S.y) * 0.9, v: E.v };
+    return W.v >= 0.1 ? W : null;
+  });
+}
+
 const ACTS = ['jump', 'left', 'right', 'reach', 'leanL', 'leanR', 'throw'];
 
 export class Player {
@@ -129,7 +143,6 @@ export class Player {
     this.shake = 0;
     this.throwing = null;
     this.wristUp = [-9, -9];
-    this.wristHigh = [-9, -9];
     this.bump = 0;
     this.lastGear = 0;
   }
@@ -157,7 +170,7 @@ export class Player {
       leanR: lean > 0.3 * t,
       throw: false,
     };
-    let up = 0, flap = false;
+    let up = 0;
     f.wrists.forEach((w, i) => {
       if (w.v < 0.3) return;
       // An arm counts as "punching" when the hand is lifted to chest height or
@@ -166,11 +179,8 @@ export class Player {
       const out = Math.abs(w.x - f.sh.x) > 0.85 * t;
       if (lifted || out) raw[w.x < f.sh.x ? 'left' : 'right'] = true;
       if (w.y < f.nose.y) { up++; this.wristUp[i] = now; }
-      // Throw: a hand that was up by the head comes down in front within a moment.
+      // Throw (shown in the debug numbers; breaks use the arm swings below).
       else if (w.y > f.sh.y + 0.15 * t && now - this.wristUp[i] < 0.6) { raw.throw = true; this.wristUp[i] = -9; }
-      // Flap: an arm swings from above the shoulder down past the chest.
-      if (w.y < f.sh.y - 0.05 * t) this.wristHigh[i] = now;
-      else if (w.y > f.sh.y + 0.3 * t && now - this.wristHigh[i] < 0.7) { flap = true; this.wristHigh[i] = -9; }
     });
     raw.reach = up === 2;
 
@@ -181,14 +191,23 @@ export class Player {
       latched[k] = now - this.lastTrue[k] < 0.15;
     }
     const brk = this.throwing?.type;
-    // Hands around the body, for the hand-zone break games.
-    this.hands = f.wrists.map(w => (w.v >= 0.3 ? { x: (w.x - f.hip.x) / t, y: (w.y - B.hipY) / t } : null));
+    // Hands around the body, for the break games.
+    this.hands = handsOf(pts, f).map(w => (w ? { x: (w.x - f.hip.x) / t, y: (w.y - B.hipY) / t } : null));
     this.hipShift = clamp((f.hip.x - B.hipX) / t, -1, 1);
     if (MINI.includes(brk)) handsMini(this, this.throwing, this.hands, now);
-    if (brk === 'fire') this.aimHose(f);
-    if (brk === 'bubbles') { if (flap) this.flap(); }
-    // A karate chop is any hand coming down hard from shoulder height or above.
-    else if (raw.throw || (brk === 'karate' && flap)) this.onThrow();
+    else if (brk) {
+      // Throwing, chopping and flapping are all one big arm swing downwards:
+      // any hand that comes down a good way from about shoulder height or
+      // higher. How fast or how neat doesn't matter.
+      const T = this.throwing;
+      trackSwings(T.st ||= [], this.hands).forEach(s => {
+        if (s.dir !== 'down' || s.used || s.from > -0.75) return;
+        s.used = true;
+        if (brk === 'bubbles') this.flap();
+        else if (brk !== 'fire') this.onThrow();
+      });
+    }
+    if (brk === 'fire') this.aimHose();
     this.setActions(latched);
 
     // Slowly follow the kid if they drift closer/further while standing normally.
@@ -416,15 +435,14 @@ export class Player {
   }
 
   // Fire time: the hose follows whichever arm is held up and out the most.
-  aimHose(f) {
-    const t = f.torso;
+  // Any hand lifted a little off the hips turns the water on.
+  aimHose() {
     let best = null;
-    for (const w of f.wrists) {
-      if (w.v < 0.3 || w.y > f.hip.y - 0.2 * t) continue;
-      const ext = (w.x - f.sh.x) / t;
-      if (!best || Math.abs(ext) > Math.abs(best)) best = ext;
+    for (const h of this.hands || []) {
+      if (!h || h.y > -0.35) continue;
+      if (best == null || Math.abs(h.x) > Math.abs(best)) best = h.x;
     }
-    this.hoseInput(best == null ? null : clamp(best / 1.1, -1, 1));
+    this.hoseInput(best == null ? null : clamp(best / 0.9, -1, 1));
   }
 
   // aim: -1 (screen left) .. 1 (screen right), or null when no arm is up.

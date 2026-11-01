@@ -10,6 +10,34 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (h, x, y) => Math.hypot(h.x - x, h.y - y);
 
+// Arm swings, for the break games that are about moving your arms rather
+// than hitting a spot. Each hand is followed up and down with a little
+// hysteresis: once it has travelled AMP torso lengths one way, it counts as
+// swinging that way until it travels AMP back. Small wobbles and tracking
+// jitter never flip it, but any big, sloppy arm movement does, wherever the
+// kid happens to be holding their arms. A game marks a swing `used` once it
+// has scored it, so each swing scores once.
+export const SWING_AMP = 0.45;
+export function trackSwings(st, hands, amp = SWING_AMP) {
+  hands.forEach((h, i) => {
+    if (!h) return;
+    const s = (st[i] ||= { dir: 'down', ext: h.y, from: h.y, used: true, y: h.y });
+    s.y = h.y;
+    if (s.dir === 'down') {
+      s.ext = Math.max(s.ext, h.y);                 // lowest point so far
+      if (s.ext - h.y >= amp) Object.assign(s, { dir: 'up', from: s.ext, ext: h.y, used: false });
+    } else {
+      s.ext = Math.min(s.ext, h.y);                 // highest point so far
+      if (h.y - s.ext >= amp) Object.assign(s, { dir: 'down', from: s.ext, ext: h.y, used: false });
+    }
+  });
+  return st;
+}
+// An upswing that has reached above `level` (shoulders are at -1).
+const upSwing = (s, level) => s && s.dir === 'up' && !s.used && s.y < level;
+// A downswing that started above `level`.
+const downSwing = (s, level) => s && s.dir === 'down' && !s.used && s.from < level;
+
 // (The dance-off, rainstorm and city smash are still here but out of the rotation: kids found
 // the first two confusing, and the city smash didn't pick up their moves well enough.)
 export const MINI = ['bugs', 'goalie', 'climb', 'tray', 'fly', 'chops', 'wyr', 'swim'];
@@ -59,10 +87,10 @@ export function startMini(p, B) {
     case 'kaiju': Object.assign(B, { city: newCity(), copters: [], copterT: 1.5, slamUp: -9, dust: [] }); break;
     case 'bugs': Object.assign(B, { bugs: [], spawnT: 0.4, splats: [] }); break;
     case 'goalie': Object.assign(B, { shots: [], shotT: 1.0 }); break;
-    case 'fly': Object.assign(B, { flaps: 0, up: false, pan: 0, flapAt: -9 }); break;
-    case 'chops': Object.assign(B, { chops: 0, up: [false, false], upAt: [-9, -9], flash: 0 }); break;
-    case 'swim': Object.assign(B, { dist: 0, goal: Math.round(clamp(10 + p.skill * 0.6, 10, 16)), lastHand: -1, wasUp: [false, false], shown: 0, crossed: 0, splash: 0 }); break;
-    case 'climb': Object.assign(B, { height: 0, lastHand: -1, wasUp: [false, false], pan: 0, reachAt: -9 }); break;
+    case 'fly': Object.assign(B, { flaps: 0, pan: 0, flapAt: -9, st: [] }); break;
+    case 'chops': Object.assign(B, { chops: 0, flash: 0, st: [] }); break;
+    case 'swim': Object.assign(B, { dist: 0, goal: Math.round(clamp(10 + p.skill * 0.6, 10, 16)), shown: 0, crossed: 0, splash: 0, st: [] }); break;
+    case 'climb': Object.assign(B, { height: 0, pan: 0, reachAt: -9, st: [] }); break;
     case 'tray': Object.assign(B, { x: 0, items: [], stack: [], dropT: 1.0, wobble: 0 }); break;
     case 'wyr': Object.assign(B, { cand: -1, since: 0, hold: 0 }); break; // the question itself is shared: see wyr.js
     case 'rain': Object.assign(B, { roof: false, tilt: 0, water: 0, want: Math.random() < 0.5 ? -1 : 1, buckets: { '-1': 0, '1': 0 }, pour: null, tip: null, poured: false }); break;
@@ -76,7 +104,9 @@ function newCity() {
 // Called each frame with the kid's hands (camera or keyboard) to score hits.
 export function handsMini(p, B, hands, now) {
   const hs = hands.filter(Boolean);
-  const R = p.keyboard ? 1.0 : 0.6;
+  // How close a hand has to come to a bug or ball. Generous: kids swat
+  // roughly in the right direction, and tracking lags fast hands a little.
+  const R = p.keyboard ? 1.0 : 0.8;
   if (B.type === 'wyr') { holdWyr(p, B, hands, now); return; }
   if (B.type === 'bugs') {
     for (const bug of B.bugs) {
@@ -91,7 +121,7 @@ export function handsMini(p, B, hands, now) {
     }
   } else if (B.type === 'goalie') {
     for (const s of B.shots) {
-      if (s.done || s.t < s.dur - 0.4) continue;
+      if (s.done || s.t < s.dur - 0.55) continue;
       if (hs.some(h => dist(h, s.x, s.y) < R + 0.2)) {
         s.done = 'saved';
         s.doneT = 0;
@@ -116,71 +146,64 @@ export function handsMini(p, B, hands, now) {
     if (hs.some(h => h.y < -1.3)) B.slamUp = now;
     else if (hs.some(h => h.y > -0.6) && now - B.slamUp < 1.0) { B.slamUp = -9; slam(p, B); }
   } else if (B.type === 'fly') {
-    // Fly high: every flap (both arms up, then both down) lifts you higher.
-    if (hs.length === 2 && hs.every(h => h.y < -1.4)) B.up = true;
-    else if (B.up && hs.length === 2 && hs.every(h => h.y > -0.9)) {
-      B.up = false;
-      B.flaps++;
-      p.counts.fly++;
-      B.flapAt = now;
-      const ten = B.flaps % 10 === 0;
-      p.addPoints((ten ? 150 : 25) * p.breakMult, ten ? pick(['HIGHER!', 'SKY HIGH!', 'WHOOSH!']) : false);
-      p.onEvent?.('flap');
+    // Fly high: every flap (an arm, or both, swung down from about shoulder
+    // height or higher) lifts you higher. Both arms together count once.
+    const st = trackSwings(B.st, hands);
+    const flapped = st.filter(s => downSwing(s, -0.7));
+    if (flapped.length) {
+      flapped.forEach(s => { s.used = true; });
+      if (now - B.flapAt > 0.25) {
+        B.flaps++;
+        p.counts.fly++;
+        B.flapAt = now;
+        const ten = B.flaps % 10 === 0;
+        p.addPoints((ten ? 150 : 25) * p.breakMult, ten ? pick(['HIGHER!', 'SKY HIGH!', 'WHOOSH!']) : false);
+        p.onEvent?.('flap');
+      }
     }
   } else if (B.type === 'chops') {
-    // Karate frenzy: every hand that comes down hard from up high is a chop.
-    hands.forEach((h, i) => {
-      if (!h) return;
-      if (h.y < -1.4) { B.up[i] = true; B.upAt[i] = now; }
-      else if (B.up[i] && h.y > -0.6 && now - B.upAt[i] < 0.8) {
-        B.up[i] = false;
-        B.chops++;
-        p.counts.chop++;
-        B.flash = 0.15;
-        const ten = B.chops % 10 === 0;
-        p.addPoints((ten ? 150 : 20) * p.breakMult, ten ? pick(['HI-YAH!', 'KRAK!', 'NINJA!']) : false);
-        p.onEvent?.('chop');
-      }
+    // Karate frenzy: every hand swung down from shoulder height or above is a chop.
+    trackSwings(B.st, hands).forEach(s => {
+      if (!downSwing(s, -0.8)) return;
+      s.used = true;
+      B.chops++;
+      p.counts.chop++;
+      B.flash = 0.15;
+      const ten = B.chops % 10 === 0;
+      p.addPoints((ten ? 150 : 20) * p.breakMult, ten ? pick(['HI-YAH!', 'KRAK!', 'NINJA!']) : false);
+      p.onEvent?.('chop');
     });
   } else if (B.type === 'swim') {
-    // Swim: big arm strokes, one arm over the head then the other.
-    hands.forEach((h, i) => {
-      if (!h) return;
-      const up = h.y < -1.7;
-      if (up && !B.wasUp[i] && i !== B.lastHand) {
-        B.lastHand = i;
-        B.dist++;
-        B.splash = 0.3;
-        p.counts.swim++;
-        p.addPoints(20 * p.breakMult, false);
-        p.onEvent?.('splat');
-        if (B.dist >= B.goal) {
-          B.crossed++;
-          B.dist = 0;
-          B.shown = -0.3;
-          p.addPoints(250 * p.breakMult, pick(['MADE IT!', 'SPLASH DOWN!', 'SUPER SWIMMER!']));
-          p.onEvent?.('save');
-        }
+    // Swim: every big arm stroke that comes up to the shoulders moves you
+    // along. Either arm, in any order; one arm then the other is fastest.
+    trackSwings(B.st, hands).forEach(s => {
+      if (!upSwing(s, -0.6)) return;
+      s.used = true;
+      B.dist++;
+      B.splash = 0.3;
+      p.counts.swim++;
+      p.addPoints(20 * p.breakMult, false);
+      p.onEvent?.('splat');
+      if (B.dist >= B.goal) {
+        B.crossed++;
+        B.dist = 0;
+        B.shown = -0.3;
+        p.addPoints(250 * p.breakMult, pick(['MADE IT!', 'SPLASH DOWN!', 'SUPER SWIMMER!']));
+        p.onEvent?.('save');
       }
-      if (up) B.wasUp[i] = true;
-      else if (h.y > -1.2) B.wasUp[i] = false;
     });
   } else if (B.type === 'climb') {
-    // Climb: reach one hand above the head, then the other.
-    hands.forEach((h, i) => {
-      if (!h) return;
-      const up = h.y < -1.85;
-      if (up && !B.wasUp[i] && i !== B.lastHand) {
-        B.lastHand = i;
-        B.height++;
-        B.reachAt = now;
-        p.counts.climb++;
-        const ten = B.height % 10 === 0;
-        p.addPoints((ten ? 150 : 25) * p.breakMult, ten ? 'HIGHER!' : false);
-        p.onEvent?.('climb');
-      }
-      if (up) B.wasUp[i] = true;
-      else if (h.y > -1.4) B.wasUp[i] = false;
+    // Climb: every hand reached up to about head height is a step up the
+    // beanstalk. Either hand, in any order; one then the other is fastest.
+    trackSwings(B.st, hands).forEach(s => {
+      if (!upSwing(s, -1.1)) return;
+      s.used = true;
+      B.height++;
+      B.reachAt = now;
+      p.counts.climb++;
+      const ten = B.height % 10 === 0;
+      p.addPoints((ten ? 150 : 25) * p.breakMult, ten ? 'HIGHER!' : false);
+      p.onEvent?.('climb');
     });
   } else if (B.type === 'tray') {
     // The tray follows the hands (and the kid stepping side to side).

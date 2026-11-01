@@ -28,7 +28,7 @@ export function poseOf(hands) {
   if (hs.length === 2) {
     const [a, b] = hs;
     if (Math.abs(a.x - b.x) < 0.6 && Math.max(a.y, b.y) < -0.5 && Math.min(a.y, b.y) > -1.7) return 'clap';
-    if (a.y < -1.6 && b.y < -1.6) return 'up';
+    if (a.y < -1.4 && b.y < -1.4) return 'up';
   }
   const raised = hs.filter(h => h.y < -0.8);
   if (raised.length === 1) return raised[0].x < 0 ? 'left' : 'right';
