@@ -232,6 +232,10 @@ html, body, button, select, input, .panel { touch-action: manipulation; }
 #kidPick .kidList { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 #kidPick .kid { display: flex; align-items: center; gap: 6px; background: #24305a; color: #fff; border: 2px solid #3a4a80; border-radius: 10px; padding: .35em .6em; font: inherit; font-weight: bold; cursor: pointer; }
 #kidPick .kid:disabled { opacity: .35; }
+#kidPick .kidItem { display: inline-flex; align-items: stretch; }
+#kidPick .kidItem .kid { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; }
+#kidPick .kidDel { background: #24305a; color: #ff9a9a; border: 2px solid #3a4a80; border-left: 1px solid #3a4a80; border-radius: 0 10px 10px 0; padding: 0 .55em; font: inherit; font-weight: bold; font-size: 1.1em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.kidDelStats { display: block; margin: 12px auto 4px; background: none; border: 2px solid #ff6b6b; color: #ff9a9a; border-radius: 10px; padding: .45em 1em; font: inherit; font-weight: bold; cursor: pointer; }
 #kidPick .meta { font-weight: normal; opacity: .7; font-size: .85em; }
 #kidPick .sw { display: inline-block; width: 1em; height: 1em; border-radius: 50%; border: 2px solid #fff; padding: 0; }
 #kidPick .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
