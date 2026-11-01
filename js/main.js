@@ -673,7 +673,7 @@ const BREAK_INFO = {
   climb: { title: 'BEANSTALK CLIMB!', sub: 'Reach up with one hand, then the other!', clip: 'climb_time' },
   fly: { title: 'FLY HIGH!', sub: 'Flap your arms as fast as you can to fly up!', clip: 'fly_time' },
   chops: { title: 'KARATE FRENZY!', sub: 'Chop, chop, chop as fast as you can!', clip: 'chops_time' },
-  swim: { title: 'SWIM TIME!', sub: 'Big arm strokes, one arm then the other, to cross the pond!', clip: 'swim_time' },
+  swim: { title: 'SWIM TIME!', sub: 'Big arm strokes, one arm then the other, to swim out to the island!', clip: 'swim_time' },
   rain: { title: 'RAINSTORM!', sub: 'Hands over your head like a roof, then lean to pour into the bucket!', clip: 'rain_time' },
   tray: { title: 'PANCAKE TOWER!', sub: 'Move your hands to catch pancakes. Dodge the boots!', clip: 'tray_time' },
   wyr: { title: 'WOULD YOU RATHER?', sub: 'Strike the pose under the picture you pick!', clip: 'wyr_time' },
