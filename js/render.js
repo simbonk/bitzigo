@@ -338,6 +338,7 @@ export function drawLaneWorld(ctx, L, p, time, character, theme = THEMES.forest)
     if (T.splash > 0) for (let i = 0; i < 6; i++) rect(ctx, L.cx + (i - 2.5) * L.S * 0.35, wy - L.S * (0.2 + 0.5 * T.splash) - (i % 2) * L.S * 0.2, L.S * 0.15, L.S * 0.15, '#e6f4ff');
   } });
   // The pond sits under everything; other break props draw over the kid.
+  if (T?.type === 'chops') items.push({ z: KARATE_Z, draw: () => drawLog(ctx, L, T, time) });
   if (T && MINI.includes(T.type)) items.push({ z: T.type === 'swim' ? 1.5 : 0.01, draw: () => drawMini(ctx, L, p, T, time) });
   else if (T?.type === 'boss' && T.boss) {
     // Captain Squawk hangs behind the kid, and comes in front when he swoops.
@@ -1096,11 +1097,12 @@ function drawSnowman(ctx, L, T, u, ground) {
     ctx.restore();
   }
 }
-// Karate time: boards across two bricks. Chopped boards snap and fly.
-const KARATE_Z = 0.12;
+// Karate time: boards across two bricks, out in front of the kid down the
+// road (so they show over the kid's head). Chopped boards snap and fly.
+const KARATE_Z = 0.3;
 function drawBoards(ctx, L, T) {
   const { y, s } = project(L, KARATE_Z);
-  const u = L.S * s;
+  const u = L.S * s * 1.3;
   block(ctx, L.cx - u * 1.5, y - u * 1.0, u * 0.6, u * 1.0, '#9aa7b8', 0.2);
   block(ctx, L.cx + u * 0.9, y - u * 1.0, u * 0.6, u * 1.0, '#9aa7b8', 0.2);
   const bh = u * 0.24;
@@ -1116,6 +1118,35 @@ function drawBoards(ctx, L, T) {
     }
   }
 }
+// Chop frenzy: a log on a stump out in front. Every chop splits it, the
+// halves fly off, and a fresh log drops on.
+function drawLog(ctx, L, T, time) {
+  const { y, s } = project(L, KARATE_Z);
+  const u = L.S * s * 1.3, k = T.flash / 0.15;
+  block(ctx, L.cx - u * 0.9, y - u * 0.9, u * 1.8, u * 0.9, '#8a5220', 0.25);   // stump
+  rect(ctx, L.cx - u * 0.75, y - u * 0.9, u * 1.5, u * 0.12, '#d8a868');
+  const top = y - u * 0.9, lw = u * 0.9, lh = u * 1.3;
+  if (k > 0) {
+    // Split: two halves fly apart, and chips spray out.
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(L.cx + side * u * (0.3 + (1 - k) * 1.6), top - lh / 2 - (1 - k) * u * 0.8);
+      ctx.rotate(side * (1 - k) * 1.2);
+      rect(ctx, -lw / 4, -lh / 2, lw / 2, lh, '#e0b070');
+      rect(ctx, side < 0 ? lw / 4 - u * 0.1 : -lw / 4, -lh / 2, u * 0.1, lh, '#8a5220');
+      ctx.restore();
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.05 + T.chops, d = (1 - k) * u * 1.6;
+      rect(ctx, L.cx + Math.cos(a) * d, top - lh * 0.6 + Math.sin(a) * d * 0.6, u * 0.14, u * 0.14, '#f0c88a');
+    }
+  } else {
+    block(ctx, L.cx - lw / 2, top - lh, lw, lh, '#9a5c26', 0.25);
+    rect(ctx, L.cx - lw * 0.38, top - lh, lw * 0.76, u * 0.14, '#e8c088');
+    rect(ctx, L.cx - u * 0.04, top - lh, u * 0.08, u * 0.14, '#b8742a');
+  }
+}
+
 // Fire time: a little house with fires on it, and the kid's hose spray.
 function houseGeom(L) {
   const { y, s } = project(L, TOWER_Z);
@@ -1527,10 +1558,11 @@ function drawAvatar(ctx, L, p, time, ch) {
   }
   // Running, the character faces away down the road (you see the back of
   // their head) and does a quick head turn to the camera as a reaction:
-  // after a move, when bonked, or on a streak. In the break games, the boss
-  // fight and before the run starts they face the camera.
+  // after a move, when bonked, or on a streak. The break games and the boss
+  // fight are the same: the targets are out in front, down the road. Only
+  // before the run starts (and when paused) do they face the camera.
   const onFire = p.fx?.some(e => e.type === 'fire');
-  const body = !!T || !(p.run > 0.3) || p.paused;
+  const body = (!T && !(p.run > 0.3)) || p.paused;
   const glance = body || p.bonk > 0 || p.bump > 0.15 || onFire;
   p.turn = glance ? 1 : 0; // a quick, cheesy snap round: no spinning
   const look = { sx, sy, wow, turn: p.turn, back: !body };
@@ -1615,6 +1647,21 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
     stroke(ol * 2, INK); ctx.fillStyle = '#2b2b33'; ctx.fill();
   }
 
+  // Arms, with round hands. Seen from behind, the hands are out in front of
+  // the body, so the arms go on before the torso and it hides them.
+  const arms = () => {
+    limb(P.ls, P.le, P.lw, S * 0.28, limbCol);
+    limb(P.rs, P.re, P.rw, S * 0.28, limbCol);
+    for (const w of [P.lw, P.rw]) blob(X(w), Y(w), S * 0.18, handCol);
+    if (ch.stripes && !flash) {
+      for (const [a, b] of [[P.le, P.lw], [P.re, P.rw], [P.lk, P.la], [P.rk, P.ra]]) {
+        const x = X(a) + (X(b) - X(a)) * 0.7, y = Y(a) + (Y(b) - Y(a)) * 0.7;
+        ctx.beginPath(); ctx.moveTo(x - S * 0.06, y); ctx.lineTo(x + S * 0.06, y); stroke(S * 0.14, '#d8dce6');
+      }
+    }
+  };
+  if (look.back) arms();
+
   // Torso: a rounded trapezoid, lit from the left.
   const tp = [[X(P.ls) - S * 0.02, Y(P.ls)], [X(P.rs) + S * 0.02, Y(P.rs)], [X(P.rh) + S * 0.04, Y(P.rh) + S * 0.08], [X(P.lh) - S * 0.04, Y(P.lh) + S * 0.08]];
   const xl = Math.min(tp[0][0], tp[3][0]) - S * 0.1, xr = Math.max(tp[1][0], tp[2][0]) + S * 0.1;
@@ -1641,16 +1688,7 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
     rect(ctx, cx - S * 0.06, Y(P.ls) + S * 0.05, S * 0.12, Y(P.lh) - Y(P.ls), '#b8801a');
   }
 
-  // Arms, with round hands.
-  limb(P.ls, P.le, P.lw, S * 0.28, limbCol);
-  limb(P.rs, P.re, P.rw, S * 0.28, limbCol);
-  for (const w of [P.lw, P.rw]) blob(X(w), Y(w), S * 0.18, handCol);
-  if (ch.stripes && !flash) {
-    for (const [a, b] of [[P.le, P.lw], [P.re, P.rw], [P.lk, P.la], [P.rk, P.ra]]) {
-      const x = X(a) + (X(b) - X(a)) * 0.7, y = Y(a) + (Y(b) - Y(a)) * 0.7;
-      ctx.beginPath(); ctx.moveTo(x - S * 0.06, y); ctx.lineTo(x + S * 0.06, y); stroke(S * 0.14, '#d8dce6');
-    }
-  }
+  if (!look.back) arms();
 
   // Head, sitting on the shoulders and following the nose.
   const neck = [(P.ls[0] + P.rs[0]) / 2, (P.ls[1] + P.rs[1]) / 2];
@@ -2027,7 +2065,7 @@ export function drawLaneHud(ctx, L, p, ch, opts) {
       ctx.globalAlpha = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45;
       const pop = k < 0.12 ? 0.6 + k / 0.12 * 0.7 : k < 0.25 ? 1.3 - (k - 0.12) / 0.13 * 0.3 : 1;
       const ease = 1 - (1 - k) * (1 - k);
-      text(ctx, e.text, L.cx + L.w * 0.22 + Math.sin(k * 6) * L.w * 0.01, L.horizon + L.depth * 0.45 - ease * L.h * 0.2, clamp(L.w * 0.11, 20, 60) * pop, '#ffe14d');
+      text(ctx, e.text, L.cx + L.w * 0.22 + Math.sin(k * 6) * L.w * 0.01, L.horizon + L.depth * 0.45 - ease * L.h * 0.2, clamp(L.w * 0.11, 20, 60) * pop, e.color || '#ffe14d');
       ctx.restore();
       continue;
     }
@@ -2130,6 +2168,7 @@ function drawSpeedLines(ctx, L, k, lean) {
 function drawScore(ctx, L, p, r, pad) {
   // The plate swells and rattles a little each time points go up.
   const k = p.bump > 0 ? p.bump / 0.5 : 0;
+  const robbed = p.stealLeft > 0;
   const x0 = L.x + pad + (L.x < 1 ? SAFE.l : 0), y0 = pad;
   const cx = x0 + r, cy = y0 + r;
   // While feeding Super Eagle the plate counts down what's left to feed him.
@@ -2142,7 +2181,7 @@ function drawScore(ctx, L, p, r, pad) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(1 + 0.12 * k, 1 + 0.12 * k);
-  ctx.rotate(k * 0.04 * Math.sin(performance.now() / 25));
+  ctx.rotate(k * 0.04 * Math.sin(performance.now() / 25) + (robbed ? 0.05 * Math.sin(performance.now() / 18) : 0));
   ctx.translate(-cx, -cy);
   // Plate.
   ctx.save();
@@ -2152,7 +2191,7 @@ function drawScore(ctx, L, p, r, pad) {
   ctx.fill();
   ctx.restore();
   roundRect(ctx, x0, y0 + r * 0.18, pw, r * 1.64, r * 0.82);
-  ctx.lineWidth = Math.max(2, r * 0.1); ctx.strokeStyle = p.color; ctx.stroke();
+  ctx.lineWidth = Math.max(2, r * 0.1); ctx.strokeStyle = robbed ? '#ff4d5e' : p.color; ctx.stroke();
   // Face circle.
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = p.color; ctx.fill();
@@ -2173,7 +2212,7 @@ function drawScore(ctx, L, p, r, pad) {
   text(ctx, p.name, tx, cy - r * 0.42, nw > room ? nf * room / nw : nf, '#ffffff', 'left');
   ctx.font = `${R(sf)}px ${FONT}`;
   const sw = ctx.measureText(label).width;
-  text(ctx, label, tx, cy + r * 0.28, sw > room ? sf * room / sw : sf, k > 0.3 ? '#ffb02e' : '#ffe14d', 'left');
+  text(ctx, label, tx, cy + r * 0.28, sw > room ? sf * room / sw : sf, robbed ? '#ff4d5e' : k > 0.3 ? '#ffb02e' : '#ffe14d', 'left');
   ctx.restore();
   // Streak counter.
   if (p.streak >= 3) {
