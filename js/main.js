@@ -1420,6 +1420,9 @@ function updateGame(t, dt) {
 // ---------------- Drawing ----------------
 
 function draw(t) {
+  // Start every frame from clean canvases, so a drawing error in one frame
+  // can never leave a clip or transform behind for the next ones.
+  for (const c of [ctx, cctx, lctx, fctx]) c.reset?.();
   ctx.clearRect(0, 0, W, H);
   cctx.setTransform(1, 0, 0, 1, 0, 0);
   cctx.clearRect(0, 0, W, H);

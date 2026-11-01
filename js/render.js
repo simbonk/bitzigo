@@ -108,13 +108,20 @@ export function flushCharacters(cctx, k) {
   const q = LAYERS.queue || [];
   for (const it of q) {
     cctx.save();
-    cctx.setTransform(k, 0, 0, k, 0, 0);
-    if (it.clip) { cctx.beginPath(); cctx.rect(it.clip.x, 0, it.clip.w, it.clip.h); cctx.clip(); }
-    const m = it.m;
-    cctx.setTransform(k * m.a, k * m.b, k * m.c, k * m.d, k * m.e, k * m.f);
-    cctx.globalAlpha = it.alpha;
-    drawCharacter(cctx, ...it.args);
-    cctx.restore();
+    // Always restore, even if one character fails to draw: a left-over clip
+    // would otherwise stay on this canvas for good, cutting every later
+    // character off at that lane's edge (half a kid, or a missing one)
+    // until the page was reloaded.
+    try {
+      cctx.setTransform(k, 0, 0, k, 0, 0);
+      if (it.clip) { cctx.beginPath(); cctx.rect(it.clip.x, 0, it.clip.w, it.clip.h); cctx.clip(); }
+      const m = it.m;
+      cctx.setTransform(k * m.a, k * m.b, k * m.c, k * m.d, k * m.e, k * m.f);
+      cctx.globalAlpha = it.alpha;
+      drawCharacter(cctx, ...it.args);
+    } catch (e) {
+      if (!flushCharacters.warned) { flushCharacters.warned = true; console.error(e); }
+    } finally { cctx.restore(); }
   }
   q.length = 0;
 }
@@ -894,6 +901,8 @@ function drawAvatar(ctx, L, p, time, ch) {
     const raw = steadyPose(cameraPose(p), MINI.includes(p.throwing?.type));
     const f = p.poseFilter ??= {}, now = performance.now() / 1000;
     P = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, [oneEuro(f, k + 'x', v[0], now), oneEuro(f, k + 'y', v[1], now)]]));
+    // One bad camera number would otherwise stick in the filter: start it afresh.
+    if (!finitePose(P)) { p.poseFilter = {}; P = finitePose(raw) ? raw : cartoonPose(p.act); }
   }
   else P = cartoonPose(p.act, Math.sin(time * 8 + p.index) * 0.04);
   const S = L.S;
@@ -973,7 +982,11 @@ function drawDust(ctx, cx, ground, S, steps) {
 }
 
 // Draws a blocky character with hip centre at (ox, oy).
+const finitePose = P => P && Object.values(P).every(v => Number.isFinite(v[0]) && Number.isFinite(v[1]));
 export function drawCharacter(ctx, ox, oy, S, P, ch, flash = false, gear = {}, look = {}) {
+  // A bad number from the tracker must never stop the drawing: stand instead.
+  if (!finitePose(P)) P = cartoonPose();
+  if (!Number.isFinite(ox) || !Number.isFinite(oy) || !(S > 0)) return;
   VEC++;
   const prevOl = OLW;
   ctx.save();
