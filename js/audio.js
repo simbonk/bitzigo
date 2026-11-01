@@ -15,6 +15,9 @@ export function unlockAudio() {
     // iPhone/iPad: play even with the ring switch on silent.
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
     loadVoices();
+    // iPhone only lets a page talk after it has spoken once from a tap:
+    // say nothing, silently, now (unlockAudio runs from a tap).
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis?.speak(u); } catch { }
   }
   if (!held && ac.state !== 'running' && ac.state !== 'closed') ac.resume().catch(() => { });
 }
@@ -77,16 +80,11 @@ export const sfx = {
   },
   // Jump: springy boing.
   jump() { tone(260, 0.25, { type: 'triangle', vol: 0.35, slide: 3 }); noise(0.2, { vol: 0.25, from: 500, to: 2500, q: 2 }); tone(523, 0.08, { vol: 0.12, delay: 0.22 }); tone(784, 0.1, { vol: 0.12, delay: 0.28 }); },
-  // Bird dodged: whoosh past plus a cross squawk.
-  dodge() { noise(0.3, { vol: 0.5, from: 600, to: 3500, q: 2 }); tone(1400, 0.08, { type: 'sawtooth', vol: 0.1, slide: 0.6, delay: 0.12 }); tone(1300, 0.08, { type: 'sawtooth', vol: 0.1, slide: 0.6, delay: 0.22 }); },
+  // Bird ducked: it whooshes overhead.
+  dodge() { noise(0.3, { vol: 0.45, from: 600, to: 3500, q: 2 }); },
   // Rope swing: a rising-falling slide whistle.
   swing() { tone(400, 0.35, { type: 'sine', vol: 0.3, slide: 3 }); tone(1200, 0.35, { type: 'sine', vol: 0.25, slide: 0.4, delay: 0.35 }); },
   splash() { tone(150, 0.2, { type: 'sine', vol: 0.4, slide: 0.4 }); noise(0.6, { vol: 0.7, from: 1800, to: 200, q: 0.7 }); [0.2, 0.32, 0.45].forEach(d => tone(900 + d * 1000, 0.05, { type: 'sine', vol: 0.15, slide: 1.6, delay: d })); },
-  // Bird ducked: a furious sputtering squawk.
-  fume() { [0, 0.09, 0.18, 0.27, 0.36].forEach((d, i) => tone(700 - i * 40, 0.08, { type: 'sawtooth', vol: 0.16, slide: 0.55, delay: 0.3 + d })); noise(0.3, { vol: 0.2, from: 300, to: 900, q: 1, delay: 0.75 }); },
-  // Bird bonked them: a cackling "ha ha ha ha" running downhill.
-  cackle() { [0, 0.13, 0.26, 0.39, 0.52].forEach((d, i) => { tone(1500 - i * 110, 0.09, { type: 'square', vol: 0.13, slide: 0.75, delay: 0.2 + d }); noise(0.05, { vol: 0.12, from: 2500, to: 1500, q: 2, delay: 0.2 + d }); }); },
-  squawk() { tone(900, 0.12, { type: 'sawtooth', vol: 0.2, slide: 1.4 }); tone(800, 0.18, { type: 'sawtooth', vol: 0.2, slide: 0.6, delay: 0.12 }); noise(0.25, { vol: 0.3, from: 1200, to: 3000, q: 2, delay: 0.05 }); [0, 0.07, 0.14].forEach(d => noise(0.04, { vol: 0.25, from: 600, to: 400, q: 1, delay: 0.3 + d })); },
   throw() { noise(0.18, { vol: 0.35, from: 900, to: 2600, q: 3 }); },
   knock() { noise(0.2, { vol: 0.5, from: 4000, to: 900, q: 2 }); tone(520, 0.06, { vol: 0.12 }); tone(390, 0.08, { vol: 0.12, delay: 0.07 }); },
   strike() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.12, { vol: 0.16, delay: i * 0.06 })); },
@@ -122,10 +120,8 @@ export const sfx = {
 export function approachSound(kind, side) {
   const pan = side === 'left' ? -0.8 : side === 'right' ? 0.8 : 0;
   if (kind === 'bird') panned(pan, () => {
-    // Flapping wings and an angry caw.
-    for (let i = 0; i < 6; i++) noise(0.05, { vol: 0.3, from: 700, to: 300, q: 1, delay: i * 0.08 });
-    tone(1100, 0.14, { type: 'sawtooth', vol: 0.12, slide: 0.7, delay: 0.15 });
-    tone(1000, 0.16, { type: 'sawtooth', vol: 0.12, slide: 0.6, delay: 0.32 });
+    // Soft flapping wings (the announcer says "Duck!").
+    for (let i = 0; i < 5; i++) noise(0.05, { vol: 0.18, from: 700, to: 300, q: 1, delay: i * 0.08 });
   });
   else if (kind === 'crate') panned(pan, () => tone(1400, 0.35, { type: 'sine', vol: 0.12, slide: 0.45 })); // incoming whistle
   else if (kind === 'log') { tone(70, 0.25, { type: 'sine', vol: 0.4 }); tone(70, 0.25, { type: 'sine', vol: 0.4, delay: 0.3 }); } // stomp stomp
@@ -135,13 +131,12 @@ export function approachSound(kind, side) {
 export function hitSound(kind) {
   if (kind === 'crate') sfx.smash();
   else if (kind === 'log') sfx.jump();
-  else if (kind === 'bird') { sfx.dodge(); sfx.fume(); }
+  else if (kind === 'bird') sfx.dodge();
   else if (kind === 'rope') sfx.swing();
 }
 
 export function missSound(kind) {
   if (kind === 'rope') sfx.splash();
-  else if (kind === 'bird') { sfx.squawk(); sfx.cackle(); }
   else sfx.miss();
 }
 
@@ -333,6 +328,21 @@ function playClip(name) {
 let announcer = true;
 export function setAnnouncer(on) { announcer = on; }
 
+// Lines with no recorded clip yet: the browser's own voice says them, so the
+// kids still hear what to do. A recorded voice/<name>.mp3 takes over.
+const SPOKEN = { duck: 'Duck!', lesson_duck: 'Crazy bird! Duck under it!' };
+function speak(text) {
+  try {
+    const s = window.speechSynthesis;
+    if (!s) return false;
+    s.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 1.05; u.pitch = 1.3; u.volume = 1;
+    s.speak(u);
+    return true;
+  } catch { return false; }
+}
+
 // Plays what a game moment calls for: the announcer clip if there is one
 // (and the announcer is on), otherwise its synthesised sound cue.
 export function cue(name) {
@@ -342,5 +352,6 @@ export function cue(name) {
     playClip(name);
     return;
   }
+  if (announcer && SPOKEN[name] && speak(SPOKEN[name])) return;
   CUE_FOR[name]?.();
 }
