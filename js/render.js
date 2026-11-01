@@ -1904,11 +1904,17 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
     px(7.2, ey - 1.2, 0.7, 1, '#7cc4ff'); px(7.4, ey - 1.6, 0.35, 0.5, '#7cc4ff');
   } else if (mood === 'happy') {
     // Eyes squeezed into happy arcs, and a big open grin.
-    for (const ex of [1.4, 5.0]) {
-      px(ex - 0.2, ey - 0.1, 2, 2, head === '#ffffff' ? '#f0f0f0' : head);
-      px(ex - 0.1, ey + 0.8, 0.5, 0.6, line); px(ex + 0.3, ey + 0.3, 0.9, 0.55, line); px(ex + 1.1, ey + 0.8, 0.5, 0.6, line);
+    const frog = ch.id === 'frog';
+    for (const ex of frog ? [0.8, 5.8] : [1.4, 5.0]) {
+      const ey2 = frog ? -1.2 : ey;
+      px(ex - 0.2, ey2 - 0.1, frog ? 1.8 : 2, frog ? 1.9 : 2, head === '#ffffff' ? '#f0f0f0' : head);
+      px(ex - 0.1, ey2 + 0.8, 0.5, 0.6, line); px(ex + 0.3, ey2 + 0.3, 0.9, 0.55, line); px(ex + 1.1, ey2 + 0.8, 0.5, 0.6, line);
     }
-    px(2.4, my - 0.1, 3.2, 0.6, '#1b1b22'); px(2.7, my + 0.5, 2.6, 0.9, '#3a1020'); px(3.2, my + 0.9, 1.6, 0.6, '#ff6b81');
+    if (frog) {
+      // A wide frog grin: the mouth line curls up at the ends and opens.
+      px(0.9, 4.5, 0.7, 0.8, '#1f6e2a'); px(6.4, 4.5, 0.7, 0.8, '#1f6e2a');
+      px(2.2, 5.9, 3.6, 0.9, '#3a1020'); px(3.2, 6.2, 1.6, 0.6, '#ff6b81');
+    } else { px(2.4, my - 0.1, 3.2, 0.6, '#1b1b22'); px(2.7, my + 0.5, 2.6, 0.9, '#3a1020'); px(3.2, my + 0.9, 1.6, 0.6, '#ff6b81'); }
   } else if (mood === 'angry') {
     // Brows slammed down in a V, a cross frown and red cheeks.
     px(0.9, ey - 1.1, 1.1, 0.6, line); px(1.9, ey - 0.65, 1.1, 0.6, line);
