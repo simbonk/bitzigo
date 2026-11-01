@@ -1601,8 +1601,18 @@ function drawAvatar(ctx, L, p, time, ch) {
   const away = T ? ['boss', 'fire', 'swim'].includes(T.type) && !party : p.run > 0.3;
   const body = !away || p.paused;
   const mood = p.bonk > 0 ? 'angry' : scared ? 'scared' : party || p.bump > 0.15 || onFire ? 'happy' : null;
-  p.turn = body || mood ? 1 : 0; // a quick, cheesy snap round: no spinning
-  const look = { sx, sy, wow: mood === 'scared', mood, turn: p.turn, back: !body };
+  // The turn is a quick cartoon flip: the head squashes thin, swaps to the
+  // face and pops back out (about a seventh of a second), then holds for a
+  // moment so it doesn't flicker back and forth.
+  const nowS = performance.now() / 1000, tdt = clamp(nowS - (p.turnClock ?? nowS), 0, 0.1);
+  p.turnClock = nowS;
+  if (mood) { p.turnHold = 0.6; p.turnMood = mood; }
+  else p.turnHold = Math.max(0, (p.turnHold || 0) - tdt);
+  const want = body || p.turnHold > 0 ? 1 : 0;
+  const t0 = p.turn ?? want;
+  p.turn = want > t0 ? Math.min(want, t0 + tdt / 0.14) : Math.max(want, t0 - tdt / 0.14);
+  const face = mood || (p.turnHold > 0 ? p.turnMood : null);
+  const look = { sx, sy, wow: face === 'scared', mood: face, turn: p.turn, back: !body };
   queueCharacter(ctx, { x: L.x, w: L.w, h: L.h }, ox, oy, S, P, ch, flash, p.gear, look);
 }
 
@@ -1736,8 +1746,10 @@ function drawRig(ctx, ox, oy, S, P, ch, flash, gear, look) {
 
 function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   const hs = S * 1.0; // head size
-  const back = (look.turn ?? 1) < 0.5;
-  const hw = hs * (look.sx || 1), hh = hs * (look.sy || 1);
+  const tn = look.turn ?? 1, back = tn < 0.5;
+  // Mid-turn the head squashes thin and stretches a little, then pops back.
+  const mid = 1 - Math.abs(1 - 2 * tn);
+  const hw = hs * (look.sx || 1) * (1 - 0.75 * mid), hh = hs * (look.sy || 1) * (1 + 0.12 * mid);
   const left = x - hw / 2, top = y - hh / 2;
   const head = flash ? '#ffffff' : ch.head;
   const u = hw / 8, uy = hh / 8; // head "pixel"
