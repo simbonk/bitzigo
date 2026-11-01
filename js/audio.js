@@ -200,10 +200,10 @@ const SONG_DEFS = {
     A: 'G5 - - G5 Bb5 - C6 - | Eb6 - D6 C6 - Bb5 C6 - | G5 - - G5 Bb5 - Eb6 - | F6 - Eb6 D6 - Bb5 D6 F6',
     B: 'C6 - Eb6 - G6 - F6 Eb6 | C6 - - Ab5 - C6 Eb6 - | Bb5 - - G5 Eb5 - G5 Bb5 | D6 - F6 - Bb6 - - .',
     kick: 'x...x...x...x...', snare: '....x.......x...', clap: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', bass: 'roorroorroorroor', laser: true },
-  beach: { name: 'Surf Smash', bpm: 162, chords: 'E F E E', lead: 'sawtooth', voice: 'guitar', bassVoice: 'round', shaker: true, tremolo: true, echo: true,
-    A: 'E5 F5 G#5 A5 B5 - A5 G#5 | F5 - G#5 A5 C6 - B5 A5 | G#5 A5 B5 C6 D6 - C6 B5 | A5 G#5 F5 G#5 E5 - - .',
-    B: 'E6 - D6 C6 B5 - C6 D6 | C6 - B5 A5 F5 - A5 C6 | B5 - C6 B5 G#5 - E5 G#5 | B5 - - A5 G#5 F5 E5 .',
-    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', bongo: 'x..x.x..x..x.x.x', tom: '.........x.x.x.x', bass: 'r.rr.rr.r.rr.ro.' },
+  beach: { name: 'Fiesta Splash', bpm: 152, chords: 'C F G C', voice: 'steel', voiceB: 'brass', bassVoice: 'round', echo: true, shaker: true,
+    A: 'E5 G5 . E5 G5 . C6 . | A5 . A5 G5 F5 . A5 . | B5 D6 . B5 G5 . D6 . | C6 . E6 . C6 G5 E5 .',
+    B: 'C6 - C6 E6 G6 - E6 C6 | A5 - C6 - F6 - C6 A5 | B5 - D6 G6 - F6 D6 B5 | C6 - G5 - C6 - - .',
+    kick: 'x.......x.......', snare: '', hat: '', bongo: '..x..xx...x..xx.', clave: 'x..x..x...x.x...', coco: 'h.l.h.l.h.l.hhl.', stabs: '...x..x....x..x.', bass: 'r..f..r.r..f..o.' },
   candy: { name: 'Sugar Rush', bpm: 168, chords: 'G Em C D', lead: 'square', arp: 'square', echo: true,
     A: 'G5 B5 D6 B5 G5 B5 D6 G6 | E5 G5 B5 G5 E5 G5 B5 E6 | C6 - E6 - G6 - E6 C6 | D6 - F#6 - A6 - F#6 D6',
     B: 'B5 - D6 - B5 - G5 A5 | B5 - G5 - E5 - G5 B5 | C6 B5 A5 G5 E5 G5 C6 E6 | D6 - - C6 B5 A5 F#5 A5',
@@ -270,6 +270,35 @@ function voice(kind, freq, t, dur, vol, dest) {
   for (const o of out) { o.connect(into); o.start(t); o.stop(t + dur + 0.05); }
 }
 
+// Fiesta instruments: steel drum, trumpets, and wooden clops.
+function steel(freq, t, vol, dest) {
+  // A steel pan: a bright ping of a few partials that rings and fades.
+  for (const [m, v, d] of [[1, 1, 0.55], [2, 0.5, 0.35], [3.01, 0.22, 0.2], [4.2, 0.08, 0.1]]) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(freq * m, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+    o.connect(g).connect(dest); o.start(t); o.stop(t + d + 0.02);
+  }
+}
+function brass(freq, t, dur, vol, dest) {
+  // A trumpet: a saw whose filter blares open, with a little vibrato.
+  const o = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+  o.type = o2.type = 'sawtooth'; o.frequency.setValueAtTime(freq, t); o2.frequency.setValueAtTime(freq, t); o2.detune.value = 8;
+  lfo.frequency.value = 6; lg.gain.value = freq * 0.006; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
+  f.type = 'lowpass'; f.Q.value = 2; f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(3200, t + 0.05); f.frequency.exponentialRampToValueAtTime(1800, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.03); g.gain.setValueAtTime(vol, t + Math.max(0.04, dur - 0.05)); g.gain.exponentialRampToValueAtTime(0.0005, t + dur + 0.04);
+  o.connect(f); o2.connect(f); f.connect(g).connect(dest);
+  for (const x of [o, o2, lfo]) { x.start(t); x.stop(t + dur + 0.08); }
+}
+function clop(freq, t, vol) {
+  // Coconut shells or a clave: a short hollow knock.
+  const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.85, t + 0.04);
+  f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 3;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.06);
+  o.connect(f).connect(g).connect(music.drums); o.start(t); o.stop(t + 0.08);
+}
+
 let noiseBuf = null;
 function noiseHit(t, len, type, freq, vol, q = 1) {
   if (!noiseBuf) {
@@ -315,6 +344,9 @@ function schedule() {
     // Drums.
     if (hit(S.kick, beat)) drum(t, 'kick');
     if (hit(S.snare, beat)) { if (S.bigSnare) { noiseHit(t, 0.35, 'bandpass', 1800, 0.55, 0.6); noiseHit(t, 0.08, 'highpass', 3000, 0.3); } else drum(t, 'snare'); }
+    if (hit(S.clave, beat)) clop(2400, t, 0.5);
+    if (S.coco && S.coco[beat] !== '.') clop(S.coco[beat] === 'h' ? 1100 : 750, t, 0.55);
+    if (hit(S.stabs, beat) && bar % 8 < 4) for (const k of [0, 1, 2]) brass(hz(ch.root + 24 + ch.tones[k]), t, spb * 1.1, 0.02, music.lead);
     if (S.shaker && beat % 2 === 0) noiseHit(t, 0.05, 'highpass', 9000, beat % 4 ? 0.1 : 0.16);
     if (S.pad && beat === 0) for (const k of [0, 1, 2]) voice('pad', hz(ch.root + 12 + ch.tones[k]), t, spb * 16, 0.03, music.bus);
     if (hit(S.clap, beat)) drum(t, 'clap');
@@ -337,7 +369,10 @@ function schedule() {
     const m = S.melody[s];
     if (m) {
       const dur = spb * m.len * 0.92;
-      if (S.voice) {
+      const vc = bar >= 4 && S.voiceB ? S.voiceB : S.voice;
+      if (vc === 'steel') { steel(hz(m.n), t, 0.09, music.lead); if (m.len > 2) steel(hz(m.n), t + spb * 2, 0.06, music.lead); }
+      else if (vc === 'brass') { brass(hz(m.n), t, dur, 0.045, music.lead); steel(hz(m.n - 12), t, 0.04, music.lead); }
+      else if (S.voice) {
         if (S.tremolo) for (let k = 0; k < m.len; k++) voice(S.voice, hz(m.n), t + k * spb, spb * 0.9, 0.06, music.lead);
         else voice(S.voice, hz(m.n), t, Math.max(dur, spb * 1.5), 0.05, music.lead);
       }
