@@ -27,6 +27,8 @@ export const CHARACTERS = [
   { id: 'axolotl', name: 'Axolotl', body: '#ff9ec7', limb: '#f27fb0', head: '#ff9ec7', belly: '#ffd6e8' },
   { id: 'firefighter', name: 'Firefighter', body: '#e8a92a', limb: '#d4951c', head: '#ffd2a8', belly: '#e8a92a', hand: '#3a3a44', stripes: true },
   { id: 'cow', name: 'Cow', body: '#f8f8f8', limb: '#2b2b33', head: '#f8f8f8', belly: '#ffc4d6' },
+  { id: 'cat', name: 'Ginger Cat', body: '#f08a3c', limb: '#d9702a', head: '#f08a3c', belly: '#fff1e0' },
+  { id: 'berner', name: 'Bernese Dog', body: '#2a2a32', limb: '#2a2a32', head: '#2a2a32', belly: '#ffffff', hand: '#c8692c' },
 ];
 
 export const THEMES = {
@@ -1085,6 +1087,11 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
       px(-0.4, -1.6, 1.2, 1.8, '#f0e0c0'); px(7.2, -1.6, 1.2, 1.8, '#f0e0c0');
       px(-1.6, 1.2, 1.8, 1.1, '#2b2b33'); px(7.8, 1.2, 1.8, 1.1, '#2b2b33');
     }
+    if (ch.id === 'cat') {
+      // Pointy ears with pink insides.
+      for (const x of [0, 5.6]) { px(x, -1.4, 2.4, 1.8, ch.body); px(x + 0.5, -2.3, 1.4, 1.2, ch.body); px(x + 0.7, -1.2, 1, 1.2, '#ffb3c7'); }
+    }
+    if (ch.id === 'berner') { px(-1.5, 0.4, 1.9, 4.4, '#1c1c22'); px(7.6, 0.4, 1.9, 4.4, '#1c1c22'); } // floppy ears
     if (ch.id === 'ninja') { px(8, 1, 2, 0.8, '#e63946'); px(8.6, 1.8, 1.6, 0.7, '#e63946'); }
     if (ch.id === 'firefighter' && !gear.hat) px(-1.6, 0.3, 11.2, 1.3, '#a81a26'); // helmet's long brim
   };
@@ -1160,6 +1167,21 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
         px(-0.2, 1.1, 8.4, 0.5, '#a81a26');
       }
       break;
+    case 'cat':
+      px(2.5, 0, 0.6, 1.5, '#c45a1a'); px(3.7, 0, 0.6, 2, '#c45a1a'); px(4.9, 0, 0.6, 1.5, '#c45a1a'); // tabby stripes
+      eye(1.5, 2.9); eye(5.1, 2.9);
+      px(2.3, 4.7, 3.4, 2.2, '#fff1e0'); px(3.4, 4.7, 1.2, 0.8, '#ff8fb1');
+      px(3, 5.9, 0.7, 0.5, '#7a3a1a'); px(4.3, 5.9, 0.7, 0.5, '#7a3a1a');
+      px(-0.9, 5, 2.2, 0.3, '#ffffff'); px(-0.9, 5.9, 2.2, 0.3, '#ffffff'); px(6.7, 5, 2.2, 0.3, '#ffffff'); px(6.7, 5.9, 2.2, 0.3, '#ffffff'); // whiskers
+      break;
+    case 'berner':
+      px(3.3, -0.1, 1.4, 4.6, '#ffffff'); // white blaze
+      px(1.5, 1.9, 1.3, 0.7, '#c8692c'); px(5.2, 1.9, 1.3, 0.7, '#c8692c'); // rust eyebrows
+      px(0.4, 4.6, 1.4, 1.8, '#c8692c'); px(6.2, 4.6, 1.4, 1.8, '#c8692c'); // rust cheeks
+      px(1.7, 4.3, 4.6, 3.7, '#ffffff'); // white muzzle
+      eye(1.4, 2.8); eye(5.2, 2.8);
+      px(3.2, 4.5, 1.6, 1.1, '#1b1b22'); px(3.5, 6.3, 1, 1, '#ff6b81');
+      break;
     case 'cow':
       px(0.6, 0.6, 2.6, 2, '#2b2b33'); px(5.4, 0.2, 2, 1.4, '#2b2b33');
       eye(1.5, 2.6); eye(5.1, 2.6);
@@ -1168,7 +1190,7 @@ function drawHead(ctx, x, y, S, ch, flash, gear = {}, look = {}) {
   }
   if (look.wow && !flash && ch.id !== 'none') {
     // Surprised "O" mouth.
-    const my = { frog: 4.6, fox: 6.0, cow: 6.4, robot: 5.4, hedgehog: 6.0, panda: 6.4 }[ch.id] ?? 5.9;
+    const my = { frog: 4.6, fox: 6.0, cow: 6.4, cat: 5.8, berner: 6.0, robot: 5.4, hedgehog: 6.0, panda: 6.4 }[ch.id] ?? 5.9;
     px(3.1, my, 1.8, 1.6, '#3a1020'); px(3.5, my + 0.6, 1, 0.7, '#ff6b81');
   }
   for (const mode of VEC ? ['outline', 'fill'] : ['fill']) {
